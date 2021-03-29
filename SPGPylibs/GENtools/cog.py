@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import simps
 
-def COG(input_data,wave,wave_axis,lande_factor=0,cpos = False):
+def cog(input_data,wave,wave_axis,lande_factor=0,cpos = False):
 
     '''
     Calculates the velocity [and longitudinal field] of a profile or set of profiles using CoG technique.
@@ -32,7 +32,7 @@ def COG(input_data,wave,wave_axis,lande_factor=0,cpos = False):
         Ic = input_data[lpos-1]
         t1 = wave_axis * ( Ic - input_data ) 
         tc = ( Ic - input_data )
-        Itn = simps(t1, x=wave_axis,axis=0) / simps(tc, x=wave_axis,axis=0)
+        Itn = simps(t1, x=wave_axis) / simps(tc, x=wave_axis)
         vlos = -(wave - Itn ) * 2.99792458e+5 / wave 
 
         return vlos
@@ -51,7 +51,7 @@ def COG(input_data,wave,wave_axis,lande_factor=0,cpos = False):
         Ic = input_data[lpos-1,0]
         t1 = wave_axis * ( Ic - input_data[:,0] ) 
         tc = ( Ic - input_data[:,0] )
-        Itn = simps(t1, x=wave_axis,axis=0) / simps(tc, x=wave_axis,axis=0)
+        Itn = simps(t1, x=wave_axis) / simps(tc, x=wave_axis)
         vlos = -(wave - Itn ) * 2.99792458e+5 / wave 
 
         t_plus = input_data[:,0] + input_data[:,3]
@@ -60,8 +60,8 @@ def COG(input_data,wave,wave_axis,lande_factor=0,cpos = False):
         tc1 = Ic - t_plus 
         t2 = wave_axis * ( Ic - t_minus ) #Ic*0.5 ??
         tc2 = Ic - t_minus
-        l_plus = simps(t1, x=wave_axis,axis=0) / simps(tc1, x=wave_axis,axis=0)
-        l_minus = simps(t2, x=wave_axis,axis=0) / simps(tc2, x=wave_axis,axis=0)
+        l_plus = simps(t1, x=wave_axis) / simps(tc1, x=wave_axis)
+        l_minus = simps(t2, x=wave_axis) / simps(tc2, x=wave_axis)
         blos = (l_plus - l_minus) / 2 / 4.67e-13/ (lande_factor * wave**2)
 
         return vlos,blos
