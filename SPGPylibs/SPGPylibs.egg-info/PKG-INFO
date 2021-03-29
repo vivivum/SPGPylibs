@@ -1,0 +1,24 @@
+Metadata-Version: 2.1
+Name: SPGPylibs
+Version: 0.0.1
+Summary: Solar Physics Group python tools for PHI and TuMAG instruments
+Home-page: https://github.com/vivivum/SPGPylibs
+Author: SPG
+Author-email: orozco@iaa.es
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/vivivum/SPGPylibs/issues
+Description: # P-tools
+        
+        Python libraries for PHI and TuMAG proyects
+        
+        FP-tools are pythons tools for simulating etalons
+        
+        PD-tools are Phase-Diversity image reconstruction programs for TuMAG
+        
+        
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown

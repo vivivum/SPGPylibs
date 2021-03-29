@@ -1,1 +1,1 @@
-# P-tools/TuMAG-tools
+# P-SPGPylibs/TuMAGtools

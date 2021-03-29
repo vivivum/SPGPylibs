@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+setup.cfg
+SPGPylibs/SPGPylibs.egg-info/PKG-INFO
+SPGPylibs/SPGPylibs.egg-info/SOURCES.txt
+SPGPylibs/SPGPylibs.egg-info/dependency_links.txt
+SPGPylibs/SPGPylibs.egg-info/top_level.txt
