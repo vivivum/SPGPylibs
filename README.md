@@ -15,7 +15,7 @@ Installation
 SPGPylibs is based in Python 3+ and can be installed in your distribution using pip:
 
 ::
-    pip install pyiacsun
+    pip install SPGPylibs
 
 Getting started
 ===============
