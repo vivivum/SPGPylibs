@@ -1,0 +1,5 @@
+include SOLAR-ORBITER.html
+include MANIFEST.in
+include README.md
+recursive-include kernels *
+recursive-include misc *

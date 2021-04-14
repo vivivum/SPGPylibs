@@ -1,0 +1,313 @@
+ KPL/IK
+
+STIX Instrument Kernel
+===========================================================================
+
+   This instrument kernel (I-kernel) briefly describes and contains 
+   orientative information of the Field-of-View (FoV) and/or 
+   Field-of-Regard (FoR) of and the line of sight (boresight) of the 
+   X-ray Spectrometer/Telescope (STIX) sensors. 
+
+   DISCLAIMER: This I-kernel should not be used as a reference for the 
+   instrument nor for data analysis for the FoVs will not be updated to 
+   reflect best known / calibrated FoVs, nor variation according to mode.
+
+
+Version and Date
+-----------------------------------------------------------------------------
+
+   Version 0.2 -- March 28, 2018 -- Marc Costa Sitja, ESAC/ESA
+
+      Incorporated feedback from SOC. Moved FOV frame definition from
+      SOLO_STIX_*_OPT frame to SOLO_STIX_*_ILS frame.
+
+   Version 0.1 -- October 5, 2017 -- Marc Costa Sitja, ESAC/ESA
+   
+      Reviewed by SOLO SOC (Christopher Watson). Corrected FoV definition. 
+
+   Version 0.0 -- May 16, 2017 -- Marc Costa Sitja, ESAC/ESA
+
+      Preliminary Version.
+
+
+References
+-----------------------------------------------------------------------------
+
+      1.  ``Kernel Pool Required Reading''.
+
+      2.  ``Frames Required Reading''.
+
+      3.  ``C-Kernel Required Reading''.
+
+      4.   Solar Orbiter Spacecraft Frames Definition Kernel.
+
+      5.   ``Experiment Interface Document - Part B Solar Orbiter STIX
+           (Spectrometer/Telescope for Imaging X-Rays)'', SO-STIX-EID-30001,
+           P. Orleanski, H. Wiehl, Issue 5, Revision 11, 16th December 2017.
+
+
+Contact Information
+-----------------------------------------------------------------------------
+
+   If you have any questions regarding this file contact SPICE support at
+   ESAC:
+
+           Marc Costa Sitja
+           (+34) 91-8131-457
+           mcosta@sciops.esa.int, esa_spice@sciops.esa.int
+
+   or the Solar Orbiter Science Operations Center at ESAC:
+
+           sol_soc@esa.int
+
+
+Implementation Notes
+-----------------------------------------------------------------------------
+
+  This file is used by the SPICE system as follows: programs that make use
+  of this frame kernel must "load" the kernel normally during program
+  initialization. Loading the kernel associates the data items with
+  their names in a data structure called the "kernel pool".  The SPICELIB
+  routine FURNSH loads a kernel into the pool as shown below:
+
+    FORTRAN: (SPICELIB)
+
+      CALL FURNSH ( frame_kernel_name )
+
+    C: (CSPICE)
+
+      furnsh_c ( frame_kernel_name );
+
+    IDL: (ICY)
+
+      cspice_furnsh, frame_kernel_name
+
+    MATLAB: (MICE)
+      
+         cspice_furnsh ( 'frame_kernel_name' )
+
+    PYTHON: (SPICEYPY)*
+
+         furnsh( frame_kernel_name )
+
+  In order for a program or routine to extract data from the pool, the
+  SPICELIB routines GDPOOL, GIPOOL, and GCPOOL are used.  See [2] for
+  more details.
+
+  This file was created and may be updated with a text editor or word
+  processor.
+
+  * SPICEPY is a non-official, community developed Python wrapper for the
+    NAIF SPICE toolkit. Its development is managed on Github.
+    It is available at: https://github.com/AndrewAnnex/SpiceyPy
+
+
+Naming Conventions
+-----------------------------------------------------------------------------
+
+   Data items are specified using ''keyword=value'' assignments [1].
+   All keywords referencing values in this I-kernel start with the
+   characters `INS' followed by the NAIF SOLO instrument ID code,
+   constructed using the spacecraft ID number (-144) followed by the NAIF
+   three digit ID number for one of the STIX data item.
+
+   These IDs are as follows
+
+       Instrument name          ID
+       --------------------   -------
+       SOLO_STIX              -144850
+
+
+   The remainder of the name is an underscore character followed by the
+   unique name of the data item.  For example, the STIX boresight direction 
+   in the SOLO_STIX_OPT frame (see [2]) is specified by:
+
+       INS-144850_BORESIGHT
+
+   The upper bound on the length of the name of any data item identifier
+   is 32 characters.
+
+   If the same item is included in more than one file, or if the same item
+   appears more than once within a single file, the latest value supersedes
+   any earlier values.
+
+
+Overview
+-----------------------------------------------------------------------------
+
+   From [5]:
+
+   The Spectrometer Telescope for Imaging X rays (STIX) provides imaging 
+   spectroscopy of solar thermal and non-thermal X-ray emissions from ~4 to 
+   150 keV, with unprecedented sensitivity and spatial resolution (near 
+   perihelion), and good spectral resolution.
+
+   STIX plays an important role in enabling Solar Orbiter to achieve two of 
+   its major science goals: (1) determining the magnetic connection of Solar 
+   Orbiter back to the Sun and (2) understanding the acceleration of electrons 
+   at the Sun and their transport into interplanetary space. The 
+   remote-sensing X-ray measurements made with STIX will determine the 
+   intensity, spectrum, timing, and location of accelerated electrons near the 
+   Sun. Flare-accelerated electrons escaping the Sun can then be tracked into 
+   the inner heliosphere through their type-III radio emission, observed by 
+   RPW (the Radio and Plasma Waves instrument), and detected in situ by STEIN  
+   (the SupraThermal Electron sensor) of the Energetic Particle Detector (EPD) 
+   suite, to provide direct tracing of the magnetic structure, field line 
+   length, and connectivity. In this way, STIX, together with RPW and STEIN, 
+   is able to magnetically link the heliospheric region observed in situ back 
+   to regions at the Sun where the electrons are accelerated. STIX is based on 
+   a Fourier-transform imaging technique. 
+
+   STIX consists of three main parts:
+      
+      1. A pair of X-ray windows,
+      2. An imager with 32 subcollimators, and
+      3. A spectrometer with 32 Cadmium Telluride (CdTe) X-ray detectors, one 
+         behind each subcollimator.
+
+   The X-ray windows are mounted on the spacecraft thermal shield. The imager 
+   module is located in front of spectrometer module. Both are internally 
+   mounted, Sun-pointed, behind the spacecraft thermal shield. The 
+   transmission through the grid pairs to the detectors is a very sensitive 
+   function of the direction of incidence of the X-ray flux. The relative 
+   count rates of the detectors behind the different sets of grids encode the 
+   spatial information that can be subsequently decoded on the ground to 
+   reconstruct images of the source region at different X-ray energies 
+
+
+   Measurement principle:
+   ~~~~~~~~~~~~~~~~~~~~~~
+
+   Observationally, STIX determines the location, spectrum and timing of 
+   transient X-ray emission on the Sun at energy ranges that encompass 
+   emission from both hot thermal plasmas and bremsstrahlung from energetic 
+   electrons. The properties of the electrons that generated the X-rays can 
+   be inferred from their X-ray spectrum. The distinction between a thermal 
+   plasma and non-thermal electron population is based on the shape of the 
+   X-ray spectrum with the latter having a characteristic power law (or 
+   broken power law) profile and the former providing a black body spectrum   
+   (corresponding to 106 to 108 K). The spectra are very steep and so good 
+   spectral resolution is required for their interpretation. There is also an 
+   Iron line complex at 6.7 keV which, if isolated, can be interpreted in 
+   terms of the thermal electron population. Since a typical flare typically 
+   generates both thermal and non-thermal emission, which often are not 
+   co-located (for example at the top and footpoints of magnetic loops 
+   respectively), both good spatial and spectral resolution are required.
+
+   The observational objectives are achieved by imaging the Sun as a function 
+   of time and energy with enough spatial, spectral and temporal resolution 
+   to match the sources of interest. Comparing the resulting images at 
+   different energies yields the X-ray spectra of individual features (e.g. 
+   footpoints or flaring loops). Comparing the images as a function of time 
+   discloses the temporal behavior of the hot plasma and accelerated 
+   electrons. The data can also be combined to yield spatially-integrated 
+   light curves and spectra. In all cases, the basic observational datum is a 
+   single, photometrically-accurate image corresponding to a well-defined 
+   time and energy interval.
+
+   Focusing optics are not a feasible option for arcsecond-class hard X-ray 
+   imaging within Solar Orbiter constraints. As a result, STIX uses an 
+   indirect Fourier imaging technique based on X-ray collimation. 
+   Conceptually, the instrument is made up of three mechanically separate 
+   modules: X-ray transparent windows; a passive imager containing front and 
+   rear grids; and a Detector/Electronics Module (DEM) containing 
+   passivelycooled X-ray detectors and electronics.
+
+   The imager is comprised of 32 subcollimators, each of which consists of a 
+   pair of wellseparated X-ray opaque grids located in front of a 
+   corresponding CdTe X-ray detector in the DEM. The X-ray transmission of 
+   each grid pair forms a large-scale Moiré pattern on the detector with the 
+   properties of these Moiré patterns being very sensitive to the angular  
+   distribution of the incident of the X-ray flux. Individual CdTe detector 
+   pixels associated with each subcollimator provide ~2 mm spatial resolution 
+   which is sufficient to characterize the Moiré pattern formed by its grids. 
+   As a result, high-angular resolution X-ray imaging information is encoded 
+   into a set of large scale spatial distributions of counts in the 
+   detectors. This can be subsequently decoded on the ground to reconstruct 
+   an image of the X-ray source.For each detected X-ray, the detectors 
+   provide an output pulse proportional to its energy.
+
+   By reconstructing images using counts within specific energy intervals, 
+   the combined system functions as a high resolution X-ray imaging 
+   spectrometer. 
+
+
+Mounting Alignment
+-----------------------------------------------------------------------------
+
+   Refer to the latest version of the Solar Orbiter Frames Definition Kernel
+   (FK) [4] for the STIX reference frame definitions and mounting
+   alignment information.
+
+
+STIX Apparent Field-of-View Layout
+-----------------------------------------------------------------------------
+
+   For STIX, the front element of the telescope is an X-ray mirror with a 
+   a FOV of ~2 degree.
+
+   This section provides a diagram illustrating the STIX apparent FOV layout 
+   in the corresponding reference frames.
+
+
+                                  ^ +Ystix
+                                  | 
+                                  |
+       ---              +---------|---------+
+        ^               |         |         |
+        |               |         |         |                 
+        |               |         |         |                 
+        |               |         |         |                 
+        |   2 deg       |         x-------------> +Zstix  
+        |               |       +Xstix      |     
+        |               |                   |
+        |               |                   |
+        V               |                   |
+       ---              +-------------------+
+
+                        |        2 deg      |      Boresight (+X axis)
+                        |<----------------->|       is into the page
+                        |                   |
+
+
+FOV Definition
+---------------------------------------------------------------------------
+
+   This section contains definitions for the STIX apparent FOVs.
+   These definitions are provided in the format required by the SPICE
+   TOOLKIT function GETFOV. 
+
+   Please note that the FOV reference and cross angles are defined with half
+   angle values. The FOV definitions correspond to the NAIF Body Name:
+   SOLO_STIX.
+
+      \begindata
+
+         INS-144850_NAME                      = 'SOLO_STIX'
+         INS-144850_BORESIGHT                 = ( -1.000  0.000  0.000 )
+         INS-144850_FOV_FRAME                 = 'SOLO_STIX_ILS'
+         INS-144850_FOV_SHAPE                 = 'RECTANGLE'
+         INS-144850_FOV_CLASS_SPEC            = 'ANGLES'
+         INS-144850_FOV_REF_VECTOR            = (  0.000  0.000  1.000 )
+         INS-144850_FOV_REF_ANGLE             = (  1.000000 )
+         INS-144850_FOV_CROSS_ANGLE           = (  1.000000 )
+         INS-144850_FOV_ANGLE_UNITS           = 'DEGREES'
+
+     \begintext
+
+
+Platform ID
+-----------------------------------------------------------------------------
+
+   This number is the NAIF instrument ID of the platform on which
+   the channels are mounted. For all channels this platform is
+   the spacecraft.
+
+    \begindata
+
+      INS-144900_PLATFORM_ID = ( -144000 )
+
+    \begintext
+
+
+End of IK file.

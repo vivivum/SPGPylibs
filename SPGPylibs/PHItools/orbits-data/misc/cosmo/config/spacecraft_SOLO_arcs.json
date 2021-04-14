@@ -1,0 +1,68 @@
+{
+   "version": "1.0",
+   "name": "Cosmographia SOLO Example",
+   "items": [
+      {
+         "class": "spacecraft",
+         "name": "SOLO",
+         "startTime": "2018-10-10 19:43:21.123 UTC",
+         "arcs": [
+            {
+               "endTime": "2028-03-24 21:00:49.999 UTC",
+               "center": "Sun",
+               "trajectory": {
+                  "type": "Spice",
+                  "target": "SOLO",
+                  "center": "Sun"
+               },
+               "bodyFrame": {
+                  "type": "Spice",
+                  "name": "SOLO_SRF"
+               }
+            },
+            {
+               "center": "Sun",
+               "trajectory": {
+                  "type": "Spice",
+                  "target": "SOLO",
+                  "center": "Sun"
+               },
+               "bodyFrame": {
+                  "type": "Spice",
+                  "name": "SOLO_SRF"
+               }
+            }
+         ],
+      "geometry": {
+        "type": "Mesh",
+        "meshRotation": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "size": 0.031,
+        "source": "../models/solo.3ds"
+      },
+      "label": {
+        "color": [
+          1,
+          1,
+          1
+        ]
+      },
+      "trajectoryPlot": {
+        "color": [
+          1,
+          1,
+          1
+        ],
+        "duration": "3 y",
+        "lead": 0,
+        "fade": 1,
+        "sampleCount": 5000
+        
+      }
+    }
+  ]
+}

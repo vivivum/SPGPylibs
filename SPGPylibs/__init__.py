@@ -1,5 +1,7 @@
-from . import FPtools
-from . import PDtools
-from . import PHItools
-from . import TuMAGtools
-from . import GENtools
+from .FPtools import *
+from .PDtools import *
+from .PHItools import *
+from .TuMAGtools import *
+from .GENtools import *
+__all__ = ['cog']
+

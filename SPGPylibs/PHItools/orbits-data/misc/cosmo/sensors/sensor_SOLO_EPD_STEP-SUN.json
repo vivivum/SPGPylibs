@@ -1,0 +1,33 @@
+{
+   "version": "1.0",
+   "name": "Cosmographia SOLO Example",
+   "items": [
+      {
+         "class": "sensor",  
+         "name": "SOLO_EPD_STEP",
+         "parent": "SOLO",
+         "center": "SOLO",
+         "trajectoryFrame": {
+            "type": "BodyFixed",
+            "body": "SOLO"
+         },
+         "geometry": {
+            "type": "Spice",
+            "instrName": "SOLO_EPD_STEP",
+            "target": "Sun",
+            "range": 1000,
+            "rangeTracking": true,
+            "frustumColor": [
+               1.0,
+               0.0,
+               0.5
+            ],
+            "frustumOpacity": 0.3,
+            "gridOpacity": 0.8,
+            "footprintOpacity": 0.8,
+            "sideDivisions": 125,
+            "onlyVisibleDuringObs": false
+         }
+      }
+   ]
+}

@@ -1,0 +1,273 @@
+ KPL/IK
+
+METIS Instrument Kernel
+===========================================================================
+
+   This instrument kernel (I-kernel) briefly describes and contains 
+   orientative information of the Field-of-View (FoV) and/or 
+   Field-of-Regard (FoR) of and the line of sight (boresight) of the 
+   Multi Element Telescope for Imaging and Spectroscopy (METIS) sensors. 
+
+   DISCLAIMER: This I-kernel should not be used as a reference for the 
+   instrument nor for data analysis for the FoVs will not be updated to 
+   reflect best known / calibrated FoVs, nor variation according to mode.
+
+
+Version and Date
+-----------------------------------------------------------------------------
+
+   Version 0.3 -- March 13, 2020 -- Marc Costa Sitja, ESAC/ESA
+                                    Vicenzo Andretta, INAF
+
+      Corrected reference angles for several FOVs as indicated by
+      METIS instrument team.
+
+   Version 0.2 -- March 28, 2018 -- Marc Costa Sitja, ESAC/ESA
+
+      Incorporated feedback from SOC. Moved FOV frame definition from
+      SOLO_METIS_*_OPT frame to SOLO_METIS_*_ILS frame.
+
+   Version 0.1 -- October 5, 2017 -- Marc Costa Sitja, ESAC/ESA
+   
+      Reviewed by SOLO SOC (Christopher Watson). Corrected FoV definition. 
+
+   Version 0.0 -- May 16, 2017 -- Marc Costa Sitja, ESAC/ESA
+
+      Preliminary Version.
+
+
+References
+-----------------------------------------------------------------------------
+
+      1.  ``Kernel Pool Required Reading''.
+
+      2.  ``Frames Required Reading''.
+
+      3.  ``C-Kernel Required Reading''.
+
+      4.   Solar Orbiter Spacecraft Frames Definition Kernel.
+
+      5. ``Metis Instrument for the Solar Orbiter Mission Experiment 
+         Interface Document – Part B'', METIS-OATO-ICD-001, 
+         G. Nicolini and the Metis team, Issue 5, Revision 0, 
+         18th March 2017.
+
+      6. E-Mail ``Re: alpha Leo occultation time'', from Vicenzo Andretta
+         on 26 February 2020.
+
+
+Contact Information
+-----------------------------------------------------------------------------
+
+   If you have any questions regarding this file contact the
+   ESA SPICE Service at ESAC:
+
+           Marc Costa Sitja
+           (+34) 91-8131-457
+           marc.costa@esa.int, esa_spice@sciops.esa.int
+
+   or the Solar Orbiter Science Operations Center at ESAC:
+
+           sol_soc@esa.int
+
+
+Implementation Notes
+-----------------------------------------------------------------------------
+
+  This file is used by the SPICE system as follows: programs that make use
+  of this frame kernel must "load" the kernel normally during program
+  initialization. Loading the kernel associates the data items with
+  their names in a data structure called the "kernel pool".  The SPICELIB
+  routine FURNSH loads a kernel into the pool as shown below:
+
+    FORTRAN: (SPICELIB)
+
+      CALL FURNSH ( frame_kernel_name )
+
+    C: (CSPICE)
+
+      furnsh_c ( frame_kernel_name );
+
+    IDL: (ICY)
+
+      cspice_furnsh, frame_kernel_name
+
+    MATLAB: (MICE)
+      
+         cspice_furnsh ( 'frame_kernel_name' )
+
+    PYTHON: (SPICEYPY)*
+
+         furnsh( frame_kernel_name )
+
+  In order for a program or routine to extract data from the pool, the
+  SPICELIB routines GDPOOL, GIPOOL, and GCPOOL are used.  See [2] for
+  more details.
+
+  This file was created and may be updated with a text editor or word
+  processor.
+
+  * SPICEPY is a non-official, community developed Python wrapper for the
+    NAIF SPICE toolkit. Its development is managed on Github.
+    It is available at: https://github.com/AndrewAnnex/SpiceyPy
+
+
+Naming Conventions
+-----------------------------------------------------------------------------
+
+    Data items are specified using ''keyword=value'' assignments [1].
+    All keywords referencing values in this I-kernel start with the
+    characters `INS' followed by the NAIF SOLO instrument ID code,
+    constructed using the spacecraft ID number (-144) followed by the NAIF
+    three digit ID number for one of the METIS data item.
+
+    These IDs are as follows
+
+        Instrument name          ID
+        --------------------   -------
+        SOLO_METIS_EUV         -144410
+        SOLO_METIS_EUV_MIN     -144411
+        SOLO_METIS_EUV_MAX     -144412
+        SOLO_METIS_VIS         -144420
+        SOLO_METIS_VIS_MIN     -144421
+        SOLO_METIS_VIS_MAX     -144422
+
+
+    The remainder of the name is an underscore character followed by the
+    unique name of the data item.  For example, the METIS HRI LYA boresight 
+    direction in the SOLO_METIS_EUV_MIN frame (see [2]) is specified by:
+
+        INS-144411_BORESIGHT
+
+    The upper bound on the length of the name of any data item identifier
+    is 32 characters.
+
+    If the same item is included in more than one file, or if the same item
+    appears more than once within a single file, the latest value supersedes
+    any earlier values.
+
+
+Overview
+-----------------------------------------------------------------------------
+
+   From [5]:
+
+   The solar corona is the region connecting the Sun to the heliosphere, where 
+   the processes generating and driving the heliosphere occur. The major open 
+   issues in the understanding of the corona and the solar wind can be 
+   effectively addressed by performing multi-wavelength near-Sun coronal 
+   imaging with Metis, exploiting the unique opportunities offered by the 
+   Solar Orbiter mission profile. Such observations are crucial for answering 
+   fundamental questions concerning: 1) the origins of the fast and slow wind, 
+   2) the sources of solar energetic particles, 3) the origin and early 
+   evolution of coronal mass ejections.
+
+   Metis performs imaging of the solar corona in the visible (VL) and in the 
+   ultraviolet (UV).
+
+   The Metis reference configuration consists of the following physical units;
+   
+   -  Telescope, contains all the opto-mechanical elements and the detectors   
+      producing the Sun corona images in visible (VL) and UV light.
+   -  Metis Processing and Power Unit (MPPU), the electronics which manages 
+      the instrument operations, acquires and processes the data produced by 
+      the detectors, converts and distributes the power received from the 
+      spacecraft, and provides the data interface with the spacecraft.
+   -  Camera Power Converter (CPC) and High Voltage Unit (HVU), the 
+      electronics which supply low and high voltage power to the detectors for 
+      the visible light (VLDA) and for the UV light (UVDA) detector assemblies.
+   -  The Harness provides an electrical interconnection among all the Metis 
+      physical units.
+
+
+Mounting Alignment
+-----------------------------------------------------------------------------
+
+   Refer to the latest version of the Solar Orbiter Frames Definition Kernel
+   (FK) [4] for the METIS reference frame definitions and mounting
+   alignment information.
+
+
+METIS Apparent Field-of-View Layout
+-----------------------------------------------------------------------------
+
+   METIS is an externally occulted coronagraph designed for: broad-band 
+   polarization imaging of the visible K-corona (580-640 nm); narrow-band 
+   imaging of the UV corona in the HI Lyman-alpga, 121.6 nm line; in an 
+   annular FOV between 1.6 deg – 3.4 deg (half angle), corresponding to 1.6
+   and 3.0 solar radii when the perihelion is 0.28 AU ([6]).
+  
+   Because of this the METIS FoVs for each sensor are modeled as a ``Minimum'' 
+   and a ``Maximum'' circular FoV with aperture angles of 1.6 and 3.4
+   degrees.
+
+
+FOV Definition
+---------------------------------------------------------------------------
+
+   This section contains definitions for the METIS apparent FOVs.
+   These definitions are provided in the format required by the SPICE
+   TOOLKIT function GETFOV. 
+
+   Please note that the FOV reference and cross angles are defined with half
+   angle values. The FOV definitions correspond to the NAIF Body Names:
+   SOLO_METIS_EUV_MIN, SOLO_METIS_EUV_MAX, SOLO_METIS_VIS_MIN and
+   SOLO_METIS_VIS_MAX.
+
+      \begindata
+
+         INS-144413_NAME                       = 'SOLO_METIS_EUV_MIN'
+         INS-144413_BORESIGHT                  = ( -1.000,  0.000,  0.000 )
+         INS-144413_FOV_FRAME                  = 'SOLO_METIS_EUV_ILS'
+         INS-144413_FOV_SHAPE                  = 'CIRCLE'
+         INS-144413_FOV_CLASS_SPEC             = 'ANGLES'
+         INS-144413_FOV_REF_VECTOR             = (  0.000,  1.000,  0.000 )
+         INS-144413_FOV_REF_ANGLE              = (  1.6 )
+         INS-144413_FOV_ANGLE_UNITS            = 'DEGREES'
+
+         INS-144414_NAME                       = 'SOLO_METIS_EUV_MAX'
+         INS-144414_BORESIGHT                  = ( -1.000,  0.000,  0.000 )
+         INS-144414_FOV_FRAME                  = 'SOLO_METIS_EUV_ILS'
+         INS-144414_FOV_SHAPE                  = 'CIRCLE'
+         INS-144414_FOV_CLASS_SPEC             = 'ANGLES'
+         INS-144414_FOV_REF_VECTOR             = (  0.000,  1.000,  0.000 )
+         INS-144414_FOV_REF_ANGLE              = (  3.4 )
+         INS-144414_FOV_ANGLE_UNITS            = 'DEGREES'
+
+         INS-144423_NAME                       = 'SOLO_METIS_VIS_MIN'
+         INS-144423_BORESIGHT                  = ( -1.000,  0.000,  0.000 )
+         INS-144423_FOV_FRAME                  = 'SOLO_METIS_VIS_ILS'
+         INS-144423_FOV_SHAPE                  = 'CIRCLE'
+         INS-144423_FOV_CLASS_SPEC             = 'ANGLES'
+         INS-144423_FOV_REF_VECTOR             = (  0.000,  1.000,  0.000 )
+         INS-144423_FOV_REF_ANGLE              = (  1.6 )
+         INS-144423_FOV_ANGLE_UNITS            = 'DEGREES'
+
+
+         INS-144424_NAME                       = 'SOLO_METIS_VIS_MAX'
+         INS-144424_BORESIGHT                  = ( -1.000,  0.000,  0.000 )
+         INS-144424_FOV_FRAME                  = 'SOLO_METIS_VIS_ILS'
+         INS-144424_FOV_SHAPE                  = 'CIRCLE'
+         INS-144424_FOV_CLASS_SPEC             = 'ANGLES'
+         INS-144424_FOV_REF_VECTOR             = (  0.000,  1.000,  0.000 )
+         INS-144424_FOV_REF_ANGLE              = (  3.4 )
+         INS-144424_FOV_ANGLE_UNITS            = 'DEGREES'
+
+     \begintext
+
+
+Platform ID
+-----------------------------------------------------------------------------
+
+    This number is the NAIF instrument ID of the platform on which
+    the channels are mounted. For all channels this platform is
+    the spacecraft.
+
+    \begindata
+
+      INS-144500_PLATFORM_ID = ( -144000 )
+
+    \begintext
+
+
+End of IK file.

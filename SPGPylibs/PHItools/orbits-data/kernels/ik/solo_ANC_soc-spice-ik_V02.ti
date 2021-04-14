@@ -1,0 +1,294 @@
+ KPL/IK
+
+SPICE Instrument Kernel
+===========================================================================
+
+   This instrument kernel (I-kernel) briefly describes and contains 
+   orientative information of the Field-of-View (FoV) and/or 
+   Field-of-Regard (FoR) of and the line of sight (boresight) of the 
+   Spectral Imaging of the Coronal Environment (SPICE) sensors. 
+
+   DISCLAIMER: This I-kernel should not be used as a reference for the 
+   instrument nor for data analysis for the FoVs will not be updated to 
+   reflect best known / calibrated FoVs, nor variation according to mode.
+
+
+Version and Date
+-----------------------------------------------------------------------------
+
+   Version 0.2 -- March 28, 2018 -- Marc Costa Sitja, ESAC/ESA
+
+      Incorporated feedback from SOC. Moved FOV frame definition from
+      SOLO_SPICE_*_OPT frame to SOLO_SPICE_*_ILS frame.
+
+   Version 0.1 -- October 5, 2017 -- Marc Costa Sitja, ESAC/ESA
+   
+      Reviewed by SOLO SOC (Christopher Watson). Corrected FoV definition. 
+
+   Version 0.0 -- May 16, 2017 -- Marc Costa Sitja, ESAC/ESA
+
+      Preliminary Version.
+
+
+References
+-----------------------------------------------------------------------------
+
+      1.  ``Kernel Pool Required Reading''.
+
+      2.  ``Frames Required Reading''.
+
+      3.  ``C-Kernel Required Reading''.  
+
+      4.   Solar Orbiter Spacecraft Frames Definition Kernel.
+
+      5.   ``SPICE Experiment Interface Definition – Part B (EID-B)'', 
+           SPICE-RAL-RS-0001, P. Eccleston, Issue 6, Revision 0, 
+           7th October 2015.
+
+
+Contact Information
+-----------------------------------------------------------------------------
+
+   If you have any questions regarding this file contact SPICE support at
+   ESAC:
+
+           Marc Costa Sitja
+           (+34) 91-8131-457
+           mcosta@sciops.esa.int, esa_spice@sciops.esa.int
+
+   or the Solar Orbiter Science Operations Center at ESAC:
+
+           sol_soc@esa.int
+
+
+Implementation Notes
+-----------------------------------------------------------------------------
+
+  This file is used by the SPICE system as follows: programs that make use
+  of this frame kernel must "load" the kernel normally during program
+  initialization. Loading the kernel associates the data items with
+  their names in a data structure called the "kernel pool".  The SPICELIB
+  routine FURNSH loads a kernel into the pool as shown below:
+
+    FORTRAN: (SPICELIB)
+
+      CALL FURNSH ( frame_kernel_name )
+
+    C: (CSPICE)
+
+      furnsh_c ( frame_kernel_name );
+
+    IDL: (ICY)
+
+      cspice_furnsh, frame_kernel_name
+
+    MATLAB: (MICE)
+      
+         cspice_furnsh ( 'frame_kernel_name' )
+
+    PYTHON: (SPICEYPY)*
+
+         furnsh( frame_kernel_name )
+
+  In order for a program or routine to extract data from the pool, the
+  SPICELIB routines GDPOOL, GIPOOL, and GCPOOL are used.  See [2] for
+  more details.
+
+  This file was created and may be updated with a text editor or word
+  processor.
+
+  * SPICEPY is a non-official, community developed Python wrapper for the
+    NAIF SPICE toolkit. Its development is managed on Github.
+    It is available at: https://github.com/AndrewAnnex/SpiceyPy
+
+
+Naming Conventions
+-----------------------------------------------------------------------------
+
+   Data items are specified using ''keyword=value'' assignments [1].
+   All keywords referencing values in this I-kernel start with the
+   characters `INS' followed by the NAIF SOLO instrument ID code,
+   constructed using the spacecraft ID number (-144) followed by the NAIF
+   three digit ID number for one of the SPICE data item.
+
+   These IDs are as follows
+
+       Instrument name          ID
+       --------------------   -------
+       SOLO_SPICE_SW          -144810
+       SOLO_SPICE_LW          -144820
+
+
+   The remainder of the name is an underscore character followed by the
+   unique name of the data item.  For example, the SPICE boresight direction 
+   in the SOLO_SPICE_SW_OPT frame (see [2]) is specified by:
+
+       INS-144810_BORESIGHT
+
+   The upper bound on the length of the name of any data item identifier
+   is 32 characters.
+
+   If the same item is included in more than one file, or if the same item
+   appears more than once within a single file, the latest value supersedes
+   any earlier values.
+
+
+Overview
+-----------------------------------------------------------------------------
+
+   From [5]:
+
+   SPICE is a high resolution imaging spectrometer operating at ultraviolet 
+   wavelengths. It will address the key science goals of the Solar Orbiter 
+   mission, by providing the quantitative knowledge of the physical state and 
+   composition of the plasmas at the solar source region and investigating the 
+   links between the solar surface, corona and inner heliosphere.
+
+   The EUV wavelength region 70.2 - 105 nm observed by SPICE is dominated by 
+   emission lines from a wide range of ionized atoms formed in the Sun's 
+   atmosphere at temperatures from 10.000 to 10 million K. SPICE will measure 
+   plasma density and temperature, flow velocities, the presence of plasma 
+   turbulence and composition of the source region plasma. It will be 
+   observing, at all latitudes, the energetics, dynamics and fine-scale 
+   structure of the Sun’s magnetized atmosphere. 
+
+   SPICE will remotely determine plasma properties on the Sun and provide 
+   understanding of the linkage between in-situ measurements of solar wind 
+   streams using the suite of plasma instruments on Solar Orbiter and remote 
+   imaging of their source regions on and near the Sun.
+
+
+   Instrument Design:
+   ~~~~~~~~~~~~~~~~~~
+
+   The SPICE instrument is an imaging spectrograph which records high 
+   resolution EUV spectra of the Sun. The SPICE optical design is based on the 
+   comprehensive work carried out during the earlier phases of the project. 
+   The light enters the instrument through the entrance aperture then an image 
+   is formed at the slit by the off-axis parabola. The slit defines the 
+   portion of the solar image that is allowed to pass onto a concave Toroidal 
+   Variable Line Space (TVLS) grating, which disperses, magnifies, and 
+   reimages incident radiation onto two detectors. The two wavebands cover the 
+   same one-dimensional spatial field, and are recorded simultaneously. 
+
+   The instrument contains four mechanisms:
+      
+      -  The SPICE Door Mechanism (SDM) which can be actuated to provide a 
+         contamination tight seal of the entrance aperture during 
+         non-operational periods (both during ground handling when under purge 
+         and non-operational periods in flight).
+      
+      -  The telescope mirror is mounted to a two-axis mechanism (tilt and 
+         focus), the scan focus mechanism (SFM), that is used to direct 
+         different portions of the solar image onto the selected entrance slit 
+         and to focus the telescope relative to the entrance slit. The image 
+         of the Sun is repeatedly scanned across the entrance slit an area of 
+         the Sun. During each scan the image of the Sun is stepped across the 
+         entrance slit in increments equal to the selected slit width, such 
+         that the region of interest is completely sampled.
+
+      -  A slit change mechanism (SCM) provides four interchangeable slits of 
+         different widths, one of which can be selected depending upon the 
+         science activities to be conducted. In the nominal design these slits 
+         have a 2'', 4'', 6'' and 30'' width on the external field of view.
+
+      -  A vacuum door mechanism on the Detector Assembly (DA Door). The 
+         micro-channel plate and image intensifier used to translate the 
+         incident EUV photons into visible light photons which can be detected 
+         by the detectors must be maintained either at vacuum or in zero 
+         humidity during ground handling. Therefore the detector assembly 
+         contains a door mechanism which is only opened during vacuum testing 
+         on ground, and opened finally once on-orbit. 
+
+
+Mounting Alignment
+-----------------------------------------------------------------------------
+
+   Refer to the latest version of the Solar Orbiter Frames Definition Kernel
+   (FK) [4] for the SPICE reference frame definitions and mounting
+   alignment information.
+
+
+SPICE Apparent Field-of-View Layout
+-----------------------------------------------------------------------------
+   
+   For SPICE the FoV in the direction of the scan is actually the Field of 
+   Regard (FoR) defined by the full theoretical movement of the scan 
+   mechanism. This applies to both the SW and LW sensors. 
+
+   This section provides a diagram illustrating the SPICE apparent FoR layout 
+   in the corresponding reference frames.
+
+
+                                  ^ +Yspice
+                                  | 
+                                  |
+       ---              +---------|---------+
+        ^               |         |         |
+        |               |         |         |                 
+        |               |         |         |                 
+        |               |         |         |                 
+        |  11 arcmin    |         x-------------> +Zspice 
+        |               |       +Xspice     |     
+        |               |                   |
+        |               |                   |
+        V               |                   |
+       ---              +-------------------+
+
+                        |     16 arcmin     |      Boresight (+X axis)
+                        |<----------------->|       is into the page
+                        |                   |
+
+
+FOV Definition
+---------------------------------------------------------------------------
+
+   This section contains definitions for the SPICE apparent FOVs.
+   These definitions are provided in the format required by the SPICE
+   TOOLKIT function GETFOV. 
+
+   Please note that the FOV reference and cross angles are defined with half
+   angle values. The FOV definitions correspond to the NAIF Body Names:
+   SOLO_SPICE_SW and SOLO_SPICE_LW.
+
+      \begindata
+
+         INS-144810_NAME                      = 'SOLO_SPICE_SW'
+         INS-144810_BORESIGHT                 = ( -1.000  0.000  0.000 )
+         INS-144810_FOV_FRAME                 = 'SOLO_SPICE_SW_ILS'
+         INS-144810_FOV_SHAPE                 = 'RECTANGLE'
+         INS-144810_FOV_CLASS_SPEC            = 'ANGLES'
+         INS-144810_FOV_REF_VECTOR            = (  0.000  0.000  1.000 )
+         INS-144810_FOV_REF_ANGLE             = (  0.0916667 )
+         INS-144810_FOV_CROSS_ANGLE           = (  0.1333333 )
+         INS-144810_FOV_ANGLE_UNITS           = 'DEGREES'
+
+
+         INS-144820_NAME                      = 'SOLO_SPICE_LW'
+         INS-144820_BORESIGHT                 = ( -1.000  0.000  0.000 )
+         INS-144820_FOV_FRAME                 = 'SOLO_SPICE_LW_ILS'
+         INS-144820_FOV_SHAPE                 = 'RECTANGLE'
+         INS-144820_FOV_CLASS_SPEC            = 'ANGLES'
+         INS-144820_FOV_REF_VECTOR            = (  0.000  0.000  1.000 )
+         INS-144820_FOV_REF_ANGLE             = (  0.0916667 )
+         INS-144820_FOV_CROSS_ANGLE           = (  0.1333333 )
+         INS-144820_FOV_ANGLE_UNITS           = 'DEGREES'
+
+     \begintext
+
+
+Platform ID
+-----------------------------------------------------------------------------
+
+   This number is the NAIF instrument ID of the platform on which
+   the channels are mounted. For all channels this platform is
+   the spacecraft.
+
+    \begindata
+
+      INS-144900_PLATFORM_ID = ( -144000 )
+
+    \begintext
+
+
+End of IK file.
