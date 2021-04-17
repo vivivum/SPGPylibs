@@ -1,5 +1,3 @@
-#hough
-
 from datetime import timedelta
 import matplotlib.dates as mdates
 import numpy as np
@@ -102,7 +100,7 @@ def phi_orbit_test():
     starttime = datetime(2020, 11, 30)
     endtime = datetime(2022, 9, 30)
     res_in_days = 0.1
-#kernel = None
+    #kernel = None
 
     solo_info = phi_orbit(starttime, 'Solar Orbiter', end_date = endtime,resolution = res_in_days)
 
@@ -125,5 +123,57 @@ def phi_orbit_test():
         print('   FDT solar diameter in pixels from solo: ',solo_heeq[i].s_size/3.61)
         print('-------------------------------------------')
         
+def phi_orbit_conjuntion():
+
+    from datetime import datetime
+    import matplotlib.pyplot as plt
+
+    when = [datetime(2021, 2, 1,12,30,3),\
+        datetime(2021, 2, 2 ,12,30,2),\
+        datetime(2021, 2, 3 ,12,30,2),\
+        datetime(2021, 2, 4 ,12,30,2),\
+        datetime(2021, 2, 5 ,0,30,2),\
+        datetime(2021, 2, 5 ,6,30,2),\
+        datetime(2021, 2, 5 ,14,30,2),\
+        datetime(2021, 2, 5 ,22,30,2),\
+        datetime(2021, 2, 6 ,12,30,2),\
+        datetime(2021, 2, 7 ,12,30,2),\
+        datetime(2021, 2, 9 ,12,30,3),\
+        datetime(2021, 2, 10,12,30,2),\
+        datetime(2021, 2, 11,12,30,2),\
+        datetime(2021, 2, 12,12,30,2),\
+        datetime(2021, 2, 21,6,00,2)]
+
+    # 2021-02-01 12:30:03
+    # 2021-02-02 12:30:02
+    # 2021-02-03 12:30:02
+    # 2021-02-04 12:30:02
+    # 2021-02-05 00:30:02
+    # 2021-02-05 06:30:02
+    # 2021-02-05 14:30:02
+    # 2021-02-05 22:30:02
+    # 2021-02-06 12:00:02
+    # 2021-02-07 12:30:02
+    # 2021-02-09 12:30:03
+    # 2021-02-10 12:30:02
+    # 2021-02-11 12:30:02
+    # 2021-02-12 12:30:02
+    # 2021-02-21 06:00:02FF
+
+    solo = phi_orbit(when, 'Solar Orbiter')
+
+    for i in range(len(when)):
+        print('___________________________________________')
+        print('Time: ',when[i])
+        print('   Solo Sun center [HEEQ,degree]: ',solo.lat[i]*180/np.pi)
+        print('   Solo radial velocity [km/s]: ',solo.vr[i])
+        print('   Longitud (wrt Earth): ',solo.lon[i]*180/np.pi)
+        print('   Distance [AU]: ',solo.r[i])
+        print('   Solar size in arcsec from solo: ',solo[i].s_size)
+        print('   FDT solar diameter in pixels from solo: ',solo[i].s_size/3.61)
+        print('-------------------------------------------')
+    
+    for i in range(len(when)):
+        print('   Time, Solo radial velocity [km/s]: ',when[i],solo.vr[i])
 
     return None

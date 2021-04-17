@@ -1,4 +1,6 @@
-# SPGPylibs
+<img src="SPGLOGO-LR.png" align="right" width=100px />
+
+## SPGPylibs
 
 Python libraries for PHI and TuMAG proyects
 

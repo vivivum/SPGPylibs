@@ -1,7 +1,5 @@
 from .phi_fits import *
 from .phi_gen import *
-from .phi_jitter import *
-from .phi_kll import *
 from .phi_reg import *
 from .phi_utils import *
 from .phifdt_flat import *
