@@ -17,7 +17,50 @@ from SPGPylibs.GENtools import *
 def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='prewitt',save=False,
             dhtr=10,normalize = False,verbose=False,Otsu = None,threshold = 0.15):
     '''
-    Do Hough Transform
+    Calculates the position and radious of the solar disk in a set of input images using the Hough transform.
+
+    Parameters
+    ----------
+    image : (K, N, M) ndarray
+        List or numpy array of K Grayscale images of NxM size.
+    inner_radius : int
+        Minimum search radious 
+    outer_radius : int
+        Maximum search radious 
+    steps: int
+        Number of steps to look for solar radius. 
+        step is used to generate:
+            (1): coarse find jumps: np.linspace(inner_radius, outer_radius, steps)
+            (2): width of the ring for crosscorrelating the disk: (outer_radius - inner_radius)//steps * 2
+    org_centers = org_centers: numpy array [K,2] centers for comparison (they are not used)
+    method = method: method for finding the limb boundary. default = 'prewitt'
+        more info look FindEdges()
+    save = False: save the centers as 'hough_centers.txt' -> ASCII (centers_fine,radii_fine)
+    dhtr = 10:
+    normalize = False:
+    verbose = False:
+    Otsu = None:
+    threshold = 0.15:
+
+    Returns
+    -------
+    centers : numpy int array of [K,2] elements where [i,0] = x-centers and [i,0] = y-centers
+    radious : numpy int array of [K] elements containing the radious of the K-images in pixels 
+
+    Raises
+    ------
+
+    References
+    ----------
+    .. [1] Hough transform using FFT,
+    .. [2] Wikipedia, http://en.wikipedia.org/wiki/Otsu's_Method
+
+    Examples
+    --------
+    >>> import SPGPylibs as spg
+
+    Notes
+    -----
     '''
     imsize = image[0].shape
     n_images = len(image)

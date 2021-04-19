@@ -1,1 +1,19 @@
-# SPGPylibs/GENtools
+<div style="width:800px">
+
+<img src="../SPGLOGO-LR.png" align="right" width=100px />
+
+## `SPGPylibs/GENtools`
+--------------------------
+
+These GENtools functions..... 
+
+Functions present in SPGPylibs.GENtools are listed below.
+
+-------------------------- 
+</div>
+
+#### *cog.py*      
+- `cog()`             <span style="float:right; width:45em;">n_images flat gen test run</span> 
+
+#### *plot_lib.py*      
+- `???()`             <span style="float:right; width:45em;">n_images flat gen test run</span> 

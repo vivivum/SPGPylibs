@@ -1,6 +1,6 @@
 <div style="width:800px">
 
-<img src="SPGLOGO-LR.png" align="right" width=100px />
+<img src="../SPGLOGO-LR.png" align="right" width=100px />
 
 ## `SPGPylibs/PHItools`
 --------------------------
@@ -13,73 +13,62 @@ Functions present in SPGPylibs.PHItools are listed below.
 -------------------------- 
 </div>
 
-| <div style="width:220px">*phihrt_flat.py* </div> |  <div style="width:400px"><font size="2"> description</font> </div>    |
-|-------------------------------|-----------------------------|
-|` `                      | <font size="2">  </font> |
+#### *phifdt_flat.py*      
+- `do_hough()`             <span style="float:right; width:45em;">n_images flat gen test run</span> 
+- `fdt_flat()`             <span style="float:right; width:45em;">KLL</span>      
+- `fdt_flat_gen()`         <span style="float:right; width:45em;">FDT kll flatfield determination wrapper.</span> 
+- `fdt_flat_testrun()`     <span style="float:right; width:45em;">FDT flat gen test run</span>
+
+#### *phi_utils.py*      
+- `dot()`             <span style="float:right; width:45em;">dot product</span> 
+- `angle()`             <span style="float:right; width:45em;">angle between two vectors</span>      
+- `sphere2cart()`         <span style="float:right; width:45em;">Coordinate transformation</span> 
+- `cart2sphere()`     <span style="float:right; width:45em;">Coordinate transformation</span>
+- `phi_orbit()`     <span style="float:right; width:45em;">Wrapper to scipypy for orbit calculations</span>
+- `phi_orbit_test()`     <span style="float:right; width:45em;">tests program</span>
+
+#### *phi_gen.py*      
+- `shift()`             <span style="float:right; width:45em;">Shift function</span> 
+- `generate_circular_mask()`             <span style="float:right; width:45em;">Circular mask</span>      
+- `gradient()`         <span style="float:right; width:45em;">--</span> 
+- `threshold_otsu()`     <span style="float:right; width:45em;">--</span>
+- `histogram()`     <span style="float:right; width:45em;">--</span>
+- `FindEdges()`     <span style="float:right; width:45em;">--</span>
+- `make_circles()`     <span style="float:right; width:45em;">--</span>
+- `find_Circles_ida()`     <span style="float:right; width:45em;">--</span>
+- `votes()`     <span style="float:right; width:45em;">tests program</span>
+- `bin_annulus()`     <span style="float:right; width:45em;">tests program</span>
+- `circle_grid()`     <span style="float:right; width:45em;">tests program</span>
+- `find_circle_hough()`     <span style="float:right; width:45em;">tests program</span>
+- `FFTs()`     <span style="float:right; width:45em;">tests program</span>
+- `Laplacian()`     <span style="float:right; width:45em;">tests program</span>
+- `rebin()`     <span style="float:right; width:45em;">tests program</span>
+
+#### *phi_reg.py*      
+- `sampling()`             <span style="float:right; width:45em;">--</span> 
+- `aperture()`             <span style="float:right; width:45em;">--</span>      
+- `PHI_shifts_FFT()`         <span style="float:right; width:45em;">--</span> 
+- `PHI_shifts_CC()`         <span style="float:right; width:45em;">--</span> 
+- `shift_subp()`         <span style="float:right; width:45em;">--</span> 
+- `gaussian()`         <span style="float:right; width:45em;">--</span> 
+- `moments()`         <span style="float:right; width:45em;">--</span> 
+- `fitgaussian()`         <span style="float:right; width:45em;">--</span> 
+
+#### *phi_fits.py*      
+- `fits_get()`             <span style="float:right; width:45em;">--</span> 
+- `fits_get_sampling()`             <span style="float:right; width:45em;">--</span>      
+- `fits_get_part()`         <span style="float:right; width:45em;">--</span> 
+- `read_shifts()`         <span style="float:right; width:45em;">--</span> 
+- `write_shifts()`         <span style="float:right; width:45em;">--</span> 
 
 
-| <div style="width:220px">*phifdt_flat.py* </div> |  <div style="width:400px"><font size="2"> description</font> </div>    |
-|-------------------------------|-----------------------------|
-|`do_hough()`     | <font size="2"> n_images flat gen test run </font>               |
-|`fdt_flat()`                      | <font size="2"> KLL </font> |
-|`fdt_flat_gen()`     | <font size="2"> FDT kll flatfield determination wrapper. </font>               |
-|`fdt_flat_testrun()`     | <font size="2"> FDT flat gen test run </font>               |
+#### *phifdt_pipe.py*      
+- `----()`             <span style="float:right; width:45em;">--</span> 
 
+#### *phihrt_pipe.py*      
+- `----()`             <span style="float:right; width:45em;">--</span> 
 
-| <div style="width:220px">*phi_utils.py* </div> |  <div style="width:400px"><font size="2"> description</font> </div>    |
-|-------------------------------|-----------------------------|
-|`dot()`                      | <font size="2"> dot product </font> |
-|`angle()`     | <font size="2"> angle between two vectors </font>               |
-|`sphere2cart()`     | <font size="2"> Coordinate transformation </font>               |
-|`cart2sphere()`     | <font size="2"> Coordinate transformation </font>               |
-|`phi_orbit()`     | <font size="2"> Wrapper to scipypy for orbit calculations </font>               |
-|`phi_orbit_test()`     | <font size="2"> tests program </font>               |
-
-
-|  <div style="width:220px">*phi_gen.py*</div>  |  <div style="width:400px"><font size="2"> description</font> </div>    |
-|-------------------------------|-----------------------------|
-|`shift()`                      | <font size="2"> Shift function</font> |
-|`generate_circular_mask()`     | <font size="2"> Circular mask</font>               |
-|`gradient()`     | <font size="2">  - </font>               |
-|`threshold_otsu()`     | <font size="2"> - </font>               |
-|`histogram()`     | <font size="2"> Circular mask</font>               |
-|`FindEdges()`     | <font size="2"> Circular mask</font>               |
-|`make_circles()`     | <font size="2"> Circular mask</font>               |
-|`find_Circles_ida()`     | <font size="2"> Circular mask</font>               |
-|`votes()`     | <font size="2"> Circular mask</font>               |
-|`bin_annulus()`     | <font size="2"> Circular mask</font>               |
-|`circle_grid()`     | <font size="2"> Circular mask</font>               |
-|`find_circle_hough()`     | <font size="2"> Circular mask</font>               |
-
-
-|  <div style="width:220px">*phi_reg.py*</div>  |  <div style="width:400px"><font size="2"> Image registering tools</font> </div>    |
-|-------------------------------|-----------------------------|
-|`sampling()`                      | <font size="2">  </font> |
-|`aperture()`                      | <font size="2">  </font> |
-|`PHI_shifts_FFT()`                      | <font size="2">  </font> |
-
-
-|  <div style="width:220px">*phi_fits.py*</div>  |  <div style="width:400px"><font size="2"> PHI I/O tools </font> </div>    |
-|-------------------------------|-----------------------------|
-|`fits_get()`                      | <font size="2">  </font> |
-|`fits_get_sampling()`     | <font size="2">  </font>               |
-|`fits_get_part()`     | <font size="2">  </font>               |
-|`read_shifts()`     | <font size="2">  </font>               |
-|`write_shifts()`     | <font size="2">  </font>               |
-
-
-|  <div style="width:220px">*phifdt_pipe.py*</div>  |  <div style="width:400px"><font size="2"> FDT pipeline</font></div>     |
-|-------------------------------|-----------------------------|
-|` `                      | <font size="2">  </font> |
-
-
-|  <div style="width:220px">*phihrt_pipe.py*</div>  |  <div style="width:400px"><font size="2"> HRT pipeline</font></div>     |
-|-------------------------------|-----------------------------|
-|` `                      | <font size="2">  </font>          |
-
-
-|  <div style="width:220px"> *tools.py* </div>             |  <div style="width:400px"> <font size="2"> Tools </font> </div>     |
-|-------------------------------|-----------------------------|
-|`countcall()`                  | <font size="2">  </font> |
-|`timeit()`                     | <font size="2">  </font>               |
+#### *tools.py*      
+- `countcall()`            <span style="float:right; width:45em;">--</span> 
+- `timeit()`             <span style="float:right; width:45em;">--</span> 
 

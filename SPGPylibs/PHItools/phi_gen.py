@@ -536,3 +536,28 @@ def find_center(im,sjump = 10,njumps = 50,threshold = 0.9):
     print(xc_m,yc_m,rf_m)
 
     return xc_m,yc_m,rf_m
+
+def FFTs(f, dir):
+    """fft with shifting"""
+    what = np.ascontiguousarray(f)
+
+    if dir == 1:
+        return np.fftshift(np.fftn(what))
+    elif dir == -1:
+        return np.fftshift(np.ifftn(np.ifftshift(what)))
+    else:
+        print('Select direction: 1 -> Direct FFT; -1 -> Inverse FFT')
+        quit()
+        return 0
+
+def Laplacian(xs):
+    "calculate gradient of real image using Laplacian filter"
+    lxx = (shift(xs, shift=[1, 0]) - 2*xs + shift(xs, shift=[-1, 0]))/2
+    lyy = (shift(xs, shift=[0, 1]) - 2*xs + shift(xs, shift=[0, -1]))/2
+    return lxx**2+lyy**2
+
+def rebin(arr, new_shape):
+    """Rebin 2D array arr to shape new_shape by averaging."""
+    shape = (new_shape[0], arr.shape[0] // new_shape[0],
+             new_shape[1], arr.shape[1] // new_shape[1])
+    return arr.reshape(shape).mean(-1).mean(1)
