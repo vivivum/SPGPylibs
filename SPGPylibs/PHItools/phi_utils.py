@@ -29,18 +29,120 @@ def cart2sphere(x,y,z):
     phi = np.arctan2(y,x)                        # phi
     return (r, theta, phi)
 
-def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resolution = 1, kernel = None):
+def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resolution = 1, kernel = None, kernel_dir = None):
     ''' get basic orbitar parameters using Spice kernels
     Need to have spicepy installed.
+    The program goes to the kernel dir for loading the mk (meta-kernel) file that takes into account all stuff.
+
+    Default frame is Mean ecliptic and equinox of J2000 (ECLIPJ2000)
+    ECLIPJ2000  -- >> Ecliptic coordinates based upon the J2000 frame.
+
+    Kernels provided by SOLO (see readme in the kernels)
+      SPICE Frame Name            Common names and other designators
+      --------------------        --------------------------------------
+      SUN_ARIES_ECL               HAE, Solar Ecliptic (SE)
+      SUN_EARTH_CEQU              HEEQ, Stonyhurst Heliographic
+      SUN_INERTIAL                HCI, Heliographic Inertial (HGI)
+      EARTH_SUN_ECL               GSE of Date, Hapgood
+      SUN_EARTH_ECL               HEE of Date
+      EARTH_MECL_MEQX             Mean Ecliptic of Date (ECLIPDATE)
+    
+     The Heliocentric Earth Ecliptic frame (HEE) is defined as follows (from [3]):
+       -  X-Y plane is defined by the Earth Mean Ecliptic plane of date,
+           therefore, the +Z axis is the primary vector,and it defined as
+            the normal vector to the Ecliptic plane that points toward the
+            north pole of date;
+       -  +X axis is the component of the Sun-Earth vector that is
+            orthogonal to the +Z axis;
+       -  +Y axis completes the right-handed system;
+       -  the origin of this frame is the Sun's center of mass.
+
+     The Heliocentric Inertial Frame (HCI) is defined as follows (from [3]):
+
+       -  X-Y plane is defined by the Sun's equator of epoch J2000: the +Z
+          axis, primary vector, is parallel to the Sun's rotation axis of
+          epoch J2000, pointing toward the Sun's north pole;
+       -  +X axis is defined by the ascending node of the Sun's equatorial
+          plane on the ecliptic plane of J2000;
+       -  +Y completes the right-handed frame;
+       -  the origin of this frame is the Sun's center of mass.
+
+    The Heliocentric Earth Equatorial (HEEQ) frame is defined as follows (from [3]
+      and [4]):
+
+       -  X-Y plane is the solar equator of date, therefore, the +Z axis 
+            is the primary vector and it is aligned to the Sun's north pole
+            of date;
+       -  +X axis is defined by the intersection between the Sun equatorial
+            plane and the solar central meridian of date as seen from the Earth.
+            The solar central meridian of date is defined as the meridian of the
+            Sun that is turned toward the Earth. Therefore, +X axis is the
+            component of the Sun-Earth vector that is orthogonal to the +Z axis;
+       -  +Y axis completes the right-handed system;
+       -  the origin of this frame is the Sun's center of mass.
+
+    SOLO mission specific generic frames are (see solo_ANC_soc-sci-fk_V07.tf):
+
+      SOLO_SUN_RTN                Sun Solar Orbiter Radial-Tangential-Normal
+      SOLO_SOLAR_MHP              S/C-centred mirror helioprojective
+      SOLO_IAU_SUN_2009           Sun Body-Fixed based on IAU 2009 report
+      SOLO_IAU_SUN_2003           Sun Body-Fixed based on IAU 2003 report
+      SOLO_GAE                    Geocentric Aries Ecliptic at J2000 (GAE)
+      SOLO_GSE                    Geocentric Solar Ecliptic at J2000 (GSE)
+      SOLO_HEE                    Heliocentric Earth Ecliptic at J2000 (HEE)
+      SOLO_VSO                    Venus-centric Solar Orbital (VSO)
+
+   Heliospheric Coordinate Frames developed for the NASA STEREO mission:
+
+      SOLO_ECLIPDATE              Mean Ecliptic of Date Frame
+      SOLO_HCI                    Heliocentric Inertial Frame
+      SOLO_HEE_NASA               Heliocentric Earth Ecliptic Frame
+      SOLO_HEEQ                   Heliocentric Earth Equatorial Frame ***
+      SOLO_GEORTN                 Geocentric Radial Tangential Normal Frame
+
+   Heliocentric Generic Frames(*):
+
+      SUN_ARIES_ECL               Heliocentric Aries Ecliptic   (HAE)
+      SUN_EARTH_CEQU              Heliocentric Earth Equatorial (HEEQ)
+      SUN_EARTH_ECL               Heliocentric Earth Ecliptic   (HEE)
+      SUN_INERTIAL                Heliocentric Inertial         (HCI)
+
     '''
 
-    spice_files = ['Orbits-data/kernels/lsk/naif0012.tls',\
-        'Orbits-data/kernels/spk/de421.bsp',\
-        'Orbits-data/kernels/pck/pck00010.tpc',\
-        'Orbits-data/kernels/spk/solo_ANC_soc-orbit_20200210-20301120_L004_V1_00062_V01.bsp']
+    import os 
 
-    #Load the kernals 
-    spiceypy.furnsh(spice_files)
+    KERNELS_FULL_PATH_DIRECTORY = \
+        '/Users/orozco/Dropbox_folder/Python/VS-GitHub/SPGPylibs/SPGPylibs/PHItools/Orbits-data/kernels/'
+    try:
+        if kernel_dir != None:
+            KERNELS_FULL_PATH_DIRECTORY = kernel_dir
+    except:
+        pass
+
+    REQUIRED_KERNELS = ['mk/solo_ANC_soc-flown-mk_v107_20210412_001.tm']
+    try:
+        if kernel != None:
+            REQUIRED_KERNELS = kernel
+    except:
+        pass    
+
+    #Here the function moves to KERNELS_FULL_PATH_DIRECTORY folder to furnsh the corresponding kernels
+    
+    #Get urrent folder
+    cd = os.getcwd()
+    try:
+        os.chdir(KERNELS_FULL_PATH_DIRECTORY)
+    except Exception:
+        print("Unable to go to kernel folder location: {}",KERNELS_FULL_PATH_DIRECTORY)        
+        return None
+    try:
+        #Load the kernals 
+        spiceypy.furnsh(REQUIRED_KERNELS)
+    except:
+        raise IOError("Error reading kernel files",KERNELS_FULL_PATH_DIRECTORY+REQUIRED_KERNELS)
+
+    #back to working directory
+    os.chdir(cd)
 
     # Calculate the timerange
     # times -->> TDB seconds past the J2000 epoch.
@@ -53,9 +155,11 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
             sc_time.append(init_date)
             init_date += timedelta(days=resolution)
 
+    # Convert UTC to ephemeris time
     sc_time_spice = [spiceypy.str2et(t.strftime('%Y-%m-%d %H:%M')) for t in sc_time]
 
-    solo, lT = spiceypy.spkezr('Solar Orbiter', sc_time_spice,frame , 'NONE', 'Sun')
+
+    solo, lT = spiceypy.spkezr(object, sc_time_spice, frame , 'NONE', 'Sun')
     pos_solo = np.array(solo)[:, :3] * u.km
     vel_solo = np.array(solo)[:, 3:] * u.km / u.s
 
@@ -102,7 +206,14 @@ def phi_orbit_test():
     res_in_days = 0.1
     #kernel = None
 
-    solo_info = phi_orbit(starttime, 'Solar Orbiter', end_date = endtime,resolution = res_in_days)
+    solo_info = spg.phi_orbit(starttime, 'Solar Orbiter', end_date = endtime,resolution = res_in_days, frame = 'ECLIPJ2000')
+
+    plt.plot_date(solo_info.time,solo_info.vr ,'-')
+    plt.xlabel('Time')
+    plt.ylabel('Velocity [km/s]')
+    plt.show()
+
+    solo_info = spg.phi_orbit(starttime, 'Solar Orbiter', end_date = endtime,resolution = res_in_days, frame = 'SOLO_HEEQ')
 
     plt.plot_date(solo_info.time,solo_info.vr ,'-')
     plt.xlabel('Time')
@@ -111,17 +222,19 @@ def phi_orbit_test():
 
     when = [datetime(2020, 5, 15,19,0,0),datetime(2020, 5, 21,14,00,0)]
 
-    solo_heeq = phi_orbit(when, 'Solar Orbiter')
+    solo_j2000 = spg.phi_orbit(when, 'Solar Orbiter', frame = 'ECLIPJ2000')
+    solo_heeq = spg.phi_orbit(when, 'Solar Orbiter', frame = 'SOLO_HEEQ')
 
     for i in range(len(when)):
-        print('___________________________________________')
+        print('____________________J2000 - HEEQ_______________________')
         print('Time: ',when[i])
-        print('   Solo Sun center [HEEQ,degree]: ',solo_heeq.lat[i]*180/np.pi)
-        print('   Longitud (wrt Earth): ',solo_heeq.lon[i]*180/np.pi)
-        print('   Distance [AU]: ',solo_heeq.r[i])
-        print('   Solar size in arcsec from solo: ',solo_heeq[i].s_size)
-        print('   FDT solar diameter in pixels from solo: ',solo_heeq[i].s_size/3.61)
+        print('   Solo Sun center [degree]: ',solo_j2000.lat[i]*180/np.pi,solo_heeq.lat[i]*180/np.pi)
+        print('   Longitud (wrt Earth): ',solo_j2000.lon[i]*180/np.pi,solo_heeq.lon[i]*180/np.pi)
+        print('   Distance [AU]: ',solo_j2000.r[i],solo_heeq.r[i])
+        print('   Solar size in arcsec from solo: ',solo_j2000[i].s_size,solo_heeq[i].s_size)
+        print('   FDT solar diameter in pixels from solo: ',solo_j2000[i].s_size/3.61,solo_heeq[i].s_size/3.61)
         print('-------------------------------------------')
+
         
 def phi_orbit_conjuntion():
 
@@ -175,5 +288,9 @@ def phi_orbit_conjuntion():
     
     for i in range(len(when)):
         print('   Time, Solo radial velocity [km/s]: ',when[i],solo.vr[i])
+
+    # t = spiceypy.str2et('2021-2-1 12:30:03') 
+    # solo, lT = spiceypy.spkezr('Solar Orbiter', t,'SOLO_HEEQ', 'NONE', 'Sun') 
+
 
     return None

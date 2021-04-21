@@ -47,7 +47,7 @@ Implementation Notes
 
    \begindata
 
-     PATH_VALUES       = ( '..' )
+     PATH_VALUES       = ( './' )
 
      PATH_SYMBOLS      = ( 'KERNELS' )
 

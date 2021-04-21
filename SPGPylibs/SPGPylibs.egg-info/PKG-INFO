@@ -7,7 +7,9 @@ Author: SPG
 Author-email: orozco@iaa.es
 License: UNKNOWN
 Project-URL: Bug Tracker, https://github.com/vivivum/SPGPylibs/issues
-Description: # P-tools
+Description: <img src="SPGLOGO-LR.png" align="right" width=100px />
+        
+        ## SPGPylibs
         
         Python libraries for PHI and TuMAG proyects
         
@@ -15,7 +17,35 @@ Description: # P-tools
         
         PD-tools are Phase-Diversity image reconstruction programs for TuMAG
         
+        SPGPylibs contains many of the tools used for the pre-processing and analysis of IMaX and TuMAG instruments of the Sunrise mission and PHI instrument for the Solar Orbiter mission.
+        For more information about the members of the group visit http://spg.iaa.es/
         
+        Installation
+        ------------
+        
+        SPGPylibs is based in Python 3+ and can be installed in your distribution using pip:
+        
+        ::
+            pip install SPGPylibs
+        
+        Getting started
+        ===============
+        
+        Contributors
+        ------------
+        
+        	-D. Orozco Suárez
+        	-P. Santamarina
+        	-J. Blanco
+            -A. Sui
+            -A. Dorantes
+            -H. Strecker
+            -A. Moreno Vacas
+        
+        License
+        -------
+        
+        .. include:: ../LICENSE
 Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
