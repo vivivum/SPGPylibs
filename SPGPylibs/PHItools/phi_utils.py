@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta,datetime
 import matplotlib.dates as mdates
 import numpy as np
 from astropy import units as u 
@@ -29,6 +29,123 @@ def cart2sphere(x,y,z):
     phi = np.arctan2(y,x)                        # phi
     return (r, theta, phi)
 
+def cart2polar(x, y):
+    r = np.sqrt(x**2 + y**2)
+    theta = np.arctan2(y, x)
+    return r, theta
+
+def polar2cart(r, theta):
+    x = r * np.cos(theta)
+    y = r * np.sin(theta)
+    return x, y
+
+def azimutal_average(img,centers,size_of_bin = 2):
+    sy,sx = img.shape
+    [X, Y] = np.meshgrid(np.arange(sx) - centers[0], np.arange(sy) - centers[1])
+    R = np.sqrt(np.square(X) + np.square(Y))
+    rad = np.arange(1, np.max(R), 1)
+    intensity = np.zeros(len(rad))
+    index = 0
+    size_of_bin = 2
+    for i in rad:
+        mask = (np.greater(R, i - size_of_bin) & np.less(R, i + size_of_bin))
+        values = img[mask]
+        intensity[index] = np.mean(values)
+        index += 1
+    return intensity, rad
+
+def limb_darkening(x,pars):
+    ''' Limb darkening function and its derivative
+        Returns the funcion and derivatives respect to pars 
+       as numpy arrays of dimension (x_data, x_par) 
+       x : mu = 1 - cos(theta)
+       I = I0 * ( 1 - sum_(k=1)^(order) a_k * mu^k)
+       Based on D. Hestroffer and C. Magnan, Astron. Astrophys. 333, 338–342 (1998)
+    '''
+    # Order 1 case (simplest)
+    # df_dI0 = -(1 - u * (1 - mu))
+    # df_du  = -( I0 * (mu - 1))
+
+    order = len(pars)
+    I0 = pars[0]
+    mu = 1 - x
+    exponent = np.arange(order-1, dtype=float) + 1.0
+    
+    fn = np.zeros((len(mu)))
+    fn[:] = I0
+    for i in exponent:
+        fn[:] -= I0 * pars[int(i)] * mu**i
+        
+    dr = np.zeros((len(mu),len(pars)))
+    dr[:,0] = 1
+    for i in exponent:
+        dr[:,0] -=  pars[int(i)] * mu**i
+    for i in exponent:
+        dr[:,int(i)] = - I0 * mu**i
+    
+    return fn , dr 
+  
+def newton(y,x,pars,func, **args):
+
+    try:
+        iter = int(iter)
+    except:
+        iter = 3
+    for i in range(iter):
+    
+        fn , dr = func(x,pars,**args)
+
+        chi2 = np.sum((y - fn)**2) #NOT USED
+        chi = (y - fn)
+        J = np.matmul(chi, - dr)
+        H = np.matmul(np.transpose( - dr), - dr)
+        HI = np.linalg.inv(H)
+        Change = np.matmul(HI,np.transpose(J))
+        pars_new = pars - Change
+
+        print(pars)
+        print(pars_new)
+        pars = pars_new
+
+    return pars
+
+def allen_clv(wave,theta,check = 0):
+
+    """
+    Allen's Astrophysical Quantities, Springer, 2000 
+    get u(lambda) from Allen tables. I(theta)/I{(O)
+    theta = angle between the Sun's radius vector and the line of sight. In rad.
+    wave = wavelength in Angstroms
+    forth parameter is u!!!!!
+    """
+
+    def coefs(wave):
+        u = (- 8.9829751 + 0.0069093916*wave - 1.8144591e-6*wave**2 + 2.2540875e-10*wave**3 -
+            1.3389747e-14*wave**4 + 3.0453572e-19*wave**5 )
+        v = (+ 9.2891180 - 0.0062212632*wave + 1.5788029e-6*wave**2 - 1.9359644e-10*wave**3 + 
+            1.1444469e-14*wave**4 - 2.5994940e-19*wave**5 )
+        return u,v
+
+    try:
+        if check == 1:
+            gamma = np.arange(0,90,1)*np.pi/180.
+            u,v = coefs(wave) 
+            I = 1 - (u+v) + (u+v)*np.cos(gamma)
+            clv = 1 - u - v + u*np.cos(gamma)+v*np.cos(gamma)
+            plt.plot(gamma,clv)
+            plt.plot(gamma,I,'--')
+    except:
+        pass
+    u,v = coefs(wave) 
+    if check == 2:
+        return u + v
+    return 1 - u - v + u*np.cos(theta)+v*np.cos(theta),u,v,u + v
+
+def get_time(h):
+    time = datetime.strptime(h[0][1], '%Y-%m-%d %H:%M:%S.%f')
+    print('TIME: ',time)
+    return time
+
 def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resolution = 1, kernel = None, kernel_dir = None):
     ''' get basic orbitar parameters using Spice kernels
     Need to have spicepy installed.
@@ -47,7 +164,7 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
       SUN_EARTH_ECL               HEE of Date
       EARTH_MECL_MEQX             Mean Ecliptic of Date (ECLIPDATE)
     
-     The Heliocentric Earth Ecliptic frame (HEE) is defined as follows (from [3]):
+     The Heliocentric Earth Ecliptic frame (HEE) is defined as follows:
        -  X-Y plane is defined by the Earth Mean Ecliptic plane of date,
            therefore, the +Z axis is the primary vector,and it defined as
             the normal vector to the Ecliptic plane that points toward the
@@ -57,8 +174,7 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
        -  +Y axis completes the right-handed system;
        -  the origin of this frame is the Sun's center of mass.
 
-     The Heliocentric Inertial Frame (HCI) is defined as follows (from [3]):
-
+     The Heliocentric Inertial Frame (HCI) is defined as follows:
        -  X-Y plane is defined by the Sun's equator of epoch J2000: the +Z
           axis, primary vector, is parallel to the Sun's rotation axis of
           epoch J2000, pointing toward the Sun's north pole;
@@ -67,9 +183,7 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
        -  +Y completes the right-handed frame;
        -  the origin of this frame is the Sun's center of mass.
 
-    The Heliocentric Earth Equatorial (HEEQ) frame is defined as follows (from [3]
-      and [4]):
-
+    The Heliocentric Earth Equatorial (HEEQ) frame is defined as follows:
        -  X-Y plane is the solar equator of date, therefore, the +Z axis 
             is the primary vector and it is aligned to the Sun's north pole
             of date;

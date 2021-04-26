@@ -5,11 +5,7 @@
 ## `SPGPylibs`
 --------------------------
 
-This repository contains libraries and functions developed by the Solar Physics Group of the [Instituto de Astrofísica de Andalucía](https://www.iaa.es). Most of them are for data analysis and pre-procesing of the Polarimetric and Helioseismic Imager of the Solar Orbiter ESA mission and of the Tunable Magnetograph (TuMAG) of the Sunrise mission.
-
-This repository also contains tools for fully modeling the behabiour of Fabry-Perot etalons and for Phase-Diversity  image reconstruction techniques.
-
-SPGPylibs contains many of the tools used for the pre-processing and analysis of IMaX and TuMAG instruments of the Sunrise mission and PHI instrument for the Solar Orbiter mission.
+This repository contains libraries and functions developed by the Solar Physics Group of the [Instituto de Astrofísica de Andalucía](https://www.iaa.es). Most of them are for the analysis and pre-procesing of data coming from the Polarimetric and Helioseismic Imager of the Solar Orbiter ESA mission and from the Tunable Magnetograph (TuMAG) of the Sunrise balloom borne mission. This repository also contains tools for fully modeling the behabiour of Fabry-Pérot etalons and for Phase-Diversity  image reconstruction. More details can be found in the readme file located in the different package folder.
 
 For more information about the members of the group visit <http://spg.iaa.es/>
 
@@ -23,27 +19,27 @@ Inversions tools of the SPG can be found in the main web and in the following re
 Installation
 ------------
 
-SPGPylibs is based in Python 3+ and can be installed in your distribution using pip:
+SPGPylibs is based in Python 3+ and can be installed in your distribution using pip (**not active yet**) or directly downloading it from here.
 
-::
-    pip install SPGPylibs
+```shell
+pip install SPGPylibs
+```
 
 Getting started
 ===============
 
 ```python
 import SPGPylibs as spg
-print s
 ```
 
 Available packages
 ------------
 
-- `FPtools`             <span style="float:right; width:45em;">desc</span> 
-- `GENtools`             <span style="float:right; width:45em;">desc</span> 
-- `PHItools`             <span style="float:right; width:45em;">desc</span> 
-- `PDtools`             <span style="float:right; width:45em;">desc</span> 
-- `TuMAGtools`             <span style="float:right; width:45em;">desc</span> 
+- `FPtools`             <span style="float:right; width:45em;">Fabry-Pérot modeling tools</span> 
+- `GENtools`             <span style="float:right; width:45em;">Generic tools</span> 
+- `PHItools`             <span style="float:right; width:45em;">Solar Orbiter PHI related software</span> 
+- `PDtools`             <span style="float:right; width:45em;">Phase-Diversity reconstruction tools</span> 
+- `TuMAGtools`             <span style="float:right; width:45em;">Sunrise TuMAG related software</span> 
 
 Contributors
 ------------

@@ -1,3 +1,12 @@
+#=============================================================================
+# Project: SoPHI
+# File:    phi_fits.py
+# Author:  David Orozco Suárez (orozco@iaa.es)
+# Contributors: 
+#-----------------------------------------------------------------------------
+# Description: programs for accesing data and fits files
+#-----------------------------------------------------------------------------
+
 from astropy.io import fits as pyfits
 from astropy.io.fits import getheader
 import numpy as np
@@ -32,6 +41,41 @@ def fits_get(file,info = False,head = 0,scaling = False):
     except Exception:
         print("Unable to open fits file: {}",file)        
         return None
+
+def fits_get_fpatimes(file):
+    '''
+    for the moment provide the time corresponding to first exposure/wavelength 
+    '''
+    from datetime import datetime
+    fpa_head = 4
+    try:
+        dummy_head = getheader(file,fpa_head)
+        if dummy_head['EXTNAME'] != 'PHI_FITS_FPA_settings':
+            print('ERROR .... fpa_head is not number 4')
+            return
+        with pyfits.open(file) as hdu_list:
+            dat_fpa = hdu_list[fpa_head].data
+            #TODO tfg = np.zeros((n_waves),dtype=float) 
+            #TODO init = datetime.strptime(dat_fpa[0][1], '%Y-%m-%d %H:%M:%S.%f')
+            #TODO for i in range(n_waves):
+            #TODO     fin = dat_fpa[i][1]
+            #TODO     fin_ = datetime.strptime(fin, '%Y-%m-%d %H:%M:%S.%f')
+            #TODO     tfg[i] = float((fin_ - init).total_seconds())
+            return datetime.strptime(dat_fpa[0][1], '%Y-%m-%dT%H:%M:%S.%f')
+
+    except Exception:
+        print("Unable to open fits file: {}",file)        
+        return None
+
+def list_fits(path = './'):
+    '''Find all fits in directory.'''
+    import os
+    list_of_files = []
+    for (dirpath, dirnames, filenames) in os.walk(path):
+        for filename in filenames:
+            if filename.endswith('.fits'): 
+                list_of_files.append(os.path.join(dirpath, filename)) 
+    return list_of_files
 
 def fits_get_sampling(file):
     '''

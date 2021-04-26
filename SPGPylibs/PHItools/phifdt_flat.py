@@ -1,8 +1,13 @@
-################################################################################
-################################################################################
-# KLL LIBRARY 
-################################################################################
-################################################################################
+#=============================================================================
+# Project: SoPHI
+# File:    phifdt_flat.py
+# Author:  David Orozco Suárez (orozco@iaa.es)
+# Contributors: Tobias Lange and Nestor Albelo (albelo@mps.mpg.de)
+#-----------------------------------------------------------------------------
+# Description: Pipeline implementation for calculating the FDT flat
+#              Includes three algorithms for flat calculation and 
+#              the circular Hough Transform in the frequency domain.
+#-----------------------------------------------------------------------------
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -52,8 +57,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
 
     References
     ----------
-    .. [1] Hough transform using FFT,
-    .. [2] Wikipedia, http://en.wikipedia.org/wiki/Otsu's_Method
+    [1] C. Hollitt, Machine Vision and Applications (2013) 24:683–694 DOI 10.1007/s00138-012-0420-x
 
     Examples
     --------
@@ -190,15 +194,25 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
     image -> [n_images][y,x]
     rel_centers -> [n_images,2] where [:,0]=dx and [:,1]=dy 
         Displacements are given with respect to image origin (0,0)
-    radious -> radious of circular mask. Default = 0. In this case, the code uses the thrd to create the mask
-    thrd -> threshold above which pixels are valid. Default = 0.05 (assuming image is normalized to one)
-    iter -> maximum number of iterations in the kll algorithm.  Default = 15
-    expand -> how much the circular mask is expanded (positive = schrinks the mask) in %.
-    verbose -> 0 = do nothing.
-    method = 'kll'
-        'kll': 
-        'chae': 
-        'alter': 
+    radious = 0 : int
+        radious of circular mask. Default = 0. In this case, the code uses the thrd to create the mask
+    thrd = 0.05 : float
+        threshold above which pixels are valid. Default = 0.05 (assuming image is normalized to one)
+    iter = 15 : int
+        maximum number of iterations in the kll algorithm.  Default = 15
+    expand = 0 : int
+        how much the circular mask is expanded (positive = schrinks the mask) in %.
+    verbose = 0 : int
+        0 = do nothing, 1 = ...., 2 = ...., 
+    method = 'kll' : string
+        'kll': J. R. Kuhn, H. Lin, and D. Loranz,  PASP 103, 1097-1108, 1991
+        'chae': Adapted from: J. Chae, Solar Physics 221: 1–14, 2004
+        'alter': James N. Caron, Marcos J. Montes, and Jerome L. Obermark,
+                 Review of Scientific Instruments 87, 063710 (2016); doi: 10.1063/1.4954730
+    bit_trun = 0: int
+        Do not touch
+    c_term = 0 : float np.array(n_images)      
+        intensity factor correction for chae method        
     '''
 
     imsize = image[0].shape
@@ -269,7 +283,7 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
                 
                 n += t_mask_1 # accumulate valid pixels first sumatorio
                 n += t_mask_2 # accumulate valid pixels second sumatorio
-        
+
         K = sum_image / n.astype(np.float64) 
         # replace NaNs and Infs by 0
         K[np.isneginf(K)] = 0
@@ -540,8 +554,8 @@ def fdt_flat(files, wavelength, npol, method, dark = None, read_shits = 0, shift
                 print('Image',i,'c: ',centers[i,0],',',centers[i,1],' rad: ', radius[i],'*')
 
         elif disp_method == 'circle':
-            centers = np.array([n_images,2])
-            radius = np.array([n_images])
+            centers = np.zeros((n_images,2))
+            radius = np.zeros((n_images))
             for i in range(n_images):
                 centers[i,1],centers[i,0],radius[i] = find_center(image[i],sjump = 4,njumps = 100,threshold = 0.8)
                 print, 'Image',i,'c: ',centers[i,0],',',centers[i,1],' rad: ', radius[i]
@@ -580,13 +594,14 @@ def fdt_flat(files, wavelength, npol, method, dark = None, read_shits = 0, shift
         return gain, norma
 
 
-import sys
-sys.path.append('../SPGPylibs/')
-import SPGPylibs as spg
+
 def fdt_flat_testrun():
     '''
     Just for local test
     '''
+    import sys
+    sys.path.append('../SPGPylibs/')
+    import SPGPylibs as spg
 
     dir = '/Users/orozco/Dropbox_folder/SoPHI/PHI-COMMISSIONING/software-and-images/RSW1/Add-data/'
     files = ['solo_L0_phi-fdt-ilam_20200618T035946_V202007101227C_0066180100.fits',
@@ -625,10 +640,6 @@ def fdt_flat_testrun():
         allgain.append(gain)
         norma[wavelength*4+npol] = norma_out
 
-    np.savetxt('flats_norma.txt', norma)
-    
-    header = getheader(files[0]) 
-
-    hdu = pyfits.PrimaryHDU(allgain)
-    hdu = pyfits.PrimaryHDU(header=header)
-    hdu.writeto('flats.fits', clobber=True, output_verify='fix')
+    hdu_list = pyfits.open(files[0]) 
+    hdu_list[0].data = allgain
+    hdu_list.writeto('flats.fits', clobber=True)

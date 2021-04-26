@@ -5,7 +5,6 @@
 ## `SPGPylibs/PHItools`
 --------------------------
 
-
 These PHItools functions have been developed during the Solar Orbiter PHI commissioning and cruise phase activities. They provide tools for performing data analysis and calibration tasks. These libraries are not optimized for performance or anything. The user of these libraries should take care of their proper use. 
 
 Functions present in SPGPylibs.PHItools are listed below.
@@ -24,8 +23,15 @@ Functions present in SPGPylibs.PHItools are listed below.
 - `angle()`             <span style="float:right; width:45em;">angle between two vectors</span>      
 - `sphere2cart()`         <span style="float:right; width:45em;">Coordinate transformation</span> 
 - `cart2sphere()`     <span style="float:right; width:45em;">Coordinate transformation</span>
+- `cart2polar()`      <span style="float:right; width:45em;">Coordinate transformation</span>
+- `polar2cart()`       <span style="float:right; width:45em;">Coordinate transformation</span>
 - `phi_orbit()`     <span style="float:right; width:45em;">Wrapper to scipypy for orbit calculations</span>
 - `phi_orbit_test()`     <span style="float:right; width:45em;">tests program</span>
+- `allen_clv()`     <span style="float:right; width:45em;">Allen CLV coefficients</span>
+- `azimutal_average()`     <span style="float:right; width:45em;">Azimutically averages the intensity of solar disk</span>
+- `limb_darkening()`     <span style="float:right; width:45em;">Limb darkening function</span>
+- `newton()`     <span style="float:right; width:45em;">Newton LS</span>
+- `get_time()`    <span style="float:right; width:45em;">get time (h) from datetime format</span>
 
 #### *phi_gen.py*      
 - `shift()`             <span style="float:right; width:45em;">Shift function</span> 
@@ -60,7 +66,7 @@ Functions present in SPGPylibs.PHItools are listed below.
 - `fits_get_part()`         <span style="float:right; width:45em;">--</span> 
 - `read_shifts()`         <span style="float:right; width:45em;">--</span> 
 - `write_shifts()`         <span style="float:right; width:45em;">--</span> 
-
+- `fits_get_fpatimes()`         <span style="float:right; width:45em;">--</span>
 
 #### *phifdt_pipe.py*      
 - `----()`             <span style="float:right; width:45em;">--</span> 
