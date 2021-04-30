@@ -17,55 +17,88 @@ def fits_get(file,info = False,head = 0,scaling = False):
     if info = True prints fits info (headers structure)
     if head is provided, returns data and selected header
     if scaling = True, return the file scaling
+        The scaling will be a list of two tuple elelemts
+        scaling[0] ->  IMGFMT_16_0_S scaling 
+            with scaling[0][0] = bool: True if present and scaling[0][1] the actual scaling 
+        scaling[1] ->  IMGFMT_24_8 scaling
+            with scaling[0][0] = bool: True if present and scaling[0][1] the actual scaling 
     '''
-    try:
-        if info == True:
+    if info == True:
+        try:
             return pyfits.info(file)
-        if scaling == True:
-            index = 1
-            while True:
+        except Exception:
+            print("Unable to open fits file: {}",file)        
+            return None
+    if scaling == True:
+        index = 1
+        scaling = {"Present": [False,True], "scaling": [0,0]}
+        while True:
+            try:
                 dummy_head = getheader(file,index)
-                if dummy_head['EXTNAME'] == 'PHI_FITS_imageSummary':
-                    with pyfits.open(file) as hdu_list:
-                        header_data = hdu_list[index].data
+            except Exception:
+                print("Unable to open fits file: {}",file)        
+                return None
+            if dummy_head['EXTNAME'] == 'PHI_FITS_imageSummary':
+                with pyfits.open(file) as hdu_list:
+                    header_data = hdu_list[index].data
+                    #case 1 if that there is only ONE scaling (untouched data)
+                    if len(header_data) == 1:
+                        scaling["Present"][0] = False
+                        scaling["Present"][1] = True
+                        scaling["scaling"][0] = 0.
+                        scaling["scaling"][1] = float(header_data[0][12])
+                        return scaling
+                    #case 2 if that there is more than TWO scaling data
+                    if len(header_data) > 2:
+                        #check the first one from below and if it is IMGFMT_16_0_S store it and continue
                         if header_data[-1][3] == 'IMGFMT_16_0_S':
-                            return float(header_data[-1][12])
-                        else:
-                            return float(header_data[-2][12])
-                index += 1
-        with pyfits.open(file) as hdu_list:
-            if head != 0:
-                return hdu_list[head].data , hdu_list[head].header 
-            else:
-                return hdu_list[head].data.astype(np.dtype('float32')) , hdu_list[head].header
-    except Exception:
-        print("Unable to open fits file: {}",file)        
-        return None
+                            scaling["Present"][0] = True
+                            scaling["Present"][1] = True
+                            scaling["scaling"][0] = float(header_data[-1][12])
+                            scaling["scaling"][1] = float(header_data[-3][12])
+                            return scaling
+                        if header_data[-1][3] == 'IMGFMT_24_8':
+                            scaling["Present"][0] = False
+                            scaling["Present"][1] = True
+                            scaling["scaling"][0] = 0.
+                            scaling["scaling"][1] = float(header_data[-1][12])
+                            return scaling
+            index += 1
+    with pyfits.open(file) as hdu_list:
+        if head != 0:
+            return hdu_list[head].data , hdu_list[head].header 
+        else:
+            return hdu_list[head].data.astype(np.dtype('float32')) , hdu_list[head].header
 
-def fits_get_fpatimes(file):
+def fits_get_fpatimes(file,offset = None):
     '''
     for the moment provide the time corresponding to first exposure/wavelength 
     '''
-    from datetime import datetime
+    from datetime import datetime,timedelta
     fpa_head = 4
-    try:
-        dummy_head = getheader(file,fpa_head)
-        if dummy_head['EXTNAME'] != 'PHI_FITS_FPA_settings':
-            print('ERROR .... fpa_head is not number 4')
-            return
-        with pyfits.open(file) as hdu_list:
-            dat_fpa = hdu_list[fpa_head].data
-            #TODO tfg = np.zeros((n_waves),dtype=float) 
-            #TODO init = datetime.strptime(dat_fpa[0][1], '%Y-%m-%d %H:%M:%S.%f')
-            #TODO for i in range(n_waves):
-            #TODO     fin = dat_fpa[i][1]
-            #TODO     fin_ = datetime.strptime(fin, '%Y-%m-%d %H:%M:%S.%f')
-            #TODO     tfg[i] = float((fin_ - init).total_seconds())
-            return datetime.strptime(dat_fpa[0][1], '%Y-%m-%dT%H:%M:%S.%f')
-
-    except Exception:
-        print("Unable to open fits file: {}",file)        
-        return None
+    # try:  
+    dummy_head = getheader(file,0)
+    NAXIS3 = dummy_head['NAXIS3']
+    dummy_head = getheader(file,fpa_head)
+    if dummy_head['EXTNAME'] != 'PHI_FITS_FPA_settings':
+        print('ERROR .... fpa_head is not number 4')
+        return
+    adq_times = np.zeros((NAXIS3),dtype=float)
+    with pyfits.open(file) as hdu_list:
+        dat_fpa = hdu_list[fpa_head].data
+        init = datetime.strptime(dat_fpa[0][1], '%Y-%m-%dT%H:%M:%S.%f')
+        for i in range(NAXIS3):
+            the_time = datetime.strptime(dat_fpa[i][1], '%Y-%m-%dT%H:%M:%S.%f')
+            adq_times[i] = float((the_time - init).total_seconds()) 
+        if offset:
+            diff = init - offset
+            print('diff: ', adq_times)
+            print('diff: ', float(diff.total_seconds()) )
+            adq_times = adq_times + float(diff.total_seconds()) 
+    return adq_times,init
+    # except Exception:
+    #     print("Unable to open fits file: {}",file,' Other resons may happen (bug)')        
+    #     return None
 
 def list_fits(path = './'):
     '''Find all fits in directory.'''
@@ -77,7 +110,7 @@ def list_fits(path = './'):
                 list_of_files.append(os.path.join(dirpath, filename)) 
     return list_of_files
 
-def fits_get_sampling(file):
+def fits_get_sampling(file,verbose = False):
     '''
     wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(file)
     No S/C velocity corrected!!!
@@ -103,22 +136,24 @@ def fits_get_sampling(file):
                         voltagesData[j] = float(v[2])
                         dummy = voltagesData[j] 
                         j += 1
-        print('     Voltages: ',voltagesData)
+        if verbose:
+            print('     Voltages: ',voltagesData)
         d1 = voltagesData[0] - voltagesData[1]
         d2 = voltagesData[4] - voltagesData[5]
         if np.abs(d1) > np.abs(d2):
             cpos = 0
         else:
             cpos = 5
-        print('Continuum position at wave: ', cpos)
+        if verbose:
+            print('Continuum position at wave: ', cpos)
         wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.3356
-        print('     Data wave axis [mA]: ',wave_axis)
+        if verbose:
+            print('     Data wave axis [mA]: ',wave_axis)
 
         return wave_axis,voltagesData,tunning_constant,cpos
 
     except Exception:
         print("Unable to open fits file: {}",file)        
-        return None
 
 def fits_get_part(file, wave, npol):
     '''helper function to load FITS data set

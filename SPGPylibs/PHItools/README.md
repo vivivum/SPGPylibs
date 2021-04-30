@@ -46,6 +46,8 @@ Functions present in SPGPylibs.PHItools are listed below.
 - `bin_annulus()`     <span style="float:right; width:45em;">tests program</span>
 - `circle_grid()`     <span style="float:right; width:45em;">tests program</span>
 - `find_circle_hough()`     <span style="float:right; width:45em;">tests program</span>
+- `simple_shift()`     <span style="float:right; width:45em;">tests program</span>
+- `find_center()`     <span style="float:right; width:45em;">tests program</span>
 - `FFTs()`     <span style="float:right; width:45em;">tests program</span>
 - `Laplacian()`     <span style="float:right; width:45em;">tests program</span>
 - `rebin()`     <span style="float:right; width:45em;">tests program</span>

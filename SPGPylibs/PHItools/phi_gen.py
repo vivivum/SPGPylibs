@@ -353,10 +353,15 @@ def find_Circles_ida(image, radii, r_width,verbose = False):
 
 def votes(acc, radii):
 
+    '''
+    devielve: (circle_y, circle_x), radius, maxima, max_positions 
+    c[0] = x
+    c[1] = y   (The other way around of the definition!!!! which would be c[1] = x and c[0] = y) 
+    '''
     maxima = []
     max_positions = []
     max_signal = 0
-    print("calc: radius |  maxima  | max_position | signal")
+    print("calc: radius |  maxima  | max_position (x,y) | signal")
 
     #FIXME Hay que mejorarlo. Coger una caja de 5x5 y buscar el máximo en la caja
     for i, r in enumerate(radii):
@@ -373,12 +378,12 @@ def votes(acc, radii):
         print("calc: %8.2f | %8.2f | %s | %8.2f" % (r, maxima[i], (max_positions[i]), signal))
     
     print("Last: %8.2f | %8.2f | %s" %
-          (radius, np.max(maxima), (circle_y, circle_x)))
+          (radius, np.max(maxima), (circle_x, circle_y)))
     
     # Identify maximum. Note: the values come back as index, row, column
     #    max_index, circle_y, circle_x = np.unravel_index(acc.argmax(), acc.shape)
 
-    return (circle_x, circle_y), radius, maxima, max_positions  # radii[max_index]
+    return (circle_x, circle_y), radius, maxima, max_positions  # 
 
 def bin_annulus(shape,radius, width, full = False):
     """
@@ -457,7 +462,7 @@ def find_circle_hough(image,inner_radius, outer_radius, steps,method='prewitt',
     acc_conv = find_Circles_ida(binmask, radii, r_width)
     #acc_conv = find_Circles(binmask, radii, r_width, verbose=verbose, full=True)
     center,radius,c,d = votes(acc_conv, radii)
-    print('Found center: ', center, ' and radius: ', radius)
+    print('Found center [y,x]: ', center, ' and radius: ', radius)
 
     if verbose == True:
         fig = plt.figure(frameon=False)

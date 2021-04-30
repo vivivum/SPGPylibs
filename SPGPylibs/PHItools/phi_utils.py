@@ -1,9 +1,13 @@
 from datetime import timedelta,datetime
+from math import degrees
 import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as u 
-import spiceypy
-import warnings
+import spiceypy, os, warnings
+#from SPGPylibs.GENtools.global import *
+from .tools import *
+
 warnings.filterwarnings('ignore')
 
 def dot(K,L):
@@ -15,7 +19,21 @@ def angle(K,L):
     n_L = np.linalg.norm(L, axis=0)
     c = dot_prod/n_K/n_L
     angle = np.arccos(np.clip(c, -1, 1))
-    return angle*180/np.pi
+    return np.degrees(angle)
+
+def angle2(K,L,n):
+    cross_prod = crossp(K,L)
+    dot_prod = dot(K,L)
+    n_c = np.linalg.norm(cross_prod, axis=0)
+    vect_c = np.sign(dot(cross_prod, np.transpose([n] * K.shape[1])))*n_c
+    ang = np.arctan2(vect_c,dot_prod)
+    return np.degrees(ang)
+
+def crossp(K,L):
+    r = np.zeros((K.shape))
+    for n in range(K.shape[1]):
+        r[:,n] = np.cross(K[:,n],L[:,n])
+    return r
 
 def sphere2cart(r, phi, theta):
     x = r*np.cos(theta)*np.cos(phi)
@@ -223,17 +241,36 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
 
     '''
 
-    import os 
+    REQUIRED_KERNELS = ['mk/solo_ANC_soc-flown-mk_v107_20210412_001.tm']
+    # KERNELS_FULL_PATH_DIRECTORY = \
+    #     '/Users/orozco/Dropbox_folder/Python/VS-GitHub/SPGPylibs/SPGPylibs/PHItools/Orbits-data/kernels/'
 
-    KERNELS_FULL_PATH_DIRECTORY = \
-        '/Users/orozco/Dropbox_folder/Python/VS-GitHub/SPGPylibs/SPGPylibs/PHItools/Orbits-data/kernels/'
+    # KERNELS_FULL_PATH_DIRECTORY = os.path.realpath(__file__) 
+    # KERNELS_FULL_PATH_DIRECTORY = KERNELS_FULL_PATH_DIRECTORY[:-12] + 'orbits-data/kernels/'
+    # #print('***',KERNELS_FULL_PATH_DIRECTORY+REQUIRED_KERNELS[0])
+    # if os.path.isfile(KERNELS_FULL_PATH_DIRECTORY+REQUIRED_KERNELS[0]):
+    #     printc("Kernel not found at:", KERNELS_FULL_PATH_DIRECTORY+REQUIRED_KERNELS[0],color=bcolors.FAIL)
+    # else:
+    #     raise ValueError('Cannot find kernel (238):', KERNELS_FULL_PATH_DIRECTORY+REQUIRED_KERNELS[0])
+
+    try:
+        KERNELS_FULL_PATH_DIRECTORY = os.path.realpath(__file__) 
+        KERNELS_FULL_PATH_DIRECTORY = KERNELS_FULL_PATH_DIRECTORY[:-12] + 'orbits-data/kernels/'
+        if os.path.isfile(KERNELS_FULL_PATH_DIRECTORY+REQUIRED_KERNELS[0]):
+            printc("Kernel found at:", KERNELS_FULL_PATH_DIRECTORY+REQUIRED_KERNELS[0],color=bcolors.OKGREEN)
+        else:
+            raise ValueError('Cannot find kernel (246):', KERNELS_FULL_PATH_DIRECTORY+REQUIRED_KERNELS[0])
+    except ValueError as err:
+        printc(err.args[0],color=bcolors.FAIL)
+        printc(err.args[1],color=bcolors.FAIL)
+        return        
+
     try:
         if kernel_dir != None:
             KERNELS_FULL_PATH_DIRECTORY = kernel_dir
     except:
         pass
 
-    REQUIRED_KERNELS = ['mk/solo_ANC_soc-flown-mk_v107_20210412_001.tm']
     try:
         if kernel != None:
             REQUIRED_KERNELS = kernel
@@ -272,8 +309,8 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
     # Convert UTC to ephemeris time
     sc_time_spice = [spiceypy.str2et(t.strftime('%Y-%m-%d %H:%M')) for t in sc_time]
 
-
     solo, lT = spiceypy.spkezr(object, sc_time_spice, frame , 'NONE', 'Sun')
+
     pos_solo = np.array(solo)[:, :3] * u.km
     vel_solo = np.array(solo)[:, 3:] * u.km / u.s
 
@@ -289,7 +326,6 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
     sc_r = np.sqrt(sc_x**2 + sc_y**2 + sc_z**2)
     elevation = np.rad2deg(np.arcsin(sc_z / sc_r))
     angle = np.rad2deg(np.arcsin((sc_x.to_value()**2 + sc_y.to_value()**2 + sc_z.to_value()**2 ) / sc_r.to_value()))
-
     sc_r, sc_lat, sc_lon = cart2sphere(sc_x,sc_y,sc_z)
 
     rad_sun = 1391016 # solar radius in km
@@ -308,6 +344,18 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
         ('y','f8'),('z','f8'),('vx','f8'),('vy','f8'),('vz','f8'),('sp','f8'),\
         ('vr','f8'),('elevation','f8'),('angle','f8'),('s_size','f8')])
     
+    target = 'SUN'
+    frame  = 'SOLO_HEEQ'
+    corrtn = 'LT+S'
+    observ = 'Solar Orbiter'
+    sundir, ltime = spiceypy.spkpos(target, sc_time_spice, frame,corrtn, observ)
+    sundir = spiceypy.vhat(sundir[0])
+
+    print('SUNDIR(X) ={:20.6f}'.format(sundir[0]))
+    print('SUNDIR(Y) ={:20.6f}'.format(sundir[1]))
+    print('SUNDIR(Z) ={:20.6f}'.format(sundir[2]))
+
+    spiceypy.unload(REQUIRED_KERNELS)
     return screc
 
 def phi_orbit_test():
@@ -317,27 +365,38 @@ def phi_orbit_test():
 
     starttime = datetime(2020, 11, 30)
     endtime = datetime(2022, 9, 30)
+    starttime = datetime(2021, 9, 10)
+    endtime = datetime(2021, 9, 20)
+    starttime = datetime(2021, 7, 1)
+    endtime = datetime(2021, 12, 20)
+    starttime = datetime(2020, 11, 16)
+    endtime = datetime(2020, 11, 19)
     res_in_days = 0.1
     #kernel = None
 
-    solo_info = spg.phi_orbit(starttime, 'Solar Orbiter', end_date = endtime,resolution = res_in_days, frame = 'ECLIPJ2000')
+    solo_info = phi_orbit(starttime, 'Solar Orbiter', end_date = endtime,resolution = res_in_days, frame = 'ECLIPJ2000')
 
     plt.plot_date(solo_info.time,solo_info.vr ,'-')
     plt.xlabel('Time')
     plt.ylabel('Velocity [km/s]')
     plt.show()
 
-    solo_info = spg.phi_orbit(starttime, 'Solar Orbiter', end_date = endtime,resolution = res_in_days, frame = 'SOLO_HEEQ')
+    solo_info = phi_orbit(starttime, 'Solar Orbiter', end_date = endtime,resolution = res_in_days, frame = 'SOLO_HEEQ')
 
     plt.plot_date(solo_info.time,solo_info.vr ,'-')
     plt.xlabel('Time')
     plt.ylabel('Velocity [km/s]')
+    plt.show()
+
+    plt.plot_date(solo_info.time,solo_info.angle ,'-')
+    plt.xlabel('Time')
+    plt.ylabel('Angle Earth-Solo')
     plt.show()
 
     when = [datetime(2020, 5, 15,19,0,0),datetime(2020, 5, 21,14,00,0)]
 
-    solo_j2000 = spg.phi_orbit(when, 'Solar Orbiter', frame = 'ECLIPJ2000')
-    solo_heeq = spg.phi_orbit(when, 'Solar Orbiter', frame = 'SOLO_HEEQ')
+    solo_j2000 = phi_orbit(when, 'Solar Orbiter', frame = 'ECLIPJ2000')
+    solo_heeq = phi_orbit(when, 'Solar Orbiter', frame = 'SOLO_HEEQ')
 
     for i in range(len(when)):
         print('____________________J2000 - HEEQ_______________________')
@@ -369,6 +428,7 @@ def phi_orbit_conjuntion():
         datetime(2021, 2, 10,12,30,2),\
         datetime(2021, 2, 11,12,30,2),\
         datetime(2021, 2, 12,12,30,2),\
+        datetime(2021, 2, 13,12,30,2),\
         datetime(2021, 2, 21,6,00,2)]
 
     # 2021-02-01 12:30:03
@@ -408,3 +468,73 @@ def phi_orbit_conjuntion():
 
 
     return None
+
+def get_angles_solo_Earth(starttime = datetime(2021, 6, 21),endtime = datetime(2022, 6, 27),res_in_days = 5):
+
+    # import sys
+    # sys.path.append('../SPGPylibs/')
+    # import SPGPylibs as spg
+    # import matplotlib.pyplot as plt
+    # from astropy.io.fits import getheader
+    # import numpy as np 
+    # from datetime import datetime
+    # #times
+    # starttime = datetime(2021, 6, 21)
+    # endtime = datetime(2022, 6, 27)
+    # res_in_days = 5
+
+    #load solo
+    solo = phi_orbit(starttime, 'Solar Orbiter', end_date = endtime,resolution = res_in_days, frame = 'SOLO_HEEQ')
+    Earth = phi_orbit(starttime, 'Earth', end_date = endtime,resolution = res_in_days, frame = 'SOLO_HEEQ')
+
+    fig, ax = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(15, 5))
+    ax[0].plot(solo.x, solo.z,'o',label='solo')
+    ax[0].plot(Earth.x, Earth.z,'o',label='Earth')
+    ax[0].set_xlabel('x (AU)')
+    ax[0].set_ylabel('z (AU)')
+    ax[0].legend()
+    ax[1].plot(solo.x, solo.y,'o')
+    ax[1].plot(Earth.x, Earth.y,'o')
+    ax[1].set_xlabel('x (AU)')
+    ax[1].set_ylabel('y (AU)')
+
+    ax[2].plot(solo.y, solo.z,'o')
+    ax[2].plot(Earth.y, Earth.z,'o')
+    ax[2].set_xlabel('y (AU)')
+    ax[2].set_ylabel('z (AU)')
+
+    for a in ax:
+        a.grid()
+        a.set_ylim(-1, 1)
+        a.set_xlim(-1, 1)
+    plt.tight_layout()
+    plt.show()
+
+    ang_heeq = angle([solo.x,solo.y,solo.z],[Earth.x,Earth.y,Earth.z])
+    ang_solo = cart2sphere(solo.x,solo.y,solo.z)
+    ang_earth = cart2sphere(Earth.x,Earth.y,Earth.z)
+    diff = ang_earth[2]*180/np.pi-ang_solo[2]*180/np.pi
+    idx = np.where(diff < 0)
+    diff[idx] =  360 + diff[idx] 
+
+    plt.plot_date(solo.time,ang_solo[2]*180/np.pi,'-',label='solo angle (X-Y)')  
+    plt.plot_date(solo.time,ang_earth[2]*180/np.pi,'-',label='earth angle (X-Y)')  
+    plt.plot_date(solo.time,diff,'-',label='diff')  
+    plt.plot_date(solo.time,ang_heeq ,'-',label='Real angle between SOLO/Earth')
+    plt.legend()
+    plt.show()
+
+    x = np.array([solo.x,solo.y,solo.z])
+    y = np.array([Earth.x,Earth.y,Earth.z])
+    n = [0,0,1]
+    ang2 = angle2(x,y,n)
+
+    plt.plot_date(solo.time,ang_heeq ,'-',label='Angle of Solo in HEEQ ref')
+    plt.plot_date(solo.time,ang2 ,'-',label='Real angle between E-Solo')
+    plt.plot_date(solo.time,ang_solo[2]*180/np.pi ,'-',label='Spherical theta angle')
+    plt.xlabel('Time')
+    plt.ylabel('Angle Earth-Solo')
+    plt.legend()
+    plt.show()
+
+    return solo.time,ang2

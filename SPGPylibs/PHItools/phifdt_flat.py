@@ -49,7 +49,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
 
     Returns
     -------
-    centers : numpy int array of [K,2] elements where [i,0] = x-centers and [i,0] = y-centers
+    centers : numpy int array of [K,2] elements where [i,0] = x-centers and [i,1] = y-centers
     radious : numpy int array of [K] elements containing the radious of the K-images in pixels 
 
     Raises
@@ -133,7 +133,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
     for i in range(n_images):
         print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
             (i, org_centers[i, 0], org_centers[i, 1],
-            centers[i][0], centers[i][1], radius[i]))
+            centers[i][1], centers[i][0], radius[i]))
 
     ############################
     #FIND CENTERS - FINE SEARCH
@@ -174,10 +174,10 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
     for i in range(n_images):
         print(" Coarse  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
             (i, org_centers[i, 0], org_centers[i, 1],
-            centers[i][0], centers[i][1], radius[i]))
+            centers[i][1], centers[i][0], radius[i]))
         print(" Fine    %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
             (i, org_centers[i, 0], org_centers[i, 1],
-            centers_fine[i][0], centers_fine[i][1], radius_fine[i]))
+            centers_fine[i][1], centers_fine[i][0], radius_fine[i]))
     
     if save == True:
         status = write_shifts('hough_centers.txt', (centers_fine,radii_fine))
