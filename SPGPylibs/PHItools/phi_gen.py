@@ -519,10 +519,10 @@ def find_center(im,sjump = 10,njumps = 50,threshold = 0.9):
         indices_y_max = np.asarray(np.where(ycut_d > ycut_d.max()*threshold)).flatten() 
         indices_y_min = np.asarray(np.where(ycut_d < ycut_d.min()*threshold)).flatten() 
 
-        x1 = np.mean(indices_x_max*xcut_d[indices_x_max])/np.mean(xcut_d[indices_x_max])
-        x2 = np.mean(indices_x_min*xcut_d[indices_x_min])/np.mean(xcut_d[indices_x_min])
-        y1 = np.mean(indices_y_max*ycut_d[indices_y_max])/np.mean(ycut_d[indices_y_max])
-        y2 = np.mean(indices_y_min*ycut_d[indices_y_min])/np.mean(ycut_d[indices_y_min])
+        x1 = np.mean(indices_x_max*xcut_d[indices_x_max])/np.mean(xcut_d[indices_x_max]) - 5
+        x2 = np.mean(indices_x_min*xcut_d[indices_x_min])/np.mean(xcut_d[indices_x_min]) - 5
+        y1 = np.mean(indices_y_max*ycut_d[indices_y_max])/np.mean(ycut_d[indices_y_max]) - 5
+        y2 = np.mean(indices_y_min*ycut_d[indices_y_min])/np.mean(ycut_d[indices_y_min]) - 5
 
         x0 = (x1+x2)/2 
         y0 = (y1+y2)/2 

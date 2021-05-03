@@ -1,4 +1,4 @@
-import functools
+import os, time, functools
 
 class bcolors:
     HEADER = '\033[95m'
@@ -29,7 +29,6 @@ def countcalls(fn):
     wrapped.ncalls = 0
     return wrapped
 
-import time
 def timeit(method):
     '''helper function to calculate executing time. Use @timeit above def'''
     def timed(*args, **kw):
@@ -54,3 +53,24 @@ def timeit(method):
 
         return result
     return timed
+
+def fix_path(path,dir='forward',verbose=False):
+    path = repr(path)
+    if dir == 'forward':
+        path = path.replace(")", "\)")
+        path = path.replace("(", "\(")
+        path = path.replace(" ", "\ ")
+        path = os.path.abspath(path).split("'")[1]
+        if verbose == True:
+            print('forward')
+            print(path)
+        return path
+    elif dir == 'backward':
+        path = path.replace("\\\\", "")
+        path = path.split("'")[1]
+        if verbose == True:
+            print('backward')
+            print(path)
+        return path
+    else:
+        pass

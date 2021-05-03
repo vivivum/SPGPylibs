@@ -21,6 +21,38 @@ def colorbar(mappable):
     cax = divider.append_axes("right", size="5%", pad=0.05)
     return fig.colorbar(mappable, cax=cax)
 
+def show_one(img,vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Image no title',cbarlabel='Some units',save=None,cmap='gray'):
+
+    plt.figure(figsize=(6, 6))
+    ax = plt.gca()
+    if vmin == None and vmax == None:
+        im = ax.imshow(img, cmap=cmap,vmin=img.mean() - PLT_RNG * img.std(),
+           vmax=img.mean() + PLT_RNG * img.std(), interpolation='none')
+    elif vmin == None:
+        im = ax.imshow(img, cmap=cmap,vmin=img.mean() - PLT_RNG * img.std(),
+           vmax=vmax, interpolation='none')
+    elif vmax == None:
+        im = ax.imshow(img, cmap=cmap,vmin=vmin,
+           vmax=img.mean() + PLT_RNG * img.std(), interpolation='none')
+    else:
+        im = ax.imshow(img, cmap=cmap,vmin=vmin,
+           vmax=vmax, interpolation='none')
+
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = plt.colorbar(im, cax=cax)
+    cbar.set_label(cbarlabel)
+    if save:
+        plt.savefig(save,dpi=300)
+        plt.close()
+    else:
+        plt.show()
+
+    return
+
 def show_two(im1,im2,vmin=[None,None],vmax=[None,None],block=True,pause=0.1,title=['',''],xlabel='Pixel',ylabel='Pixel'):
     
     fig, maps = plt.subplots(1,2,figsize=(8,8))
@@ -93,6 +125,7 @@ def show_four_row(im1,im2,im3,im4,svmin=0,svmax=0,title=['','','',''],xlabel='Pi
 
     fig, maps = plt.subplots(1,4,figsize=(12*zoom,6*zoom))
     plt.subplots_adjust(hspace=0.3, wspace=0.3)
+    yd,xd = im1.shape
     for i in range(4):
         if i == 0:
             dummy = np.copy(im1)
@@ -110,8 +143,11 @@ def show_four_row(im1,im2,im3,im4,svmin=0,svmax=0,title=['','','',''],xlabel='Pi
                 vmin = svmin[i]
                 vmax = svmax[i]
         except:
-                vmin = svmin[i]
-                vmax = svmax[i]
+                vmin = np.min(dummy[yd//2-50:yd//2+50,xd//2-50:xd//2+50])
+                vmax = np.max(dummy[yd//2-50:yd//2+50,xd//2-50:xd//2+50])
+                lim = np.max([np.abs(vmin),vmax])
+                vmin = -lim
+                vmax = lim
 
         dummy[dummy<vmin] = vmin
         dummy[dummy>vmax] = vmax
@@ -251,38 +287,6 @@ def two_plot(x,d1,d2):
     plt.plot(x,d1)
     plt.plot(x,d2)
     plt.show()
-
-    return
-
-def show_one(img,vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Image no title',cbarlabel='Some units',save=None,cmap='gray'):
-
-    plt.figure(figsize=(6, 6))
-    ax = plt.gca()
-    if vmin == None and vmax == None:
-        im = ax.imshow(img, cmap=cmap,vmin=img.mean() - PLT_RNG * img.std(),
-           vmax=img.mean() + PLT_RNG * img.std(), interpolation='none')
-    elif vmin == None:
-        im = ax.imshow(img, cmap=cmap,vmin=img.mean() - PLT_RNG * img.std(),
-           vmax=vmax, interpolation='none')
-    elif vmax == None:
-        im = ax.imshow(img, cmap=cmap,vmin=vmin,
-           vmax=img.mean() + PLT_RNG * img.std(), interpolation='none')
-    else:
-        im = ax.imshow(img, cmap=cmap,vmin=vmin,
-           vmax=vmax, interpolation='none')
-
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.title(title)
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = plt.colorbar(im, cax=cax)
-    cbar.set_label(cbarlabel)
-    if save:
-        plt.savefig(save,dpi=300)
-        plt.close()
-    else:
-        plt.show()
 
     return
 

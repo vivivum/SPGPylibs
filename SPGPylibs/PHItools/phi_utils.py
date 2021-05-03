@@ -344,12 +344,23 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
         ('y','f8'),('z','f8'),('vx','f8'),('vy','f8'),('vz','f8'),('sp','f8'),\
         ('vr','f8'),('elevation','f8'),('angle','f8'),('s_size','f8')])
     
+
+    #
+    # Compute the apparent state of the Sun as seen from solar orbiter in the SOLO_HEEQ frame.
+    #
     target = 'SUN'
     frame  = 'SOLO_HEEQ'
     corrtn = 'LT+S'
     observ = 'Solar Orbiter'
     sundir, ltime = spiceypy.spkpos(target, sc_time_spice, frame,corrtn, observ)
     sundir = spiceypy.vhat(sundir[0])
+
+    # Transformation from the inertial SOLO_HEEQ to the non-inertial body-fixed IAU_PHOEBE
+    # frame.  Since we want the apparent position, we
+    # need to subtract ltime from et.
+    #
+    sform = spiceypy.sxform( 'J2000', 'IAU_PHOEBE', et-ltime )
+
 
     print('SUNDIR(X) ={:20.6f}'.format(sundir[0]))
     print('SUNDIR(Y) ={:20.6f}'.format(sundir[1]))
@@ -407,8 +418,7 @@ def phi_orbit_test():
         print('   Solar size in arcsec from solo: ',solo_j2000[i].s_size,solo_heeq[i].s_size)
         print('   FDT solar diameter in pixels from solo: ',solo_j2000[i].s_size/3.61,solo_heeq[i].s_size/3.61)
         print('-------------------------------------------')
-
-        
+     
 def phi_orbit_conjuntion():
 
     from datetime import datetime
