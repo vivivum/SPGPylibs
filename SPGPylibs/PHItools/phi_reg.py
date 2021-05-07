@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from photutils import CircularAperture
 from scipy.optimize import curve_fit
 from .phi_gen import *
-from .tools import *
+from .tools import * 
 
 def sampling(N):
     """
@@ -328,7 +328,9 @@ def gaussian(coor ,height, x0, y0, sigma_x, sigma_y):
     return f_gauss.ravel()
 
 def moments(data):
-    """Returns (height, x, y, width_x, width_y)
+    """
+    Usefull for 2D data
+    Returns (height, x, y, width_x, width_y)
     the gaussian parameters of a 2D distribution by calculating its
     moments """
     total = data.sum()
@@ -341,6 +343,12 @@ def moments(data):
     width_y = np.sqrt(np.abs((np.arange(row.size)-x)**2*row).sum()/row.sum())
     height = data.max()
     return height, x, y, width_x, width_y
+
+def Gauss(x, a, x0, sigma):
+    return a * np.exp(-(x - x0)**2 / (2 * sigma**2))
+
+def Gauss2(x, a_1, x0_1, sigma_1,a_2, x0_2, sigma_2):
+    return Gauss(x, a_1, x0_1, sigma_1)+Gauss(x, a_2, x0_2, sigma_2)
 
 def fitgaussian(coor,data):
     print(type(coor))

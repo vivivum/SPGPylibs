@@ -1,22 +1,19 @@
-# To add a new cell, type '# %%'
-# To add a new markdown cell, type '# %% [markdown]'
-# %% 
 import numpy as np 
 import os.path
 #from astropy.io import fits as pyfits
+import random, statistics
+
 from scipy.ndimage import gaussian_filter, rotate
-import random
-import statistics
+from scipy.interpolate import interp1d
+from scipy.optimize import curve_fit
 
 from .tools import *
 from .phi_fits import *
 from .phi_gen import *
 from .phi_reg import *
-import SPGPylibs.GENtools.plot_lib as plib
+from .phi_utils import newton,azimutal_average,limb_darkening
 
-# import scipy.integrate
-# from scipy import rotate
-# import scipy.ndimage as ndimage
+import SPGPylibs.GENtools.plot_lib as plib
 
 def interpolateImages(image1, image2, dist1I, distI2):
     ''' interpolate 2D images - 
@@ -417,12 +414,30 @@ def crosstalk_ItoQUV2d(data_demod,size=4):
     #cV1 = image.reconstruct_from_patches_2d(cV1, (yy,xx))
     return cV0,cV1
 
+def running_mean(x, N):
+    '''
+    running mean to smooth signals
+    '''
+    return np.convolve(x, np.ones((N,))/N, mode='same')
+
+def genera_2d(what):
+    '''
+    generate 2D images from a radial cut
+    data should be EVEN!!!! (par vaya)
+    '''
+    n = len(what)
+    x,y = np.meshgrid(range(2*n+1),range(2*n+1)) #generate ODD grid
+    d = np.sqrt((x-n)**2+(y-n)**2)     
+    lafuncion = np.concatenate((what,np.zeros((n + 1))))
+    f = interp1d(np.arange(2*n + 1), lafuncion)
+    return f(d.flat).reshape(d.shape)
+
 def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c = True,
     inner_radius = 250, outer_radius = 800, steps = 100, normalize = 0., flat_n = 1.,
     index = None, prefilter = 1, prefilter_fits = '0000990710_noMeta.fits',
     realign = False, verbose = True, outfile=None, mask_margin = 7, 
     individualwavelengths = False,correct_ghost = False,putmediantozero=False,
-    vqu = False, do2d = 0, rte = False, debug = False,nlevel = 0.3,center_method=None):
+    vqu = False, do2d = 0, rte = False, debug = False,nlevel = 0.3,center_method=None,loopthis=0):
 
     '''
     PHI-FDT naive data reduction pipeline (HRT pipeline is rather similar)
@@ -797,6 +812,205 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         printc('\n')
 
     #-----------------
+    # GHOST CORRECTION  
+    #-----------------
+
+    if correct_ghost:
+        printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
+
+        #common part
+        coef = [-1.98787669,1945.28944245] #empirically
+        coef = [-1.998,1945.28944245] #empirically
+        coef = [-1.9999,1946.3] #empirically
+        coef = [-1.9999,1942.7 + loopthis] #empirically
+        poly1d_fn = np.poly1d(coef)
+        sh = poly1d_fn(c).astype(int) 
+        sh_float = poly1d_fn(c)
+
+        #generate a ring mask out of the solar disk to see how much is the ghost image
+        #we will be using complex histrograms....
+        mask_anulus = bin_annulus([yd,xd],r + 20, 10, full = False)
+        mask_anulus = shift(mask_anulus, shift=(c[1]-yd//2,c[0]-xd//2), fill_value=0)
+        idx = np.where(mask_anulus == 1)
+        mask_anulus_big = bin_annulus([yd,xd],r - 200, 100, full = False)
+        mask_anulus_big = shift(mask_anulus_big, shift=(c[1]-yd//2,c[0]-xd//2), fill_value=0)
+        idx_big = np.where(mask_anulus_big == 1)
+
+        printc('          computing azimuthal averages  ',color=bcolors.OKGREEN)
+
+        centers = np.zeros((2,6))
+        radius = np.zeros((6))
+        ints = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
+        ints_rad = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
+        ints_fit = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
+        ints_syn = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
+        ints_fit_pars = np.zeros((6,5))
+        factor = np.zeros((6,4))
+        mean_intensity = np.zeros((6,4))
+
+        # LOOP in wavelengths!
+        for i in range(zd//4):
+
+            # STEP --->>> average data for fitting the limb
+            dummy_data = np.mean(data[i,:,:,:],axis=0)
+
+            # STEP --->>> Find center of average data
+            centers[0,i],centers[1,i],radius[i] = find_center(dummy_data)
+
+            # STEP --->>> Generate CLV from averaged data
+            intensity, rad = azimutal_average(dummy_data,[centers[1,i],centers[0,i]])
+            ints[i,0:len(intensity)] = intensity
+            ints_rad[i,0:len(intensity)] = rad
+
+            # STEP --->>> FIT LIMB DATA
+            rrange = int(radius[i]) + 2
+            clv = ints[i,0:rrange]
+            clv_r = ints_rad[i,0:rrange]
+            mu = np.sqrt( (1 - clv_r**2/clv_r[-1]**2) )
+ 
+            # plt.plot(clv_r,clv)
+            # plt.xlabel('Solar radious [pixel]')
+            # plt.ylabel('Intensity [DN]')
+            # plt.show()
+
+            u = 0.5
+            I0 = 100
+            ande = np.where(mu > 0.1)
+            pars = newton(clv[ande],mu[ande],[I0,u,0.2,0.2,0.2],limb_darkening)
+            fit, _ = limb_darkening(mu,pars)
+            ints_fit[i,0:len(fit)] = fit
+            ints_fit_pars[i,:] = pars
+
+            # plt.plot(clv_r,clv,label='real clv')
+            # plt.plot(clv_r,fit,label='fit order = 4')
+            # plt.xlabel('Heliocentric angle ['+r'$\theta$]')
+            # plt.ylabel('Intensity [DN]')
+            # plt.legend()
+            # plt.show()
+
+            # STEP --->>> REPLICATE LIMB FIT WITH AVERAGE INTENSITY
+            #Now there are two options. Either we use the fitted CLV or the azimutally averged CLV.
+            #it is the second here but can be easily changed
+
+            ints_syn[i,:] = ints[i,:]
+            ints_syn[i,0:len(fit)] = fit
+
+            # STEP --->>> NORMALIZE
+            ints_syn[i,:] = ints_syn[i,:] / ints_fit_pars[i][0]
+            ints_fit[i,:] = ints_fit[i,:] / ints_fit_pars[i][0]
+            ints[i,:] = ints[i,:] / ints_fit_pars[i][0]
+
+            # plt.plot(ints_fit[i,:],label='fitted clv')
+            # plt.plot(ints[i,:],'.',label='real clv')
+            # plt.plot(ints_syn[i,:],'--',label='synt clv')
+            # plt.xlabel('Heliocentric angle ['+r'$\theta$]')
+            # plt.ylabel('Intensity [DN]')
+            # plt.legend()
+            # plt.show()
+
+            # STEP --->>> GENERATE GHOST
+
+       
+            nc = (PXEND2-PXBEG2+1)//2 #  center of frame
+            limb_2d = np.zeros((PXEND2-PXBEG2+1,PXEND1-PXBEG1+1)) #generate image for ghost
+            #fill the image with the revoluted fit
+            s_of_gh = int(radius[i]*1.1)
+            limb_2d[ nc - s_of_gh:nc + s_of_gh + 1, nc - s_of_gh:nc + s_of_gh + 1] = genera_2d(ints_syn[i,0:s_of_gh])
+            xl,yl = limb_2d.shape
+            # plt.imshow(limb_2d)
+            # plt.show()
+
+            # old down here
+            # limb_real = genera_2d(intensity)
+            # xl,yl = limb_real.shape
+            # limb_2d = np.zeros((PXEND2-PXBEG2+1,PXEND1-PXBEG1+1))
+            # limb_2d[ : , : ] = limb_real[xl//2 - yd//2 : xl//2 + yd//2 , yl//2 - xd//2:yl//2 + xd//2] #VERY SAME DATA
+
+            # nuevorango = np.linspace(0,rad[-1]+2,len(rad))
+            # f = interp1d(nuevorango, intensity)
+            # intensity = f(rad)
+
+            # STEP --->>> Smooth and SHIFT GHOST
+
+            limb_2d = gaussian_filter(limb_2d, sigma=(8, 8)) 
+
+            # #shift ghost to center of image
+            # limb_2d = shift(limb_2d, shift=(int(centers[1,i])-yd//2,int(centers[0,i])-xd//2), fill_value=0)
+            limb_2d = shift_subp(limb_2d, shift=[centers[0,i]-yd//2,centers[1,i]-xd//2])
+
+            # #shift to the position of the ghost
+            reflection = shift(limb_2d, shift=(sh[1]-1024,sh[0]-1024), fill_value=0) 
+            
+            #s_x,s_y,_ = PHI_shifts_FFT(data[i,:,:,:],prec=500,verbose=True,norma=False)
+
+            # STEP --->>> Correct each modulation
+
+            for j in range(4):
+
+                dummy = data[i,j,:,:] 
+                mean_intensity[i,j] = np.mean(dummy[idx_big])
+
+                # FORMA 1 - con anillo
+                values = dummy[idx].flatten() #Take the ring
+                #show the histogram
+                meanv = np.mean(values)
+                idx_l = np.where(values <= meanv)
+                m_l = np.mean(values[idx_l])
+                idx_r = np.where(values >= meanv)
+                m_r = np.mean(values[idx_r])
+                factor[i,j] = (m_r - m_l) * 100. / ints_fit_pars[i][0] 
+                print("factor",factor[i,j])
+
+                # FORMA 2 - ajustando histogramas
+
+                # y,x = np.histogram(values, bins=80)
+                # x = x[:-1]
+                # # weighted arithmetic mean (corrected - check the section below)
+                # # m_l = sum(x * y) / sum(y)
+                # # sigma = np.sqrt(sum(y * (x - m_l)**2) / sum(y))
+
+                # sigma_l = m_l * 0.1
+                # sigma_r = m_r * 0.1
+                # popt,pcov = curve_fit(Gauss2, x, y, p0=[max(y),m_l,sigma_l,max(y),m_r,sigma_r])
+                # _, m_l, _, _ ,m_r, _ = popt #unpack
+                # factor[i,j] = (m_r - m_l) * 100. / ints_fit_pars[i][0] 
+                # print("factor-n",factor[i,j])
+
+                # plt.plot(x, y, 'b+:', label='data')
+                # plt.plot(x, Gauss2(x, *popt), 'r-', label='fit')
+                # plt.legend()
+                # plt.title('Histo Fit wl: '+str(i)+' pol: '+str(j)+' factor: '+str(factor[i,j]))
+                # plt.xlabel('DN')
+                # plt.ylabel('Ad')
+                # plt.show()
+
+                # FORMA 3 - con cajitas
+                # bsize = 20
+                # box_right = data[i,j,int(centers[0,i]-bsize/2):int(centers[0,i]+bsize/2),int(centers[1,i]-radius[i]-bsize/2-20 ):int(centers[1,i]-radius[i]+bsize/2-20)]
+                # box_left = data[i,j,int(centers[0,i]-bsize/2):int(centers[0,i]+bsize/2),int(centers[1,i]+radius[i]-bsize/2+20):int(centers[1,i]+radius[i]+bsize/2+20)]
+                # # plib.show_one(box_left)
+                # # plib.show_one(box_right)
+                # m_l = np.mean(box_left)
+                # m_r = np.mean(box_right)
+                # factor[i,j] = (m_r - m_l) * 100. / ints_fit_pars[i][0] 
+                # print("factor",factor[i,j])
+
+                if verbose:
+                    plt.hist(values, bins=40)
+                    plt.axvline(meanv, lw=2, color='yellow', alpha=0.4)
+                    plt.axvline(m_l, lw=2, color='red', alpha=0.4)
+                    plt.axvline(m_r, lw=2, color='blue', alpha=0.4)
+                    plt.axvline(factor[i,j]*ints_fit_pars[i][0] / 100., lw=2, color='green', alpha=0.4)
+                    plt.show()
+
+                #sub-pixel shift to the position of the ghost
+                #reflection = shift_subp(reflection, shift=[s_x[j],s_y[j]])
+
+                data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0] * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
+                if verbose:
+                    pass
+                #plib.show_one(data[i,j,:,:],vmin=0,vmax=1)
+    #-----------------
     # REALIGN DATA BEFORE DEMODULATION
     #-----------------
 
@@ -878,7 +1092,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             plt.show()
     else:
         printc('          Crosstalk evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']',' using ',factor*100,"% of the disk",color=bcolors.OKBLUE)
-        cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=True,npoints=10000)
+        cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
     #-----------------
     # CROSS-TALK CORRECTION 
     #-----------------
@@ -893,49 +1107,15 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         plt.show()
         plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I','Q','U','V'])
 
-    if correct_ghost:
-        printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
+    PLT_RNG = 2
+    plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],save='t1_'+str(loopthis)+'.png')
+    plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],save='t3_'+str(loopthis)+'.png')
+    plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],save='t5_'+str(loopthis)+'.png')
 
-        coef = [-1.98787669,1945.28944245] #empirically
-        poly1d_fn = np.poly1d(coef)
-        sh = poly1d_fn(c).astype(int) 
-
-        #fit limb data!!!!!
-        # generate image with fit
-        # shift fit
-        # remove fit
-
-        # # reflection = image[4] - phi_f.shift(image[4], shift=sh) * 0.004
-        # reflection,coords = generate_circular_mask([yd-1,xd-1],r-15,r-15) #mascara del mismo radio
-        # #la centro en la imagen
-        # reflection = phi.shift(reflection, shift=(c[1]-yd//2,c[0]-xd//2), fill_value=0)
-        # #la desplazo para que coja la imagen fantasma
-        # reflection = phi.shift(reflection, shift=(sh[1]-1024,sh[0]-1024), fill_value=0)
-        #     
-        # corner1 = np.mean(data[0,3,int(c[1]+r-5):int(c[1]+r),int(c[0]+r-5):int(c[0]+r)])
-        # corner2 = np.mean(data[0,3,int(c[1]+r-5):int(c[1]+r),int(c[0]-r-5):int(c[0]-r)])
-        # corner3 = np.mean(data[0,3,int(c[1]-r-5):int(c[1]-r),int(c[0]+r-5):int(c[0]+r)])
-        # corner4 = np.mean(data[0,3,int(c[1]-r-5):int(c[1]-r),int(c[0]-r-5):int(c[0]-r)])
-        # cor = np.array([corner1,corner2,corner3,corner4])
-        # max_index = np.where(cor == np.amax(cor))
-        # min_index = np.where(cor == np.amin(cor))
-        # factor = cor[max_index] - cor[min_index]
-        # factor = 0.0025
-        # dd = data[0,3,:,:] - reflection * factor
-        # plt.imshow(dd,vmin=-0.001,vmax=0.003)
-        # plt.colorbar()
-        # plt.imshow(data[0,3,:,:] - reflection*0.0025,vmin=-0.05,vmax=0.05,cmap="gray")
-
-        blurred_Q = gaussian_filter(data[0,1,:,:], sigma=(5, 5))
-        blurred_U = gaussian_filter(data[0,2,:,:], sigma=(5, 5))
-        blurred_V = gaussian_filter(data[0,3,:,:], sigma=(5, 5))
-        for i in range(zd//4):
-            data[i,1,:,:] = data[i,1,:,:] - blurred_Q
-            data[i,2,:,:] = data[i,2,:,:] - blurred_U
-            data[i,3,:,:] = data[i,3,:,:] - blurred_V
-
-        if verbose:
-            plib.show_one(data[2,3,:,:],vmin=-0.006,vmax=0.006)
+    return
+    #-----------------
+    # MEDIAN TO CERO
+    #-----------------
 
     if putmediantozero:
         printc('-->>>>>>> Putting median to zero ',color=bcolors.OKGREEN)
@@ -949,6 +1129,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     if verbose == 1:
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'])
 
+    quit()
     #-----------------
     # CROSS-TALK CALCULATION FROM V TO QU (Interactive)
     #-----------------

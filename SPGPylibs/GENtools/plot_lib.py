@@ -160,6 +160,8 @@ def show_four_row(im1,im2,im3,im4,svmin=0,svmax=0,title=['','','',''],xlabel='Pi
 
     if save != False:
         plt.savefig(save)
+        plt.clf()
+        return
     plt.show()
 
     return
@@ -189,7 +191,7 @@ def squar(n):
     row = column
     return row,column
 
-def show_all(image):
+def show_all(image,save=False):
     ishape = image.shape
     row,column = squar(ishape[2])
     print(row,column,ishape)
@@ -203,8 +205,11 @@ def show_all(image):
                vmax=image[:,:,i].mean() + PLT_RNG * image[:,:,i].std(),\
                 interpolation='none')
         colorbar(im)
+    if save != False:
+        plt.savefig(save)
+        plt.clf()
+        return
     plt.show()
-    plt.close()
     return
 
 def doplots(im1,im2,im3):
