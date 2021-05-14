@@ -2,18 +2,20 @@ import numpy as np
 import os.path
 #from astropy.io import fits as pyfits
 import random, statistics
+from time import sleep
 
 from scipy.ndimage import gaussian_filter, rotate
-from scipy.interpolate import interp1d
+#from scipy.interpolate import interp1d
 from scipy.optimize import curve_fit
 
 from .tools import *
 from .phi_fits import *
 from .phi_gen import *
 from .phi_reg import *
-from .phi_utils import newton,azimutal_average,limb_darkening
+from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d
 
 import SPGPylibs.GENtools.plot_lib as plib
+import SPGPylibs.GENtools.cog as cog
 
 def interpolateImages(image1, image2, dist1I, distI2):
     ''' interpolate 2D images - 
@@ -396,7 +398,8 @@ def crosstalk_ItoQUV2d(data_demod,size=4):
 
     print('check5',' before loop')
     for i in range(npatches):
-        print(i, ' of ', len(npatches),end='', flush=True)
+        if np.remainder(i, npatches//100) == 0:
+            print(i, ' of ', npatches,end='', flush=True)
         x = patchy[i,:,0,:,:].flatten()
         ids = x > limit
         x = x[ids].flatten()
@@ -414,28 +417,10 @@ def crosstalk_ItoQUV2d(data_demod,size=4):
     #cV1 = image.reconstruct_from_patches_2d(cV1, (yy,xx))
     return cV0,cV1
 
-def running_mean(x, N):
-    '''
-    running mean to smooth signals
-    '''
-    return np.convolve(x, np.ones((N,))/N, mode='same')
-
-def genera_2d(what):
-    '''
-    generate 2D images from a radial cut
-    data should be EVEN!!!! (par vaya)
-    '''
-    n = len(what)
-    x,y = np.meshgrid(range(2*n+1),range(2*n+1)) #generate ODD grid
-    d = np.sqrt((x-n)**2+(y-n)**2)     
-    lafuncion = np.concatenate((what,np.zeros((n + 1))))
-    f = interp1d(np.arange(2*n + 1), lafuncion)
-    return f(d.flat).reshape(d.shape)
-
 def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c = True,
     inner_radius = 250, outer_radius = 800, steps = 100, normalize = 0., flat_n = 1.,
     index = None, prefilter = 1, prefilter_fits = '0000990710_noMeta.fits',
-    realign = False, verbose = True, outfile=None, mask_margin = 7, 
+    realign = False, verbose = True, outfile=None, mask_margin = 2, fringes = False,
     individualwavelengths = False,correct_ghost = False,putmediantozero=False,
     vqu = False, do2d = 0, rte = False, debug = False,nlevel = 0.3,center_method=None,loopthis=0):
 
@@ -785,7 +770,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         printc('          ',prefilter_fits,'   ')
 
         prefdata,h = fits_get(prefilter_fits)
-        prefdata = prefdata.astype(fmt)
+        prefdata = prefdata.astype(float)
         prefdata = prefdata[:,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
         #PREFILTER INFO
         #——————
@@ -822,7 +807,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         coef = [-1.98787669,1945.28944245] #empirically
         coef = [-1.998,1945.28944245] #empirically
         coef = [-1.9999,1946.3] #empirically
-        coef = [-1.9999,1942.7 + loopthis] #empirically
+        coef = [-1.9999,1942.7] #empirically
         poly1d_fn = np.poly1d(coef)
         sh = poly1d_fn(c).astype(int) 
         sh_float = poly1d_fn(c)
@@ -863,7 +848,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             ints_rad[i,0:len(intensity)] = rad
 
             # STEP --->>> FIT LIMB DATA
-            rrange = int(radius[i]) + 2
+            rrange = int(radius[i] + 2) #2
             clv = ints[i,0:rrange]
             clv_r = ints_rad[i,0:rrange]
             mu = np.sqrt( (1 - clv_r**2/clv_r[-1]**2) )
@@ -1005,8 +990,20 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
                 #sub-pixel shift to the position of the ghost
                 #reflection = shift_subp(reflection, shift=[s_x[j],s_y[j]])
+                #MINIMIZA EL ANILLO!!!
+                #The problem is that V works but QU there is a residual at the disk. I use 0.9 though 
 
-                data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0] * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
+                # rms = np.zeros((100))
+                # for k in range(100):
+                #     dummy = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * (k+50)/100.#0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
+                #     rms[k] = np.std(dummy[idx])
+                # plt.plot((np.arange(100)+50)/100.,rms)
+                # plt.show()
+                # cf = np.where(rms == np.min(rms))
+                # data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * float((cf[0] + 50)/100.)#0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
+                # print('new',factor[i,j]*float((cf[0] + 50)/100.))
+
+                data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
                 if verbose:
                     pass
                 #plib.show_one(data[i,j,:,:],vmin=0,vmax=1)
@@ -1060,8 +1057,6 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     if verbose == 1:
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'])
 
-    # %%
-
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
@@ -1107,12 +1102,145 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         plt.show()
         plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I','Q','U','V'])
 
-    PLT_RNG = 2
-    plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],save='t1_'+str(loopthis)+'.png')
-    plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],save='t3_'+str(loopthis)+'.png')
-    plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],save='t5_'+str(loopthis)+'.png')
+    # PLT_RNG = 2
+    # plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t1_'+str(loopthis)+'.png')
+    # plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t3_'+str(loopthis)+'.png')
+    # plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t5_'+str(loopthis)+'.png')
 
-    return
+    # np.save('data_dummy',data)
+    #-----------------
+    # FINGING - Need to include Ajusta senos contras!!!!
+    #-----------------
+    if fringes:
+        printc('-->>>>>>> Looking for fringes and removing them --',color=bcolors.OKGREEN)
+        freq_x = np.zeros((zd//4,3,50))  #Frecuencias Maximo de 10 ventanas
+        freq_y = np.zeros((zd//4,3,50))
+        freq_x2 = np.zeros((zd//4,3,50))  #Frecuencias Maximo de 10 ventanas
+        freq_y2 = np.zeros((zd//4,3,50))
+        rad_min = 10
+        rad_max = 30
+        wsize = 50
+        wbin = 1
+
+        win_halfw = 2 # for 0
+        #win_halfw = 4 # for gauss and win, 2 for 0
+
+        win = apod(win_halfw*2+1,0.6)
+        x,y = np.ogrid[0:win_halfw*2 + 1, 0:win_halfw*2 + 1]
+        level_theshold = [1.5,1.5,2]
+        plt.ion()
+
+        for i in range(zd//4):
+            for j in np.arange(1,4):
+
+                data_fringes = rebin(data[i,j,:,:], [yd//wbin,xd//wbin])
+                F=np.fft.fft2(data_fringes)
+                F=np.fft.fftshift(F)
+                h  = F.shape[0]
+                w  = F.shape[1]
+                #First compute FFT of single image
+                power2d = np.log10( np.abs( (F*np.conj(F)).astype(np.float) ) ) 
+                power2d = gaussian_filter(power2d, sigma=(1, 1)) 
+
+                im = power2d[w//2-wsize:w//2+wsize+1,h//2-wsize:h//2+wsize+1]
+                imc = im[2:-2,2:-2]
+                # mean = np.mean(imc[wsize//2+5:,wsize//2+5:])
+                # rms = np.std(imc[wsize//2+5:,wsize//2+5:])
+                minimum = np.min(imc[wsize-rad_max:wsize+rad_max+1,wsize-rad_max:wsize+rad_max+1])
+                mean = np.mean(imc[wsize-rad_max:wsize+rad_max+1,wsize-rad_max:wsize+rad_max+1] - minimum)
+                rms = np.std(imc[wsize-rad_max:wsize+rad_max+1,wsize-rad_max:wsize+rad_max+1])
+
+                stack = ( 
+                    (im[2:-2,2:-2] > shift(im,[-2,-2])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[-2,-1])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[-2,0 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[-2,1 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[-2,2 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[-1,-2])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[-1,-1])[2:-2,2:-2])
+                    * (im[2:-2,2:-2] > shift(im,[-1,0 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[-1,1 ])[2:-2,2:-2])
+                    * (im[2:-2,2:-2] > shift(im,[-1,2 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[0 ,-2])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[0 ,-1])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[0 ,1 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[0 ,2 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[1 ,-2])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[1 ,-1])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[1 ,0 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[1 ,1 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[1 ,2 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[2 ,-2])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[2 ,-1])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[2 ,0 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[2 ,1 ])[2:-2,2:-2]) 
+                    * (im[2:-2,2:-2] > shift(im,[2 ,2 ])[2:-2,2:-2]) 
+                    )
+
+                # mask = ( 
+                #     (im[2:-2,2:-2] > shift(im,[-1,-1])[2:-2,2:-2])
+                #     * (im[2:-2,2:-2] > shift(im,[-1,0 ])[2:-2,2:-2]) 
+                #     * (im[2:-2,2:-2] > shift(im,[-1,1 ])[2:-2,2:-2])
+                #     * (im[2:-2,2:-2] > shift(im,[0 ,-1])[2:-2,2:-2]) 
+                #     * (im[2:-2,2:-2] > shift(im,[0 ,1 ])[2:-2,2:-2]) 
+                #     * (im[2:-2,2:-2] > shift(im,[1 ,-1])[2:-2,2:-2]) 
+                #     * (im[2:-2,2:-2] > shift(im,[1 ,0 ])[2:-2,2:-2]) 
+                #     * (im[2:-2,2:-2] > shift(im,[1 ,1 ])[2:-2,2:-2]) 
+                #     )
+
+                idx = np.where(stack == 1)
+                sm = imc.shape
+                plt.imshow(imc)
+                if len(idx[0]) > 0:
+                    loop = 0
+                    for idx_i in range(len(idx[0])):
+                        if (imc[idx[0][idx_i],idx[1][idx_i]] - minimum ) > level_theshold[j-1]*mean:
+                            if (np.abs(np.sqrt((idx[0][idx_i]-sm[0]//2)**2+(idx[1][idx_i]-sm[1]//2)**2)) > rad_min) and np.abs(np.sqrt((idx[0][idx_i]-sm[0]//2)**2+(idx[1][idx_i]-sm[1]//2)**2)) < rad_max:
+                                plt.plot(idx[1][idx_i],idx[0][idx_i],"og",markersize=3)
+                                subm = imc[idx[0][idx_i]-win_halfw:idx[0][idx_i]+win_halfw+1,idx[1][idx_i]-win_halfw:idx[1][idx_i]+win_halfw + 1]
+                                if np.max(subm < 0):
+                                    subm = 1 - subm
+                                height, xcoor, ycoor, width_x, width_y = moments(subm)
+                                freq_x2[i,j-1,loop] = (idx[0][idx_i] - win_halfw + xcoor - wsize + 2  )/h
+                                freq_y2[i,j-1,loop] = (idx[1][idx_i] - win_halfw + ycoor - wsize + 2  )/w
+                                freq_x[i,j-1,loop] = (idx[0][idx_i] - wsize + 2)/h
+                                freq_y[i,j-1,loop] = (idx[1][idx_i] - wsize + 2)/w
+                                # f_gauss = height * np.exp(-((x-xcoor)**2/(2*width_x**2) + (y-ycoor)**2/(2*width_y**2)))
+                                f_gauss = 1 - np.exp(-((x-xcoor)**2/(2*(width_x*3)**2) + (y-ycoor)**2/(2*(width_y*3)**2)))
+                                #plib.show_four_row(subm,f_gauss,subm - f_gauss,imc)
+                                F[ idx[0][idx_i] + (h//2 - wsize + 2) - win_halfw : idx[0][idx_i]  + (h//2 - wsize + 2) + win_halfw + 1 , idx[1][idx_i]  + (w//2 - wsize + 2) - win_halfw : idx[1][idx_i]  + (w//2 - wsize + 2) + win_halfw + 1] *= 1e-6#f_gauss #win
+                                power2d[ idx[0][idx_i] + (h//2 - wsize + 2) - win_halfw : idx[0][idx_i]  + (h//2 - wsize + 2) + win_halfw + 1, idx[1][idx_i]  + (w//2 - wsize + 2) - win_halfw : idx[1][idx_i]  + (w//2 - wsize + 2) + win_halfw + 1 ] *=  1e-6#f_gauss #win
+                                print(freq_x[i,j-1,loop],freq_y[i,j-1,loop])
+                                print(i,j,level_theshold[j-1]*mean,3.*level_theshold[j-1]*mean, rms, 3*rms, imc[idx[0][idx_i],idx[1][idx_i]] - minimum,freq_x[i,j-1,loop],freq_y[i,j-1,loop])
+                                loop += 1
+                    plt.colorbar()
+                    plt.show(block=False)
+                    plt.pause(1)
+                    plt.clf()
+                    dum = np.copy(data_fringes)
+                    data_fringes = np.fft.ifft2(np.fft.fftshift(F)).astype(np.float)
+                    #plib.show_four_row(data_fringes,dum,dum-data_fringes,power2d,svmin=[-0.002,-0.002,-0.0002,-3],svmax=[0.002,0.002,0.0002,3])
+                    data[i,j,:,:] = np.fft.ifft2(np.fft.fftshift(F)).astype(np.float)
+        plt.ioff()
+
+    #  fx = 0.012500000 ;16   PX/Size
+    #  fy = 0.0070312503 ;9
+    #  px = round(fx * sx)
+    #  py = round(fy * sy)
+        for i in range(zd//4):
+            for j in np.arange(1,3):
+                print(i,j,freq_y[i,j,:6],freq_x[i,j,:6])
+
+    #     PLT_RNG = 2
+    #     plib.show_four_row(data_d[1,0,:,:],data_d[1,1,:,:],data_d[1,2,:,:],data_d[1,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003],block=False)
+    #     plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])
+    #     plib.show_four_row(data_d[3,0,:,:],data_d[3,1,:,:],data_d[3,2,:,:],data_d[3,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003],block=False)
+    #     plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])
+    #     plib.show_four_row(data_d[5,0,:,:],data_d[5,1,:,:],data_d[5,2,:,:],data_d[5,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003],block=False)
+    #     plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])
+
+    # np.save('data_f',data)
+    # return
     #-----------------
     # MEDIAN TO CERO
     #-----------------
@@ -1129,7 +1257,6 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     if verbose == 1:
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'])
 
-    quit()
     #-----------------
     # CROSS-TALK CALCULATION FROM V TO QU (Interactive)
     #-----------------
@@ -1185,19 +1312,23 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     #-----------------
     printc('---------------------------------------------------------',color=bcolors.OKGREEN)
     if outfile == None:
-        outfile = data_f[:-4]+'_red.fits'
-    printc(' Saving data to: ',outfile)
+        outfile = data_f[:-4]
+    printc(' Saving data to: ',outfile+'_red.fits')
 
-    hdu = pyfits.PrimaryHDU(data)
-    hdul = pyfits.HDUList([hdu])
-    hdul.writeto(outfile, overwrite=True)
+    # hdu = pyfits.PrimaryHDU(data)
+    # hdul = pyfits.HDUList([hdu])
+    # hdul.writeto(outfile, overwrite=True)
+
+    with pyfits.open(data_f) as hdu_list:
+        hdu_list[0].data = data
+        hdu_list.writeto(outfile+'_red.fits', clobber=True)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
     #-----------------
 
-    if rte == True:
-        printc('---------------------------------------------------------',color=bcolors.OKGREEN)
+    if rte == 'RTE':
+        printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
 
         try:
             CMILOS_LOC = os.path.realpath(__file__) 
@@ -1265,13 +1396,14 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             rte_invs[i,:,:] = rte_invs[i,:,:] * mask
         #save plots!!!!
         if verbose:
-            plib.show_four_row(rte_invs_noth[2,:,:],rte_invs_noth[3,:,:],rte_invs_noth[4,:,:],rte_invs_noth[8,:,:],svmin=[0,0,0,-3.],svmax=[1200,180,180,+3.],title=['Field strengh [Gauss]','Field inclination [degree]','Field azimuth [degree]','LoS velocity [km/s]'],xlabel='Pixel',ylabel='Pixel',save=outfile+'_VLoS.png')
-            plib.show_four_row(rte_invs[2,:,:],rte_invs[3,:,:],rte_invs[4,:,:],rte_invs[8,:,:],svmin=[0,0,0,-3.],svmax=[1200,180,180,+3.],title=['Field strengh [Gauss]','Field inclination [degree]','Field azimuth [degree]','LoS velocity [km/s]'],xlabel='Pixel',ylabel='Pixel',save=outfile+'BLoS.png')
+            plib.show_four_row(rte_invs_noth[2,:,:],rte_invs_noth[3,:,:],rte_invs_noth[4,:,:],rte_invs_noth[8,:,:],svmin=[0,0,0,-6.],svmax=[1200,180,180,+6.],title=['Field strengh [Gauss]','Field inclination [degree]','Field azimuth [degree]','LoS velocity [km/s]'],xlabel='Pixel',ylabel='Pixel')#,save=outfile+'_VLoS.png')
+            plib.show_four_row(rte_invs[2,:,:],rte_invs[3,:,:],rte_invs[4,:,:],rte_invs[8,:,:],svmin=[0,0,0,-6.],svmax=[1200,180,180,+6.],title=['Field strengh [Gauss]','Field inclination [degree]','Field azimuth [degree]','LoS velocity [km/s]'],xlabel='Pixel',ylabel='Pixel')#,save=outfile+'BLoS.png')
+        rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
+        rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
         np.savez_compressed(outfile+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
         
         #del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
         #print(del_dummy)
-        printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
 
         b_los_cropped = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
         b_los = np.zeros((2048,2048))
@@ -1284,33 +1416,99 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             plib.show_one(v_los,vmin=-2.5,vmax=2.5,title='LoS velocity')
             plib.show_one(b_los,vmin=-30,vmax=30,title='LoS magnetic field')
 
-        hdu = pyfits.PrimaryHDU(b_los)
-        hdul = pyfits.HDUList([hdu])
-        hdul.writeto(outfile+'_blos.fits', overwrite=True)
+        with pyfits.open(data_f) as hdu_list:
+            hdu_list[0].data = b_los
+            hdu_list.writeto(outfile+'_blos_rte.fits', clobber=True)
 
-        hdu = pyfits.PrimaryHDU(v_los)
-        hdul = pyfits.HDUList([hdu])
-        hdul.writeto(outfile+'_vlos.fits', overwrite=True)
+        with pyfits.open(data_f) as hdu_list:
+            hdu_list[0].data = v_los
+            hdu_list.writeto(outfile+'_vlos_rte.fits', clobber=True)
 
-        plib.show_one(rte_invs_noth[3,:,:]*mask,vmin=10,vmax=170)
+        with pyfits.open(data_f) as hdu_list:
+            hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
+            hdu_list.writeto(outfile+'_Icont_rte.fits', clobber=True)
+
+        printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
+
+        #-----------------
+        # PLOTS VLOS
+        #-----------------
+        Zm = np.ma.masked_where(mask == 1, mask)
+
+        plt.figure(figsize=(10, 10))
+        ax = plt.gca()
+        plt.title('PHI-FDT LoS velocity',size=20)
+
+        # Hide grid lines
+        ax.grid(False)
+        # Hide axes ticks
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        im = ax.imshow(np.fliplr(rotate(v_los, 52, reshape=False)), cmap='bwr',vmin=-3.,vmax=3.)
+
+        divider = plib.make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        cbar = plib.plt.colorbar(im, cax=cax)
+        cbar.set_label('[km/s]')
+        cbar.ax.tick_params(labelsize=16)
+
+        # ax.imshow(Zm[rx[0]:rx[1],ry[0]:ry[1]], cmap='gray')
+        plt.savefig('imagenes/velocity-map-'+outfile+'.png',dpi=300)
+        plt.close()
+
+        #-----------------
+        # PLOTS BLOS
+        #-----------------
+
+        plt.figure(figsize=(10, 10))
+        ax = plt.gca()
+        plt.title('PHI-FDT Magnetogram',size=20)
+
+        # Hide grid lines
+        ax.grid(False)
+        # Hide axes ticks
+        ax.set_xticks([])
+        ax.set_yticks([])
+                    
+        im = ax.imshow(np.fliplr(rotate(b_los, 52, reshape=False)), cmap='gray',vmin=-100,vmax=100) 
+
+        divider = plib.make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        cbar = plib.plt.colorbar(im, cax=cax)
+        # cbar.set_label('Stokes V amplitude [%]')
+        cbar.set_label('LoS magnetic field [Mx/cm$^2$]')
+        cbar.ax.tick_params(labelsize=16)
+
+        printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
+
+    if rte == 'CE':
+        printc('---------------------RUNNING COG --------------------------',color=bcolors.OKGREEN)
+        wavelength = 6173.3356
+        v_los,b_los = cog(data,wavelength,wave_axis,lande_factor=3,cpos = cpos)
+
+
+        #-----------------
+        # MASK DATA AND SAVE
+        #-----------------
+
+        v_los = v_los * mask
+        b_los = b_los * mask
+        plib.show_one(v_los,vmin=-1.5,vmax=1.5)
+        plib.show_one(b_los,vmin=-150,vmax=150)
+        if verbose == 1:
+            plib.show_one(v_los,vmin=-2.5,vmax=2.5)
+            plib.show_one(b_los,vmin=-150,vmax=150)
+
+        with pyfits.open(data_f) as hdu_list:
+            hdu_list[0].data = b_los
+            hdu_list.writeto(outfile+'_blos_ce.fits', clobber=True)
+
+        with pyfits.open(data_f) as hdu_list:
+            hdu_list[0].data = v_los
+            hdu_list.writeto(outfile+'_vlos_ce.fits', clobber=True)
 
     return
-
-
-#%%
-  # TODO Level for correct inversions is (*noise)
-
-    #-----------------
-    # APPLY COG
-    #-----------------
-    dr = np.copy(data)
-    # co = dr[0,3,:,:]
-    # co = ndimage.gaussian_filter(co, sigma=[15,15], order=0)
-    # dr[:,3,:,:] = dr[:,3,:,:] - co[np.newaxis,:,:]
-    print('Calculating COG.....')
-    # vl,bl = COG(dr[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,glande=3,cpos = 0)
-    vl,bl = COG(dr,wave_axis,glande=3,cpos = 0)
-
     #-----------------
     # CORRECT CAVITY
     #-----------------
@@ -1330,110 +1528,5 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     off = np.mean(vl[rry[0]:rry[1],rrx[0]:rrx[1]])
     vl = vl - off #- cavity
     print('velocity offset ',off)
-
-    #-----------------
-    # MASK DATA AND SAVE
-    #-----------------
-
-    vl = vl * mask#[ry[0]:ry[1],rx[0]:rx[1]]
-    bl = bl * mask#[ry[0]:ry[1],rx[0]:rx[1]]
-    # plib.show_one(vl[rry[0]:rry[1],rrx[0]:rrx[1]],vmin=-1.5,vmax=1.5)
-    if verbose == 1:
-        plib.show_one(vl,vmin=-2.5,vmax=2.5)
-        plib.show_one(bl,vmin=-150,vmax=150)
-    # plib.show_four_row(vl*mask[ry[0]:ry[1],rx[0]:rx[1]],vl*masks[ry[0]:ry[1],rx[0]:rx[1]],vl*maskp[ry[0]:ry[1],rx[0]:rx[1]],vl*maskq[ry[0]:ry[1],rx[0]:rx[1]],svmin=[-2,-2,-2,-2],svmax=[2,2,2,2],cagonento = 1)
-    # quit()
-    hdu = pyfits.PrimaryHDU(vl)
-    hdul = pyfits.HDUList([hdu])
-    hdul.writeto('data-red-tests/vlos_'+outfile, overwrite=True)
-    hdu = pyfits.PrimaryHDU(bl)
-    hdul = pyfits.HDUList([hdu])
-    hdul.writeto('data-red-tests/blos_'+outfile, overwrite=True)
-    
-    #-----------------
-    # PLOTS VLOS
-    #-----------------
-    Zm = np.ma.masked_where(mask == 1, mask)
-
-    plt.figure(figsize=(10, 10))
-    ax = plt.gca()
-    plt.title('PHI-FDT LoS velocity',size=20)
-
-    # Hide grid lines
-    ax.grid(False)
-    # Hide axes ticks
-    ax.set_xticks([])
-    ax.set_yticks([])
-
-    im = ax.imshow(np.fliplr(ndimage.rotate(vl, 50, reshape=False)), cmap='bwr',vmin=-3.,vmax=3.)
-
-    divider = plib.make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = plib.plt.colorbar(im, cax=cax)
-    cbar.set_label('[km/s]')
-    cbar.ax.tick_params(labelsize=16)
-
-    # ax.imshow(Zm[rx[0]:rx[1],ry[0]:ry[1]], cmap='gray')
-    plt.savefig('imagenes/velocity-map-'+outfile+'.png',dpi=300)
-    plt.close()
-
-    #-----------------
-    # PLOTS
-    #-----------------
-
-    esto = (dr[1,3,ry[0]:ry[1],rx[0]:rx[1]]-dr[3,3,ry[0]:ry[1],rx[0]:rx[1]])/2
-    # im = ax.imshow(np.fliplr(ndimage.rotate(lacosa, 45, reshape=False)*100), cmap='gray',vmin=-0.2,vmax=0.2) 
-    # plib.show_one(esto)
-    # plib.show_one(dr[0,3,ry[0]:ry[1],rx[0]:rx[1]])
-    # plib.show_one(bl - dr[0,3,ry[0]:ry[1],rx[0]:rx[1]])
-    
-    plt.figure(figsize=(10, 10))
-    ax = plt.gca()
-    plt.title('PHI-FDT Magnetogram',size=20)
-
-    # Hide grid lines
-    ax.grid(False)
-    # Hide axes ticks
-    ax.set_xticks([])
-    ax.set_yticks([])
-                
-    lacosa = bl
-    im = ax.imshow(np.fliplr(ndimage.rotate(lacosa, 45, reshape=False)), cmap='gray',vmin=-100,vmax=100) 
-
-    divider = plib.make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = plib.plt.colorbar(im, cax=cax)
-    # cbar.set_label('Stokes V amplitude [%]')
-    cbar.set_label('LoS magnetic field [Mx/cm$^2$]')
-    cbar.ax.tick_params(labelsize=16)
-
-    #ax.imshow(Zm[rx[0]:rx[1],ry[0]:ry[1]], cmap='gray')
-    plt.savefig('imagenes/magnetogram-map-'+outfile+'.png',dpi=300)
-    plt.close()
-
-    plt.figure(figsize=(10, 10))
-    ax = plt.gca()
-    plt.title('PHI-FDT Magnetogram',size=20)
-
-    # Hide grid lines
-    ax.grid(False)
-    # Hide axes ticks
-    ax.set_xticks([])
-    ax.set_yticks([])
-
-    im = ax.imshow(np.fliplr(ndimage.rotate(lacosa, 45, reshape=False)), cmap='BrBG',vmin=-150,vmax=150) 
-
-    divider = plib.make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = plib.plt.colorbar(im, cax=cax)
-    cbar.set_label('LoS magnetic field [Mx/cm$^2$]')
-    cbar.ax.tick_params(labelsize=16)
-
-    #ax.imshow(Zm[rx[0]:rx[1],ry[0]:ry[1]], cmap='gray')
-    plt.savefig('imagenes/magnetogram-map2-'+outfile+'.png',dpi=300)
-    plt.close()
-
-    # from datetime import datetime, timedelta
-    # when = [datetime(2020, 5, 21,15,0,0),datetime(2020, 6, 18,14,00,0)]
 
     return vl

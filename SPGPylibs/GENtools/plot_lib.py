@@ -121,7 +121,7 @@ def show_three(im1,im2,im3,vmin=[None,None,None],vmax=[None,None,None],block=Tru
     plt.close()
     return
 
-def show_four_row(im1,im2,im3,im4,svmin=0,svmax=0,title=['','','',''],xlabel='Pixel',ylabel='Pixel',save=False,zoom=1):
+def show_four_row(im1,im2,im3,im4,svmin=0,svmax=0,title=['','','',''],xlabel='Pixel',ylabel='Pixel',save=False,zoom=1,block=True):
 
     fig, maps = plt.subplots(1,4,figsize=(12*zoom,6*zoom))
     plt.subplots_adjust(hspace=0.3, wspace=0.3)
@@ -162,11 +162,11 @@ def show_four_row(im1,im2,im3,im4,svmin=0,svmax=0,title=['','','',''],xlabel='Pi
         plt.savefig(save)
         plt.clf()
         return
-    plt.show()
+    plt.show(block = block)
 
     return
 
-def show_six_row(image,plrt = 0,title='n/a'):
+def show_six_row(image,plrt = 0,title='n/a',vmin=None,vmax=None):
 
     fig, maps = plt.subplots(1,6,figsize=(24,4))
     plt.subplots_adjust(hspace=0.3, wspace=0.3)
@@ -175,7 +175,10 @@ def show_six_row(image,plrt = 0,title='n/a'):
         el_std = image[i][:,:].std()
         el_min = el_mean - (PLT_RNG + plrt) * el_std 
         el_max = el_mean + (PLT_RNG + plrt)  * el_std
-        im = maps[i].imshow(image[i][:,:],vmin=el_min,vmax=el_max)
+        try:
+            im = maps[i].imshow(image[i][:,:],vmin=vmin,vmax=vmax)
+        except:
+            im = maps[i].imshow(image[i][:,:],vmin=el_min,vmax=el_max)
         maps[i].set_title(title+'{: d}'.format(i))
 
         colorbar(im)

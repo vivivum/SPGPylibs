@@ -150,7 +150,7 @@ int main(int argc,char **argv){
 	double slight;
 	double toplim;
 	int miter;
-	PRECISION weight[4]={1.,1.,1.,1.};
+	PRECISION weight[4]={1.,20.,20.,10.};
 	int nweight;
 
 	clock_t t_ini, t_fin;

@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import fftconvolve
-from scipy.signal import savgol_filter
+from scipy.signal import fftconvolve, tukey, savgol_filter
 from itertools import combinations
 from .tools import *
 
@@ -567,3 +566,6 @@ def rebin(arr, new_shape):
              new_shape[1], arr.shape[1] // new_shape[1])
     return arr.reshape(shape).mean(-1).mean(1)
 
+def apod(nx,alpha):
+    window = tukey(int(nx),alpha=alpha) 
+    return 1 - np.outer(window,window)

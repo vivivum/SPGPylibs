@@ -12,7 +12,7 @@ def cog(input_data,wave,wave_axis,lande_factor=0,cpos = False):
         [wave, Stokes, X , Y] = 4D the program assumes Stokes I,Q,U,V in an X and Y image - return Vlos + Blos
 
     wave: line central wavelength in Angstrom.
-    wave_axis = wavenelgth axis in Angstrom.
+    wave_axis = wavelength axis in Angstrom.
     cpos: position where the continuum of the line is located. Default is last position.
     In case of Stokes parameters are given, the user has to provide the lande_factor of the transition
     '''

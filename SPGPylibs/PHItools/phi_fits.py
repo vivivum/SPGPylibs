@@ -160,7 +160,7 @@ def fits_get_part(file, wave, npol):
     wave and npol reref to wave and npol (wow!)
     '''
     try:
-#        with pyfits.open(file, do_not_scale_image_data=True, memmap=True, mode='denywrite') as hdu_list:
+    #        with pyfits.open(file, do_not_scale_image_data=True, memmap=True, mode='denywrite') as hdu_list:
         with pyfits.open(file, mode='denywrite') as hdu_list:
             hdu_list.info()
             data = hdu_list[0].data.astype(np.dtype('float32')) 

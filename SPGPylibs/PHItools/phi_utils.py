@@ -7,6 +7,7 @@ from astropy import units as u
 import spiceypy, os, warnings
 #from SPGPylibs.GENtools.global import *
 from .tools import *
+from scipy.interpolate import interp1d
 
 warnings.filterwarnings('ignore')
 
@@ -345,26 +346,26 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
         ('vr','f8'),('elevation','f8'),('angle','f8'),('s_size','f8')])
     
 
-    #
-    # Compute the apparent state of the Sun as seen from solar orbiter in the SOLO_HEEQ frame.
-    #
-    target = 'SUN'
-    frame  = 'SOLO_HEEQ'
-    corrtn = 'LT+S'
-    observ = 'Solar Orbiter'
-    sundir, ltime = spiceypy.spkpos(target, sc_time_spice, frame,corrtn, observ)
-    sundir = spiceypy.vhat(sundir[0])
+    # #
+    # # Compute the apparent state of the Sun as seen from solar orbiter in the SOLO_HEEQ frame.
+    # #
+    # target = 'SUN'
+    # frame  = 'SOLO_HEEQ'
+    # corrtn = 'LT+S'
+    # observ = 'Solar Orbiter'
+    # sundir, ltime = spiceypy.spkpos(target, sc_time_spice, frame,corrtn, observ)
+    # sundir = spiceypy.vhat(sundir[0])
 
-    # Transformation from the inertial SOLO_HEEQ to the non-inertial body-fixed IAU_PHOEBE
-    # frame.  Since we want the apparent position, we
-    # need to subtract ltime from et.
-    #
-    sform = spiceypy.sxform( 'J2000', 'IAU_PHOEBE', et-ltime )
+    # # Transformation from the inertial SOLO_HEEQ to the non-inertial body-fixed IAU_PHOEBE
+    # # frame.  Since we want the apparent position, we
+    # # need to subtract ltime from et.
+    # #
+    # sform = spiceypy.sxform( 'J2000', 'IAU_PHOEBE', et-ltime )
 
 
-    print('SUNDIR(X) ={:20.6f}'.format(sundir[0]))
-    print('SUNDIR(Y) ={:20.6f}'.format(sundir[1]))
-    print('SUNDIR(Z) ={:20.6f}'.format(sundir[2]))
+    # print('SUNDIR(X) ={:20.6f}'.format(sundir[0]))
+    # print('SUNDIR(Y) ={:20.6f}'.format(sundir[1]))
+    # print('SUNDIR(Z) ={:20.6f}'.format(sundir[2]))
 
     spiceypy.unload(REQUIRED_KERNELS)
     return screc
@@ -548,3 +549,21 @@ def get_angles_solo_Earth(starttime = datetime(2021, 6, 21),endtime = datetime(2
     plt.show()
 
     return solo.time,ang2
+
+def genera_2d(what):
+    '''
+    generate 2D images from a radial cut
+    data should be EVEN!!!! (par vaya)
+    '''
+    n = len(what)
+    x,y = np.meshgrid(range(2*n+1),range(2*n+1)) #generate ODD grid
+    d = np.sqrt((x-n)**2+(y-n)**2)     
+    lafuncion = np.concatenate((what,np.zeros((n + 1))))
+    f = interp1d(np.arange(2*n + 1), lafuncion)
+    return f(d.flat).reshape(d.shape)
+
+def running_mean(x, N):
+    '''
+    running mean to smooth signals
+    '''
+    return np.convolve(x, np.ones((N,))/N, mode='same')
