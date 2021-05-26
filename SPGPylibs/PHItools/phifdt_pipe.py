@@ -3,6 +3,7 @@ import os.path
 #from astropy.io import fits as pyfits
 import random, statistics
 from time import sleep
+import subprocess
 
 from scipy.ndimage import gaussian_filter, rotate
 #from scipy.interpolate import interp1d
@@ -421,7 +422,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     inner_radius = 250, outer_radius = 800, steps = 100, normalize = 0., flat_n = 1.,
     index = None, prefilter = 1, prefilter_fits = '0000990710_noMeta.fits',
     realign = False, verbose = True, outfile=None, mask_margin = 2, fringes = False,
-    individualwavelengths = False,correct_ghost = False,putmediantozero=False,
+    individualwavelengths = False,correct_ghost = False,putmediantozero=False,directory = './',
     vqu = False, do2d = 0, rte = False, debug = False,nlevel = 0.3,center_method=None,loopthis=0):
 
     '''
@@ -612,12 +613,13 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     #-----------------
     # TAKE ONLY DISK WITH MARGIN
     #-----------------
-    printc('-->>>>>>> Creating a mask for RTE with 7 px margin')
+    printc('-->>>>>>> Creating a mask for RTE with ',mask_margin,' px margin')
     size_of_mask = r - mask_margin
     rx = [int(c[1]-size_of_mask),int(c[1]+size_of_mask)]
     ry = [int(c[0]-size_of_mask),int(c[0]+size_of_mask)]
     mask,coords = generate_circular_mask([yd-1,xd-1],size_of_mask,size_of_mask)
     mask = shift(mask, shift=(c[1]-yd//2,c[0]-xd//2), fill_value=0)
+    printc('   XR = ', rx, 'YR = ', ry, color=bcolors.WARNING)
 
     #-----------------
     # GET INFO ABOUT VOLTAGES/WAVELENGTHS, determine continuum and new flat
@@ -1014,7 +1016,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     if realign:
         printc('-->>>>>>> Realigning data...           ',color=bcolors.OKGREEN)
         for i in range(zd//4):
-            s_x,s_y,_ = PHI_shifts_FFT(data[i,:,:,:],prec=500,verbose=True,norma=False)
+            s_x,s_y,_ = PHI_shifts_FFT(data[i,:,:,:],prec=500,verbose=verbose,norma=False)
             for j in range(4):
                 data[i,j,:,:] = shift_subp(data[i,j,:,:], shift=[s_x[j],s_y[j]])
 
@@ -1088,6 +1090,13 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     else:
         printc('          Crosstalk evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']',' using ',factor*100,"% of the disk",color=bcolors.OKBLUE)
         cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
+    # rrx = [int(c[1]),int(c[1]+r*factor)]
+    # rry = [int(c[0]-r*factor),int(c[0])]
+    # cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
+    # rrx = [int(c[1]-r*factor),int(c[1])]
+    # rry = [int(c[0]),int(c[0]+r*factor)]
+    # cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
+    # return
     #-----------------
     # CROSS-TALK CORRECTION 
     #-----------------
@@ -1313,7 +1322,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     printc('---------------------------------------------------------',color=bcolors.OKGREEN)
     if outfile == None:
         outfile = data_f[:-4]
-    printc(' Saving data to: ',outfile+'_red.fits')
+    printc(' Saving data to: ',directory+outfile+'_red.fits')
 
     # hdu = pyfits.PrimaryHDU(data)
     # hdul = pyfits.HDUList([hdu])
@@ -1321,13 +1330,13 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
     with pyfits.open(data_f) as hdu_list:
         hdu_list[0].data = data
-        hdu_list.writeto(outfile+'_red.fits', clobber=True)
+        hdu_list.writeto(directory+outfile+'_red.fits', clobber=True)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
     #-----------------
 
-    if rte == 'RTE':
+    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
 
         try:
@@ -1343,7 +1352,10 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             return        
 
         wavelength = 6173.3356
-        # wave_axis = np.array([-300,-160,-80,0,80,160])/1000.+wavelength
+        #OJO, REMOVE. NEED TO CHECK THE REF WAVE FROM S/C-PHI H/K
+        shift_w =  wave_axis[3] - wavelength
+        wave_axis = wave_axis - shift_w
+        #wave_axis = np.array([-300,-160,-80,0,80,160])/1000.+wavelength
         # wave_axis = np.array([-300,-140,-70,0,70,140])
         printc('   It is assumed the wavelength is given by the header info ')
         printc(wave_axis,color = bcolors.WARNING)
@@ -1352,6 +1364,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
         sdata = data[:,:,ry[0]:ry[1],rx[0]:rx[1]]
         l,p,x,y = sdata.shape
+        print(l,p,x,y)
+
         filename = 'dummy_in.txt'
         with open(filename,"w") as f:
             for i in range(x):
@@ -1363,15 +1377,20 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         printc('  ---- >>>>> Inverting data.... ',color=bcolors.OKGREEN)
         umbral = 3.
 
-        import subprocess
         cmd = CMILOS_LOC+"./milos"
         cmd = fix_path(cmd)
-        rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+        if rte == 'RTE':
+            rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+        if rte == 'CE':
+            rte_on = subprocess.call(cmd+" 6 15 2 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+        if rte == 'CE+RTE':
+            rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+
         print(rte_on)
         printc('  ---- >>>>> Finishing.... ',color=bcolors.OKGREEN)
         printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
-        #del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
-        #print(del_dummy)
+        del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
+        print(del_dummy)
 
         res = np.loadtxt('dummy_out.txt')
         npixels = res.shape[0]/12.
@@ -1400,33 +1419,34 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             plib.show_four_row(rte_invs[2,:,:],rte_invs[3,:,:],rte_invs[4,:,:],rte_invs[8,:,:],svmin=[0,0,0,-6.],svmax=[1200,180,180,+6.],title=['Field strengh [Gauss]','Field inclination [degree]','Field azimuth [degree]','LoS velocity [km/s]'],xlabel='Pixel',ylabel='Pixel')#,save=outfile+'BLoS.png')
         rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
         rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
-        np.savez_compressed(outfile+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
+
+        np.savez_compressed(directory+outfile+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
         
-        #del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
-        #print(del_dummy)
+        del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
+        print(del_dummy)
 
-        b_los_cropped = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
-        b_los = np.zeros((2048,2048))
-        b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = b_los_cropped
+        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
+        # b_los = np.zeros((2048,2048))
+        # b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = b_los_cropped
 
-        v_los_cropped = rte_invs_noth[8,:,:] * mask
-        v_los = np.zeros((2048,2048))
-        v_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = v_los_cropped
+        v_los = rte_invs_noth[8,:,:] * mask
+        # v_los = np.zeros((2048,2048))
+        # v_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = v_los_cropped
         if verbose:
             plib.show_one(v_los,vmin=-2.5,vmax=2.5,title='LoS velocity')
             plib.show_one(b_los,vmin=-30,vmax=30,title='LoS magnetic field')
 
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = b_los
-            hdu_list.writeto(outfile+'_blos_rte.fits', clobber=True)
+            hdu_list.writeto(directory+outfile+'_blos_rte.fits', clobber=True)
 
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = v_los
-            hdu_list.writeto(outfile+'_vlos_rte.fits', clobber=True)
+            hdu_list.writeto(directory+outfile+'_vlos_rte.fits', clobber=True)
 
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
-            hdu_list.writeto(outfile+'_Icont_rte.fits', clobber=True)
+            hdu_list.writeto(directory+outfile+'_Icont_rte.fits', clobber=True)
 
         printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
 
@@ -1445,7 +1465,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         ax.set_xticks([])
         ax.set_yticks([])
 
-        im = ax.imshow(np.fliplr(rotate(v_los, 52, reshape=False)), cmap='bwr',vmin=-3.,vmax=3.)
+    #        im = ax.imshow(np.fliplr(rotate(v_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1], 52, reshape=False)), cmap='bwr',vmin=-3.,vmax=3.)
+        im = ax.imshow(v_los, cmap='bwr',vmin=-3.,vmax=3.)
 
         divider = plib.make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -1453,7 +1474,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         cbar.set_label('[km/s]')
         cbar.ax.tick_params(labelsize=16)
 
-        # ax.imshow(Zm[rx[0]:rx[1],ry[0]:ry[1]], cmap='gray')
+        #ax.imshow(Zm, cmap='gray')
         plt.savefig('imagenes/velocity-map-'+outfile+'.png',dpi=300)
         plt.close()
 
@@ -1471,7 +1492,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         ax.set_xticks([])
         ax.set_yticks([])
                     
-        im = ax.imshow(np.fliplr(rotate(b_los, 52, reshape=False)), cmap='gray',vmin=-100,vmax=100) 
+        #im = ax.imshow(np.fliplr(rotate(b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1], 52, reshape=False)), cmap='gray',vmin=-100,vmax=100) 
+        im = ax.imshow(b_los, cmap='gray',vmin=-100,vmax=100)
 
         divider = plib.make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -1479,10 +1501,14 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         # cbar.set_label('Stokes V amplitude [%]')
         cbar.set_label('LoS magnetic field [Mx/cm$^2$]')
         cbar.ax.tick_params(labelsize=16)
+        #ax.imshow(Zm, cmap='gray')
+
+        plt.savefig('imagenes/Blos-map-'+outfile+'.png',dpi=300)
+        plt.close()
 
         printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
 
-    if rte == 'CE':
+    if rte == 'cog':
         printc('---------------------RUNNING COG --------------------------',color=bcolors.OKGREEN)
         wavelength = 6173.3356
         v_los,b_los = cog(data,wavelength,wave_axis,lande_factor=3,cpos = cpos)
@@ -1529,4 +1555,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     vl = vl - off #- cavity
     print('velocity offset ',off)
 
+    # cavity,h = phi.fits_read('HRT_cavity_map_IP5.fits')
+    # cavity = cavity * 0.3513e-3/6173.*300000. #A/V 
+    # cavity = cavity - np.median(cavity[800:1200,800:1200])
+    
     return vl

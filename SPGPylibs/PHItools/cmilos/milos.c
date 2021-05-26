@@ -150,7 +150,7 @@ int main(int argc,char **argv){
 	double slight;
 	double toplim;
 	int miter;
-	PRECISION weight[4]={1.,20.,20.,10.};
+	PRECISION weight[4]={1.,10.,10.,4.};
 	int nweight;
 
 	clock_t t_ini, t_fin;
@@ -961,10 +961,10 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	lambda_aux[3]=lambda3;
 	lambda_aux[4]=lambda4;
 
-	// //Sino queremos usar el lambda de la FPGA
-	// for(i=0;i<nlambda-1;i++){
-	// 	lambda_aux = (PRECISION)lambda[i];
-	// }
+	//Sino queremos usar el lambda de la FPGA
+	for(i=0;i<nlambda-1;i++){
+		lambda_aux[i] = (PRECISION)lambda[i];
+	}
 
 
 	spectroI=spectro;
@@ -973,6 +973,7 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	spectroV=spectro+nlambda*3;
 
 	Ic= spectro[nlambda-1]; // Continuo ultimo valor de I
+	Ic= spectro[0]; // Continuo ultimo valor de I
 
 
 	x=0;

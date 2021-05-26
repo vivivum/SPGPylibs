@@ -5,7 +5,14 @@
 ## `SPGPylibs/FPtools`
 --------------------------
 
-
-These FPtools functions ... F.J. Bailen PhD work.
+FPtools functions ... F.J. Bailen PhD work TBD.
 
 -------------------------- 
+
+</div>
+
+<!-- #### *cog.py*      
+- `cog()`             <span style="float:right; width:45em;"> Center of gravity method</span> 
+
+#### *plot_lib.py*      
+- `???()`             <span style="float:right; width:45em;"> Plotting wrappers (TBD)</span>  -->

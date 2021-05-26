@@ -593,8 +593,6 @@ def fdt_flat(files, wavelength, npol, method, dark = None, read_shits = 0, shift
 
         return gain, norma
 
-
-
 def fdt_flat_testrun():
     '''
     Just for local test
