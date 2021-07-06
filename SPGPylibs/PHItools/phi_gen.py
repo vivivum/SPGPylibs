@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import fftconvolve, tukey, savgol_filter
 from itertools import combinations
-from .tools import *
+from .tools import * 
+import SPGPylibs.GENtools.plot_lib as plib
 
 def shift(matrix, shift=[0, 0], fill_value=0):
     '''Shift operator
@@ -346,8 +347,8 @@ def find_Circles_ida(image, radii, r_width,verbose = False):
         print('Running fft convolution ', i, ' from a total of ', len(radii),end='\r')
         if verbose == True:
             print(image.shape,radii[i], r_width)
-            show_one(C,title='circle*')
-            show_one(acc[i], title='convolution')
+            plib.show_one(C,title='circle*')
+            plib.show_one(acc[i], title='convolution')
     return acc
 
 def votes(acc, radii):

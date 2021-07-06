@@ -11,12 +11,45 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from .tools import *
+from .tools import printc,bcolors,timeit
 from .phi_gen import *
 from .phi_utils import *
 from .phi_fits import *
 from .phi_reg import *
+from .phifdt_pipe_modules import phi_correct_dark
 from SPGPylibs.GENtools import *
+
+def centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=None):
+    ############################
+    #FIND CENTERS - PART OD DO_HOUGH
+    ############################
+    centers = []
+    radius = []
+    radii = np.linspace(inner_radius, outer_radius, steps + 1)
+    printc('Analizing ', n_images, ' images',color = bcolors.OKGREEN)
+
+    for i in range(n_images): 
+    #acc_conv = find_Circles(
+    #    binmask[i], radii_coarse, r_width_coarse, verbose=verbose, full=True)
+        acc_conv = find_Circles_ida(binmask[i], radii, r_width)
+        center,rad,c,d = votes(acc_conv, radii)
+
+        centers.append(center)
+        radius.append(rad)
+        printc('Found center: ', centers[i], ' and radius: ', radius[i],color = bcolors.WARNING)
+        if verbose == True:
+            fig = plt.figure(frameon=False)
+            im1 = plt.imshow(binmask[i], cmap=plt.cm.gray, alpha=.5)
+            circle_fit = bin_annulus(
+                imsize, radius[i], 1, full=False).astype(float)
+            dd = np.array(centers[i])
+            dx = dd[0] - imsize[0]//2
+            dy = dd[1] - imsize[1]//2
+            circle_fit = shift(circle_fit, shift=[dx,dy])
+            im2 = plt.imshow(circle_fit, cmap=plt.cm.gray, alpha=.5)
+            plt.show()
+
+    return centers,radius
 
 @timeit
 def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='prewitt',save=False,
@@ -37,6 +70,19 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
         step is used to generate:
             (1): coarse find jumps: np.linspace(inner_radius, outer_radius, steps)
             (2): width of the ring for crosscorrelating the disk: (outer_radius - inner_radius)//steps * 2
+            (3):if step is a negative number then uses FM find model
+                -#-
+                4 iterations
+                1] inner_radius = 152;  outer_radius = 1048; steps = 64; 15 iterations 
+                152_____________600_____________1048
+                --|---|---|---|---|---|---|---|---|---|---|---|---|---|---|--
+                2] inner_radius = Prev.Radius-32;  outer_radius = Prev.Radius+32; steps = 16; 5 iterations 
+                ---------|---------------|---------------|---------------|---------------|--------
+                3] inner_radius = Prev.Radius-8;  outer_radius = Prev.Radius+8; steps = 4; 5 iterations 
+                -----------|---------------|---------------|---------------|---------------|-----------
+                4] inner_radius = Prev.Radius-2;  outer_radius = Prev.Radius+2; steps = 1; 5 iterations 
+                -----------|---------------|---------------|---------------|---------------|-----------
+                -#-
     org_centers = org_centers: numpy array [K,2] centers for comparison (they are not used)
     method = method: method for finding the limb boundary. default = 'prewitt'
         more info look FindEdges()
@@ -101,89 +147,197 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
     ############################
     #FIND CENTERS - COARSE SEARCH
     ############################
+    #Coarse and fine compressed in one call
 
-    centers = []
-    radius = []
-    r_width_coarse = (outer_radius - inner_radius)//steps * 2
-    radii_coarse = np.linspace(inner_radius, outer_radius, steps)
-    print('Analizing ', n_images, ' images (coarse search)')
+    # centers = []
+    # radius = []
+    # r_width_coarse = (outer_radius - inner_radius)//steps * 2
+    # radii_coarse = np.linspace(inner_radius, outer_radius, steps)
+    # print('Analizing ', n_images, ' images (coarse search)')
 
-    for i in range(n_images):
-    #acc_conv = find_Circles(
-    #    binmask[i], radii_coarse, r_width_coarse, verbose=verbose, full=True)
-        acc_conv = find_Circles_ida(binmask[i], radii_coarse, r_width_coarse)
-        center,rad,c,d = votes(acc_conv, radii_coarse)
+    # for i in range(n_images): 
+    # #acc_conv = find_Circles(
+    # #    binmask[i], radii_coarse, r_width_coarse, verbose=verbose, full=True)
+    #     acc_conv = find_Circles_ida(binmask[i], radii_coarse, r_width_coarse)
+    #     center,rad,c,d = votes(acc_conv, radii_coarse)
 
-        centers.append(center)
-        radius.append(rad)
-        print('Found center: ', centers[i], ' and radius: ', radius[i])
-        if verbose == True:
-            fig = plt.figure(frameon=False)
-            im1 = plt.imshow(binmask[i], cmap=plt.cm.gray, alpha=.5)
-            circle_fit = bin_annulus(
-                imsize, radius[i], 1, full=False).astype(float)
-            dd = np.array(centers[i])
-            dx = dd[0] - imsize[0]//2
-            dy = dd[1] - imsize[1]//2
-            circle_fit = shift(circle_fit, shift=[dx,dy])
-            im2 = plt.imshow(circle_fit, cmap=plt.cm.gray, alpha=.5)
-            plt.show()
+    #     centers.append(center)
+    #     radius.append(rad)
+    #     print('Found center: ', centers[i], ' and radius: ', radius[i])
+    #     if verbose == True:
+    #         fig = plt.figure(frameon=False)
+    #         im1 = plt.imshow(binmask[i], cmap=plt.cm.gray, alpha=.5)
+    #         circle_fit = bin_annulus(
+    #             imsize, radius[i], 1, full=False).astype(float)
+    #         dd = np.array(centers[i])
+    #         dx = dd[0] - imsize[0]//2
+    #         dy = dd[1] - imsize[1]//2
+    #         circle_fit = shift(circle_fit, shift=[dx,dy])
+    #         im2 = plt.imshow(circle_fit, cmap=plt.cm.gray, alpha=.5)
+    #         plt.show()
 
-    print('Image |   Original  |  Inferred   |   Radius')
-    for i in range(n_images):
-        print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
-            (i, org_centers[i, 0], org_centers[i, 1],
-            centers[i][1], centers[i][0], radius[i]))
+    # print('Image |   Original  |  Inferred   |   Radius')
+    # for i in range(n_images):
+    #     print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+    #         (i, org_centers[i, 0], org_centers[i, 1],
+    #         centers[i][1], centers[i][0], radius[i]))
 
     ############################
     #FIND CENTERS - FINE SEARCH
     ############################
 
-    centers_fine = []
-    radius_fine = []
+    # centers_fine = []
+    # radius_fine = []
 
-    mean_r = np.mean(radius)
-    print('pp',mean_r)
-    inner_radius = mean_r-20
-    outer_radius = mean_r+20
-    steps = 20
-    r_width_fine = 5
-    radii_fine = np.linspace(inner_radius, outer_radius, steps)
-    print('Analizing ', n_images, ' images (fine case)')
+    # mean_r = np.mean(radius)
+    # print('pp',mean_r)
+    # inner_radius = mean_r-20
+    # outer_radius = mean_r+20
+    # steps = 20
+    # r_width_fine = 5
+    # radii_fine = np.linspace(inner_radius, outer_radius, steps)
+    # print('Analizing ', n_images, ' images (fine case)')
 
-    for i in range(n_images):
-        acc_conv = find_Circles_ida(binmask[i], radii_fine, r_width_fine,verbose=False)
-        center,rad,c,d = votes(acc_conv, radii_fine)
-        centers_fine.append(center)
-        radius_fine.append(rad)
-        print('Found center: ', centers_fine[i],
-            ' and radius: ', radius_fine[i])
-        if verbose == True:
-            fig = plt.figure(frameon=False)
-            im1 = plt.imshow(binmask[i], cmap=plt.cm.gray, alpha=.5)
-            circle_fit = bin_annulus(
-                imsize, radius_fine[i], 1, full=False).astype(float)
-            dd = np.array(center)
-            dx = dd[0] - imsize[0]//2
-            dy = dd[1] - imsize[1]//2
-            circle_fit = shift(circle_fit, shift=[dx,dy])
-            im2 = plt.imshow(circle_fit, cmap=plt.cm.gray, alpha=.5)
-            plt.show()
+    # for i in range(n_images):
+    #     acc_conv = find_Circles_ida(binmask[i], radii_fine, r_width_fine,verbose=False)
+    #     center,rad,c,d = votes(acc_conv, radii_fine)
+    #     centers_fine.append(center)
+    #     radius_fine.append(rad)
+    #     print('Found center: ', centers_fine[i],
+    #         ' and radius: ', radius_fine[i])
+    #     if verbose == True:
+    #         fig = plt.figure(frameon=False)
+    #         im1 = plt.imshow(binmask[i], cmap=plt.cm.gray, alpha=.5)
+    #         circle_fit = bin_annulus(
+    #             imsize, radius_fine[i], 1, full=False).astype(float)
+    #         dd = np.array(center)
+    #         dx = dd[0] - imsize[0]//2
+    #         dy = dd[1] - imsize[1]//2
+    #         circle_fit = shift(circle_fit, shift=[dx,dy])
+    #         im2 = plt.imshow(circle_fit, cmap=plt.cm.gray, alpha=.5)
+    #         plt.show()
 
-    print('Method  |  Image |   Original  |  Inferred   |   Radius')
-    for i in range(n_images):
-        print(" Coarse  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
-            (i, org_centers[i, 0], org_centers[i, 1],
-            centers[i][1], centers[i][0], radius[i]))
-        print(" Fine    %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
-            (i, org_centers[i, 0], org_centers[i, 1],
-            centers_fine[i][1], centers_fine[i][0], radius_fine[i]))
+    # print('Method  |  Image |   Original  |  Inferred   |   Radius')
+    # for i in range(n_images):
+    #     print(" Coarse  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+    #         (i, org_centers[i, 0], org_centers[i, 1],
+    #         centers[i][1], centers[i][0], radius[i]))
+    #     print(" Fine    %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+    #         (i, org_centers[i, 0], org_centers[i, 1],
+    #         centers_fine[i][1], centers_fine[i][0], radius_fine[i]))
     
+    if steps > 0:
+        ############################# 
+        #FIND CENTERS - COARSE SEARCH
+        #############################
+        r_width = (outer_radius - inner_radius)//steps * 2
+        print(np.linspace(inner_radius, outer_radius, steps + 1))
+
+        printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        print('Image |   Original  |  Inferred   |   Radius')
+        for i in range(n_images):
+            printc("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+                (i, org_centers[i, 0], org_centers[i, 1],
+                centers[i][1], centers[i][0], radius[i]),color = bcolors.FAIL)
+        ###########################
+        #FIND CENTERS - FINE SEARCH
+        ###########################
+        mean_r = np.int(np.mean(radius))
+        inner_radius = mean_r - 32
+        outer_radius = mean_r + 32
+        steps = 16
+        r_width = (outer_radius - inner_radius)//steps * 2
+        print(np.linspace(inner_radius, outer_radius, steps + 1))
+
+        printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        print('Image |   Original  |  Inferred   |   Radius')
+        for i in range(n_images):
+            printc("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+                (i, org_centers[i, 0], org_centers[i, 1],
+                centers[i][1], centers[i][0], radius[i]),color = bcolors.FAIL)
+        ################################
+        #FIND CENTERS - VERY FINE SEARCH
+        ################################
+        mean_r = np.int(np.mean(radius))
+        inner_radius = mean_r - 4
+        outer_radius = mean_r + 4
+        steps = 8
+        r_width = (outer_radius - inner_radius)//steps * 2
+        print(np.linspace(inner_radius, outer_radius, steps + 1))
+
+        printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        print('Image |   Original  |  Inferred   |   Radius')
+        for i in range(n_images):
+            printc("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+                (i, org_centers[i, 0], org_centers[i, 1],
+                centers[i][1], centers[i][0], radius[i]),color = bcolors.FAIL)
+    elif steps < 0:
+        ##################################
+        #FIND CENTERS - FM SEARCH STRATEGY
+        ##################################
+        inner_radius = 128
+        outer_radius = 1024
+        steps = 32
+        r_width = (outer_radius - inner_radius)//steps * 2
+        print(np.linspace(inner_radius, outer_radius, steps + 1))
+        printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        print('Image |   Original  |  Inferred   |   Radius')
+        for i in range(n_images):
+            print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+                (i, org_centers[i, 0], org_centers[i, 1],
+                centers[i][1], centers[i][0], radius[i]))
+        mean_r = np.int(np.mean(radius))
+        inner_radius = mean_r - 32
+        outer_radius = mean_r + 32
+        steps = 16 
+        r_width = (outer_radius - inner_radius)//steps * 2
+        print(np.linspace(inner_radius, outer_radius, steps + 1))
+        printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        print('Image |   Original  |  Inferred   |   Radius')
+        for i in range(n_images):
+            print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+                (i, org_centers[i, 0], org_centers[i, 1],
+                centers[i][1], centers[i][0], radius[i]))
+        mean_r = np.int(np.mean(radius))
+        inner_radius = mean_r - 8
+        outer_radius = mean_r + 8
+        steps = 8 
+        r_width = (outer_radius - inner_radius)//steps * 2
+        print(np.linspace(inner_radius, outer_radius, steps + 1))
+        printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        print('Image |   Original  |  Inferred   |   Radius')
+        for i in range(n_images):
+            print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+                (i, org_centers[i, 0], org_centers[i, 1],
+                centers[i][1], centers[i][0], radius[i]))
+        mean_r = np.int(np.mean(radius))
+        inner_radius = mean_r - 2
+        outer_radius = mean_r + 2
+        steps = 4
+        r_width = (outer_radius - inner_radius)//steps * 2
+        print(np.linspace(inner_radius, outer_radius, steps + 1))
+        printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        print('Image |   Original  |  Inferred   |   Radius')
+        for i in range(n_images):
+            print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
+                (i, org_centers[i, 0], org_centers[i, 1],
+                centers[i][1], centers[i][0], radius[i]))
+    else:
+        print('NO HOUGH **** WRONG')
+
     if save == True:
-        status = write_shifts('hough_centers.txt', (centers_fine,radii_fine))
+        status = write_shifts('hough_centers.txt', (centers,radius))
         if status != 1:
             print('Error in write_shifts')
-    return centers_fine, radius_fine
+
+    return centers, radius
 
 @timeit  
 def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
@@ -477,12 +631,13 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
     else:
         return None
 
-def fdt_flat(files, wavelength, npol, method, dark = None, read_shits = 0, shifts = None, verbose = 1,
+def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 0, shifts = None, verbose = 1,
     correct_ghost = 0,expand = 1,thrd = 0,iter = 4, normalize = 1 , disp_method = 'Hough', c_term = 0,
-    inner_radius = 400, outer_radius = 800, steps = 20):
+    inner_radius = 400, outer_radius = 800, steps = 20,shifts_file = './'):
     '''
     The Dark, if provided, should have the same scaling as the data and same size!!!!!!!
     This program does not take care of sizes. For that go to fdt_pipeline
+    USES OLD CORRECT GHOST ROUTINE!!!! TO BE MODIFIED
     '''
 
     ############################
@@ -517,12 +672,12 @@ def fdt_flat(files, wavelength, npol, method, dark = None, read_shits = 0, shift
     if read_shits == 1:
         try:
             print('... read user input shifts_file ...')
-            centers = read_shifts(shifts+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt')
-            radius  = read_shifts(shifts+'_rad_w'+str(wavelength)+'_n'+str(npol)+'.txt')
+            centers = read_shifts(shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt')
+            radius  = read_shifts(shifts_file+'_rad_w'+str(wavelength)+'_n'+str(npol)+'.txt')
             for i in range(n_images):
                 print('Image',i,'c: ',centers[i,0],',',centers[i,1],' rad: ', radius[i])
         except Exception:
-            print("Unable to open fits file: {}",shifts+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt')        
+            print("Unable to open fits file: {}",shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt')        
     elif read_shits == 2:
         print('... shifts provided by user ...')
         centers = shifts[0]
@@ -535,8 +690,8 @@ def fdt_flat(files, wavelength, npol, method, dark = None, read_shits = 0, shift
         if disp_method == 'Hough':
 
             centers, radius = do_hough(image, inner_radius, outer_radius, steps,verbose=False,threshold = 0.05)
-            _ = write_shifts(shifts+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt', centers)
-            _ = write_shifts(shifts+'_rad_w'+str(wavelength)+'_n'+str(npol)+'.txt', radius )
+            _ = write_shifts(shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt', centers)
+            _ = write_shifts(shifts_file+'_rad_w'+str(wavelength)+'_n'+str(npol)+'.txt', radius )
 
         elif disp_method == 'FFT':
             print('TB checked. Input par "expand" should be negative number representing solar disk')
@@ -595,11 +750,8 @@ def fdt_flat(files, wavelength, npol, method, dark = None, read_shits = 0, shift
 
 def fdt_flat_testrun():
     '''
-    Just for local test
+    Just for local test run in a folder at same level of SPGlib
     '''
-    import sys
-    sys.path.append('../SPGPylibs/')
-    import SPGPylibs as spg
 
     dir = '/Users/orozco/Dropbox_folder/SoPHI/PHI-COMMISSIONING/software-and-images/RSW1/Add-data/'
     files = ['solo_L0_phi-fdt-ilam_20200618T035946_V202007101227C_0066180100.fits',
@@ -614,12 +766,13 @@ def fdt_flat_testrun():
     files = [dir + s for s in files]
 
     dark_file = '/Users/orozco/Dropbox_folder/SoPHI/PHI-COMMISSIONING/software-and-images/RSW1/solo_L0_phi-fdt-ilam_20200618T000547_V202006221044C_0066181001_dark.fits'
-    dark, _ = fits_get(dark_file)
-    
-    scaling_dark = fits_get(dark_file,scaling = True)
-    scaling_flat = fits_get(files[0],scaling = True)
-    dark = dark * scaling_flat / scaling_dark
 
+    dark,dark_scale = phi_correct_dark(dark_file,files[0],0,0,verbose = False,get_dark = True)
+    # dark, _ = fits_get(dark_file)    
+    # scaling_dark = fits_get(dark_file,scaling = True)
+    # scaling_flat = fits_get(files[0],scaling = True)
+    # dark = dark * scaling_flat / scaling_dark
+    
     wavelength = 0
     npol = 0
 
@@ -630,9 +783,11 @@ def fdt_flat_testrun():
     for wavelength in range(1):
       for npol in range(1):
         print(wavelength,npol,'................')
-        gain, norma_out = fdt_flat(files, wavelength, npol, 'kll',dark = dark,read_shits = False, 
+        gain, norma_out = fdt_flat(files, wavelength, npol, method = 'kll', dark = dark,read_shits = False, 
             shifts_file = 'shifts/shifts', correct_ghost = 0 , expand = 10, normalize = 0, 
-            iter = 3, method = 'kll',verbose=0)
+            iter = 3,verbose=True)#,steps = -1)
+        
+        #steps = 20)
         # gain, norma_out = fdt_flat(files,wavelength,npol,'kll',dark=dark,read_shits = False, shifts_file = ' '
         #     correct_ghost=0 , expand = 10, normalize=0,thrd = 0.2, iter = 3, method = 'kll',verbose=0)
         allgain.append(gain)

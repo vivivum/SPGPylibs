@@ -2,18 +2,19 @@ import numpy as np
 import os.path
 #from astropy.io import fits as pyfits
 import random, statistics
-from time import sleep
+#from time import sleep
 import subprocess
 
 from scipy.ndimage import gaussian_filter, rotate
 #from scipy.interpolate import interp1d
-from scipy.optimize import curve_fit
+#from scipy.optimize import curve_fit
 
 from .tools import *
 from .phi_fits import *
 from .phi_gen import *
 from .phi_reg import *
 from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d
+from .phifdt_pipe_modules import phi_correct_dark
 
 import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
@@ -426,20 +427,60 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     vqu = False, do2d = 0, rte = False, debug = False,nlevel = 0.3,center_method=None,loopthis=0):
 
     '''
-    PHI-FDT naive data reduction pipeline (HRT pipeline is rather similar)
-    The steps in the "naive" procesing are:
+    Keywords shat we should have in the header for making the FM and ground pipeline compatible (and modular wise).
+ 
+   * CAL_DARK =             26181001 / Onboard calibrated for dark field ! Dark correction ( DID/file of dark if True) 
+   * CAL_FLAT =             26181101 / Onboard calibrated for gain table ! Dark correction ( DID/file of flat if True)             
+    CAL_PRE  =             Prefilter / Prefilter correction ( DID/file of flat if True)                    
+    CAL_GHST=              Prefilter / Ghost correction ( name+version of py module if True )           
+    CAL_REAL=              Prefilter / Prealigment of images before demodulation ( name+version of py module if True )             
+   * CAL_IPOL=               990510 / Onboard calibrated for instrumental polarizatio ! demodulation ( DID of demod matrix if True ) - demod matrix may be 4x4 or 2048x2048x4x4
+    CAL_CRT0=               float / cross-talk from I to Q (slope value, wrt normalized data in python) 
+    CAL_CRT1=               float / cross-talk from I to Q (off-set value, wrt normalized data in python) 
+    CAL_CRT2=               float / cross-talk from I to U (slope value, wrt normalized data in python) 
+    CAL_CRT3=               float / cross-talk from I to U (off-set value, wrt normalized data in python) 
+    CAL_CRT4=               float / cross-talk from I to V (slope value, wrt normalized data in python) 
+    CAL_CRT5=               float / cross-talk from I to V (off-set value, wrt normalized data in python) 
+    CAL_CRT6=               float / cross-talk from V to Q (slope value, wrt normalized data in python) 
+    CAL_CRT7=               float / cross-talk from V to Q (off-set value, wrt normalized data in python) 
+    CAL_CRT8=               float / cross-talk from V to U (slope value, wrt normalized data in python) 
+    CAL_CRT9=               float / cross-talk from V to U (off-set value, wrt normalized data in python) 
+    CAL_NORM=               990510 / Normalization (normalization constant PROC_Ic)
+    CAL_FRIN=               990510 / Fringe correction ( name+version of py module if True )  TBD (posibly we need the freqs.)  
+   * CAL_PSF=                990510 / Onboard calibrated for instrumental PSF  ! TBD
+   * CAL_RTE=                990510 / ok
+   * CAL_SCIP= 'None'               / Onboard scientific data analysis
+   * RTE_ITER=           4294967295 / Number RTE inversion iterations
+   * COMPRESS= 'none'               / Data compression quality
+   * COMPRAT =                   1. / Data compression ratio
+   * COMPVERS=                    0 / Version of Compression Core
+   * PHIDATID= '142010402'          / PHI dataset Id
+
+	FDT pipeline steps we have on ground:
+
     1- Read data
-    2- Check dimensions
+    2- Check dimensions (open to bugs since only few data were tested)
     3- Read flats
     4- Read and correct dark field (taking into account the scaling)
-    5- Find center of the Sun in the data
-    6- get wavelength samppling from header
+    5- Find center of the Sun in the data for masking and ghost correction
+    6- get wavelength sampling from header
     7- move the continuum to the blue (if needed) in flat and data
-    8- Correct flatfield
-    9- Correct prefilter - needs prefilter data!
-    10- realign data (not activated)
+    8- interpolate flats (Not implemented yet - in case of deviations in voltage)
+    9- Correct flat-field
+    9- Correct prefilter - needs prefilter data file!
+    9- Correct ghost (complex step) [NEEDED in FM - high priority]
+    10- realign data before demodulation [NEEDED in FM - low priority]
     11- Demodulate data using appropriate dem matrix
-    12- correct cross-talk from I to QUV
+    12- Normalize to average continuum [NEEDED in FM - low priority - determine the Icont automatically]
+    13- correct cross-talk from I to QUV [NEEDED in FM - evaluation of these automatically - mid priority]
+    14- correct cross-talk from V to QU (interactive) [NEEDED in FM - evaluation of these automatically - mid priority]
+    15- correct cross-talk from I to QUV in 2D (do not use this, your PC will have a hangover)
+    16- Fringes correction [NEEDED in FM -TBD]
+    17- median to zero [NEEDED in FM]
+    18- save
+    19- RTE (RTE or CE or CE+RTE)
+    20- plots
+
 
     Parameters
     ----------
@@ -514,7 +555,6 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         zd,yd,xd = data.shape
         data = np.reshape(data,(zd//4,4,yd, xd))
         data = data / 256.
-
     except Exception:
         printc("ERROR, Unable to open fits file: {}",data_f,color=bcolors.FAIL)
 
@@ -560,7 +600,6 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     # READ AND CORRECT DARK FIELD
     #-----------------
     if dark_c:
-
         printc('-->>>>>>> Reading Darks                   ',color=bcolors.OKGREEN)
         printc('          Input should be [y-dim,x-dim].',color=bcolors.OKGREEN)
         printc('          DARK IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
@@ -600,6 +639,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     if center_method == 'Hough':
         c, r,threshold = find_circle_hough(data[0,0,:,:],inner_radius,outer_radius,steps,threshold = 0.01,normalize=False,verbose=False)
         c = np.roll(c,1)
+        cy = c[0]
+        cx = c[1]
     else:
         cx,cy,r=find_center(data[0,0,:,:])
         c = np.array([int(cx),int(cy)])
@@ -787,10 +828,10 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             -710, -645, -579, -514, -448, -383, -317, -252, -186,-121, -56,9,74,\
             140,205,271,336,402,467,533,598,664,729,795,860,926,991,1056,1122,1187,\
             1253,1318,1384,1449,1515,1580,1646,1711,1777,1842]
-        if verbose == 1:
+        if verbose:
             datap = np.copy(data)
         data = applyPrefilter_dos(data, voltagesData, prefdata, prefscale, prefVoltages, -1,scaledown = scale, verbose = verbose)
-        if verbose == 1:
+        if verbose:
             plt.plot(data[:,0,yd//2,xd//2],'o-',label='corrected')
             plt.plot(datap[:,0,yd//2,xd//2],'--',label='original')
             plt.legend()
@@ -803,6 +844,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     #-----------------
 
     if correct_ghost:
+        if verbose:
+            datap = np.copy(data)
         printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
 
         #common part
@@ -1006,9 +1049,9 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
                 # print('new',factor[i,j]*float((cf[0] + 50)/100.))
 
                 data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
-                if verbose:
-                    pass
-                #plib.show_one(data[i,j,:,:],vmin=0,vmax=1)
+                # if verbose:
+                #     plib.show_one(datap[i,j,:,:],vmin=0,vmax=1)
+                #     plib.show_one(data[i,j,:,:],vmin=0,vmax=1)
     #-----------------
     # REALIGN DATA BEFORE DEMODULATION
     #-----------------
@@ -1104,19 +1147,67 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     data[:,1,:,:] = data[:,1,:,:] - cQ[0]*data[:,0,:,:] - cQ[1]
     data[:,2,:,:] = data[:,2,:,:] - cU[0]*data[:,0,:,:] - cU[1]
     data[:,3,:,:] = data[:,3,:,:] - cV[0]*data[:,0,:,:] - cV[1]
+
     if verbose:
         plt.hist(data[4,1,900:1100,900:1100].flatten(), bins='auto')
         plt.hist(data[4,2,900:1100,900:1100].flatten(), bins='auto')
         plt.hist(data[4,3,900:1100,900:1100].flatten(), bins='auto')
         plt.show()
         plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I','Q','U','V'])
-
     # PLT_RNG = 2
     # plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t1_'+str(loopthis)+'.png')
     # plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t3_'+str(loopthis)+'.png')
     # plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t5_'+str(loopthis)+'.png')
 
     # np.save('data_dummy',data)
+
+    #-----------------
+    # CROSS-TALK CALCULATION FROM V TO QU (Interactive)
+    #-----------------
+    
+    if vqu:
+        printc('-->>>>>>> Cross-talk correction from Stokes V to Stokes Q,U ',color=bcolors.OKGREEN)
+
+        factor = 0.3 # 30% of the disk
+        rrx = [int(c[1]-r*factor),int(c[1]+r*factor)]
+        rry = [int(c[0]-r*factor),int(c[0]+r*factor)]
+        print(' Cross-talk evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']',' using ',factor*100,"% of the disk")
+        cVQ,cVU = cross_talk_QUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],nran = 2000,nlevel=nlevel, show = 1,block=False)
+
+        option = input('Do you want to apply the correction (y/n) [n]: ')
+        if option == 'y':
+            datao = np.copy(data)
+            print('Applying V to QU cross-talk correction...')
+            datao[:,2,:,:] = data[:,2,:,:] - cVQ[0]*data[:,3,:,:] - cVQ[1]
+            datao[:,3,:,:] = data[:,3,:,:] - cVU[0]*data[:,3,:,:] - cVU[1]
+            plib.show_two(data[3,1,ry[0]:ry[1],rx[0]:rx[1]],datao[3,1,ry[0]:ry[1],rx[0]:rx[1]],block=False,title=['Stokes Q','Stokes Q corrected'])
+            plib.show_two(data[3,2,ry[0]:ry[1],rx[0]:rx[1]],datao[3,2,ry[0]:ry[1],rx[0]:rx[1]],block=False,title=['Stokes U','Stokes U corrected'])
+            option2 = input('Do you wnat to continue (y/n) [n]: ')
+            if option2 == 'y':
+                data = np.copy(datao)
+                del datao
+        plt.close()
+
+    #-----------------
+    # CROSS-TALK CALCULATION FROM I TO QUV (2D)
+    #-----------------
+
+    if do2d >= 2:
+        printc('---------------------------------------------------------',color=bcolors.OKGREEN)
+        printc('-- IN 2-Dimensions                                     --')
+        printc('-- Cross-talk correction from Stokes I to Stokes Q,U,V --')
+        printc('---------------------------------------------------------',color=bcolors.OKGREEN)
+        size = do2d
+        cV0,cV1 = crosstalk_ItoQUV2d(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],size=size)
+        nsize = size-1
+        dim = ry[1]-ry[0]-nsize
+        cV0 = cV0.reshape(dim,dim)
+        cV1 = cV1.reshape(dim,dim)
+        plib.show_one(cV0,vmin=-0.005,vmax=0.005)
+        data[:,3,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] = \
+            data[:,3,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] -\
+            cV0*data[:,0,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] #- 0.95*cV1
+
     #-----------------
     # FINGING - Need to include Ajusta senos contras!!!!
     #-----------------
@@ -1141,7 +1232,9 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
         for i in range(zd//4):
             for j in np.arange(1,4):
-
+                i = 0
+                j = 3
+                print('Wavelengh ',i,' pol state: ',j)
                 data_fringes = rebin(data[i,j,:,:], [yd//wbin,xd//wbin])
                 F=np.fft.fft2(data_fringes)
                 F=np.fft.fftshift(F)
@@ -1223,13 +1316,14 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
                                 print(i,j,level_theshold[j-1]*mean,3.*level_theshold[j-1]*mean, rms, 3*rms, imc[idx[0][idx_i],idx[1][idx_i]] - minimum,freq_x[i,j-1,loop],freq_y[i,j-1,loop])
                                 loop += 1
                     plt.colorbar()
-                    plt.show(block=False)
+                    plt.show(block=True)
                     plt.pause(1)
                     plt.clf()
                     dum = np.copy(data_fringes)
                     data_fringes = np.fft.ifft2(np.fft.fftshift(F)).astype(np.float)
                     #plib.show_four_row(data_fringes,dum,dum-data_fringes,power2d,svmin=[-0.002,-0.002,-0.0002,-3],svmax=[0.002,0.002,0.0002,3])
                     data[i,j,:,:] = np.fft.ifft2(np.fft.fftshift(F)).astype(np.float)
+                quit()
         plt.ioff()
 
     #  fx = 0.012500000 ;16   PX/Size
@@ -1266,48 +1360,6 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     if verbose == 1:
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'])
 
-    #-----------------
-    # CROSS-TALK CALCULATION FROM V TO QU (Interactive)
-    #-----------------
-    
-    if vqu:
-        printc('-->>>>>>> Cross-talk correction from Stokes V to Stokes Q,U ',color=bcolors.OKGREEN)
-
-        factor = 0.3 # 30% of the disk
-        rrx = [int(c[1]-r*factor),int(c[1]+r*factor)]
-        rry = [int(c[0]-r*factor),int(c[0]+r*factor)]
-        print(' Cross-talk evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']',' using ',factor*100,"% of the disk")
-        cVQ,cVU = cross_talk_QUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],nran = 2000,nlevel=nlevel, show = 1,block=False)
-
-        option = input('Do you want to apply the correction (y/n) [n]: ')
-        if option == 'y':
-            datao = np.copy(data)
-            print('Applying V to QU cross-talk correction...')
-            datao[:,2,:,:] = data[:,2,:,:] - cVQ[0]*data[:,3,:,:] - cVQ[1]
-            datao[:,3,:,:] = data[:,3,:,:] - cVU[0]*data[:,3,:,:] - cVU[1]
-            plib.show_two(data[3,1,ry[0]:ry[1],rx[0]:rx[1]],datao[3,1,ry[0]:ry[1],rx[0]:rx[1]],block=False,title=['Stokes Q','Stokes Q corrected'])
-            plib.show_two(data[3,2,ry[0]:ry[1],rx[0]:rx[1]],datao[3,2,ry[0]:ry[1],rx[0]:rx[1]],block=False,title=['Stokes U','Stokes U corrected'])
-            option2 = input('Do you wnat to continue (y/n) [n]: ')
-            if option2 == 'y':
-                data = np.copy(datao)
-                del datao
-        plt.close()
-
-    if do2d >= 2:
-        printc('---------------------------------------------------------',color=bcolors.OKGREEN)
-        printc('-- IN 2-Dimensions                                     --')
-        printc('-- Cross-talk correction from Stokes I to Stokes Q,U,V --')
-        printc('---------------------------------------------------------',color=bcolors.OKGREEN)
-        size = do2d
-        cV0,cV1 = crosstalk_ItoQUV2d(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],size=size)
-        nsize = size-1
-        dim = ry[1]-ry[0]-nsize
-        cV0 = cV0.reshape(dim,dim)
-        cV1 = cV1.reshape(dim,dim)
-        plib.show_one(cV0,vmin=-0.005,vmax=0.005)
-        data[:,3,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] = \
-            data[:,3,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] -\
-            cV0*data[:,0,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] #- 0.95*cV1
 
     #-----------------
     #CHECK FOR INFs
@@ -1322,7 +1374,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     printc('---------------------------------------------------------',color=bcolors.OKGREEN)
     if outfile == None:
         outfile = data_f[:-4]
-    printc(' Saving data to: ',directory+outfile+'_red.fits')
+    printc(' Saving data to: ',directory+outfile+'_L1.fits')
 
     # hdu = pyfits.PrimaryHDU(data)
     # hdul = pyfits.HDUList([hdu])
@@ -1330,7 +1382,27 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
     with pyfits.open(data_f) as hdu_list:
         hdu_list[0].data = data
-        hdu_list.writeto(directory+outfile+'_red.fits', clobber=True)
+        header = hdu_list[0].header
+        # # Print the header keys from the file to the terminal
+        # header.keys
+        # Modify the key called 'CAL_DARK' to have a value of 100
+        header['CRPIX1'] = (round(cy, 2))
+        header['CRPIX2'] = (round(cx, 2))
+        if 'CAL_DARK' in header:  # Check for existence
+            header['CAL_DARK'] = ('darkID')
+        if 'CAL_GHST' in header:  # Check for existence
+            header['CAL_GHST'] = ('darkID')
+        else:
+            header.set('CAL_GHST', 'True', 'test',after='CAL_DARK')
+        # Add a new key to the header
+        header.insert(20, ('NEWKEY', 'OMIT', 'test'))
+        #header.set('NEWKEY','50.5')
+        hdu_list.writeto(directory+outfile+'_testingonly.fits', clobber=True)
+#        hdu_list.writeto(directory+outfile+'_L1.fits', clobber=True)
+
+    # with pyfits.open(data_f) as hdu_list:
+    #     hdu_list[0].data = mask
+    #     hdu_list.writeto(directory+outfile+'_red-mask.fits', clobber=True)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
@@ -1421,7 +1493,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
 
         np.savez_compressed(directory+outfile+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
-        
+
         del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
         print(del_dummy)
 
@@ -1438,14 +1510,23 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = b_los
+            header = hdu_list[0].header
+            header['CRPIX1'] = (round(cy, 2))
+            header['CRPIX2'] = (round(cx, 2))
             hdu_list.writeto(directory+outfile+'_blos_rte.fits', clobber=True)
 
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = v_los
+            header = hdu_list[0].header
+            header['CRPIX1'] = (round(cy, 2))
+            header['CRPIX2'] = (round(cx, 2))
             hdu_list.writeto(directory+outfile+'_vlos_rte.fits', clobber=True)
 
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
+            header = hdu_list[0].header
+            header['CRPIX1'] = (round(cy, 2))
+            header['CRPIX2'] = (round(cx, 2))
             hdu_list.writeto(directory+outfile+'_Icont_rte.fits', clobber=True)
 
         printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
