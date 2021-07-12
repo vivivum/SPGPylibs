@@ -121,9 +121,7 @@ def newton(y,x,pars,func, **args):
         HI = np.linalg.inv(H)
         Change = np.matmul(HI,np.transpose(J))
         pars_new = pars - Change
-
-        print(pars)
-        print(pars_new)
+        print('Newton... Old params: ',pars, ' New params: ',pars_new,' Iter: ', i)
         pars = pars_new
 
     return pars
@@ -567,3 +565,19 @@ def running_mean(x, N):
     running mean to smooth signals
     '''
     return np.convolve(x, np.ones((N,))/N, mode='same')
+
+def find_string(where,what):
+    index = 0
+    add = len(what)
+    found = []
+    nothing = -1
+    while index < len(where):
+        index = where.find(what, index)
+        if index == -1:
+            break
+        else:
+            nothing = 1
+            found.append(index)
+            print('ll found at', index)
+            index += add # +2 because len('_') == 1
+    return found,nothing

@@ -1,11 +1,10 @@
 import numpy as np 
 import os.path
 #from astropy.io import fits as pyfits
-import random, statistics
 #from time import sleep
 import subprocess
 
-from scipy.ndimage import gaussian_filter, rotate
+from scipy.ndimage import gaussian_filter#, rotate
 #from scipy.interpolate import interp1d
 #from scipy.optimize import curve_fit
 
@@ -13,450 +12,23 @@ from .tools import *
 from .phi_fits import *
 from .phi_gen import *
 from .phi_reg import *
-from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d
-from .phifdt_pipe_modules import phi_correct_dark
+from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d,find_string
+from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_apply_demodulation,\
+    crosstalk_ItoQUV,cross_talk_QUV,crosstalk_ItoQUV2d,phi_correct_ghost,phi_correct_fringes
 
 import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
 
-def interpolateImages(image1, image2, dist1I, distI2):
-    ''' interpolate 2D images - 
-    '''
-    imageInterp = (image1 * distI2 + image2 * dist1I) / (dist1I + distI2)
-    return imageInterp
-
-def applyPrefilter(data, wvltsData, prefilter, prefScale, wvltsPref, direction, scaledown=8,verbose = 0):
-    '''PHI prefilter. Version from K. Albert.
-    '''
-    prefToApply = np.zeros((6,prefilter.shape[1],prefilter.shape[2]))
-    #prefilter = prefilter/prefScale
-    for i in range(0,6):
-        wvlCurr = wvltsData[i]
-        valueClosest = min(wvltsPref, key=lambda x:abs(x-wvlCurr))
-        if verbose:
-            print("iter", i, "wvlCurr", wvlCurr)
-            print("iter", i, "valueClosest", valueClosest)
-        indexClosest = wvltsPref.index(valueClosest)
-        if verbose:
-            print("iter", i, "indexClosest", indexClosest)
-        if (valueClosest < wvlCurr):
-            indexBefore = indexClosest
-            indexAfter = indexClosest + 1
-        else:
-            indexAfter = indexClosest
-            indexBefore = indexClosest - 1
-
-        dist1I = abs(wvltsPref[indexBefore] - wvltsData[i])
-        distI2 = abs(wvltsPref[indexAfter] - wvltsData[i])
-        prefToApply[i,:,:] = interpolateImages(prefilter[indexBefore], prefilter[indexAfter], dist1I, distI2)
-
-        if verbose:
-            print("mean prefValue Before:", np.mean(prefilter[indexBefore])*256)
-            print("mean prefValue After:", np.mean(prefilter[indexAfter])*256)
-            print("distance1:", dist1I)
-            print("distance2:", distI2)
-            print("percentage:", distI2 / (dist1I + distI2))
-
-        #Remove scale factor from prefilter
-        if verbose:
-            print("mean prefilter:", np.mean(prefToApply[i,:,:])*256)
-        prefToApply[i,:,:] = prefToApply[i,:,:] / prefScale
-        if verbose:
-            print("mean prefilter:", np.mean(prefToApply[i,:,:]))
-
-    if verbose:
-        print("Reshaping prefilter:")
-        print(prefToApply.shape)
-        print(data.shape)
-    if(data.shape[2] != prefToApply.shape[1]):
-        FOV_Start_y = int(prefToApply.shape[1]/2 - data.shape[2]/2)
-        FOV_End_y = int(prefToApply.shape[1]/2 + data.shape[2]/2)
-        prefToApply = prefToApply[:,FOV_Start_y:FOV_End_y,:]
-    if verbose:
-         print(prefToApply.shape)
-    if(data.shape[3] != prefToApply.shape[2]):
-        FOV_Start_x = int(prefToApply.shape[2]/2 - data.shape[3]/2)
-        FOV_End_x = int(prefToApply.shape[2]/2 + data.shape[3]/2)
-        prefToApply = prefToApply[:,:,FOV_Start_x:FOV_End_x]
-    if verbose:
-        print(prefToApply.shape)
-
-    dataPrefApplied = np.zeros(data.shape)
-    for i in range(0,4):
-        if(direction == 1):
-            dataPrefApplied[:,i,:,:] = data[:,i,:,:] * prefToApply
-        elif(direction == -1):
-            dataPrefApplied[:,i,:,:] = data[:,i,:,:] / prefToApply / scaledown
-        else:
-            print("Ivnalid direction! Must be 1 (mult) or -1 (div).")
-    return dataPrefApplied
-
-    #/**
-    # * This is the maximum range scaled from the division of the prefilter.
-    # * The smallest number in the prefilter is 0.13977 -> 1/0.13977 = 7.3 ~= 8
-    # */
-    #define RNG_RES_APPL_PREF 8  -> reason for division by 8.
-
-def applyPrefilter_dos(data, wvltsData, prefilter, prefScale, wvltsPref, direction, scaledown=8,verbose = 0):
-    '''PHI prefilter. Modified version from K. Albert.
-    '''
-    prefToApply = np.zeros((6,prefilter.shape[1],prefilter.shape[2]))
-    prefilter = prefilter / prefScale  #dos
-    
-    for i in range(0,6):
-        wvlCurr = wvltsData[i]
-        valueClosest = min(wvltsPref, key=lambda x:abs(x-wvlCurr))
-        if verbose:
-            print("iter", i, "wvlCurr", wvlCurr)
-            print("iter", i, "valueClosest", valueClosest)
-        indexClosest = wvltsPref.index(valueClosest)
-        if verbose:
-            print("iter", i, "indexClosest", indexClosest)
-        if (valueClosest < wvlCurr):
-            indexBefore = indexClosest
-            indexAfter = indexClosest + 1
-        else:
-            indexAfter = indexClosest
-            indexBefore = indexClosest - 1
-
-        dist1I = abs(wvltsPref[indexBefore] - wvltsData[i])
-        distI2 = abs(wvltsPref[indexAfter] - wvltsData[i])
-        prefToApply[i,:,:] = interpolateImages(prefilter[indexBefore], prefilter[indexAfter], dist1I, distI2)
-
-        if verbose:
-            print("mean prefValue Before:", np.mean(prefilter[indexBefore])*256)
-            print("mean prefValue After:", np.mean(prefilter[indexAfter])*256)
-            print("distance1:", dist1I)
-            print("distance2:", distI2)
-            print("percentage:", distI2 / (dist1I + distI2))
-
-        #Remove scale factor from prefilter
-        if verbose:
-            print("mean prefilter:", np.mean(prefToApply[i,:,:])*256)
-        #prefToApply[i,:,:] = prefToApply[i,:,:] / prefScale   #dos
-        if verbose:
-            print("mean prefilter:", np.mean(prefToApply[i,:,:]))
-
-
-    if verbose:
-        print("Reshaping prefilter:")
-        print(prefToApply.shape)
-        print(data.shape)
-    if(data.shape[2] != prefToApply.shape[1]):
-        FOV_Start_y = int(prefToApply.shape[1]/2 - data.shape[2]/2)
-        FOV_End_y = int(prefToApply.shape[1]/2 + data.shape[2]/2)
-        prefToApply = prefToApply[:,FOV_Start_y:FOV_End_y,:]
-    if verbose:
-         print(prefToApply.shape)
-    if(data.shape[3] != prefToApply.shape[2]):
-        FOV_Start_x = int(prefToApply.shape[2]/2 - data.shape[3]/2)
-        FOV_End_x = int(prefToApply.shape[2]/2 + data.shape[3]/2)
-        prefToApply = prefToApply[:,:,FOV_Start_x:FOV_End_x]
-    if verbose:
-        print(prefToApply.shape)
-
-    dataPrefApplied = np.zeros(data.shape)
-    for i in range(0,4):
-        if(direction == 1):
-            dataPrefApplied[:,i,:,:] = data[:,i,:,:] * prefToApply
-        elif(direction == -1):
-            dataPrefApplied[:,i,:,:] = data[:,i,:,:] / prefToApply # / scaledown  #dos
-        else:
-            print("Ivnalid direction! Must be 1 (mult) or -1 (div).")
-    return dataPrefApplied
-
-def demod_phi(data,instrument,demod=False,verbose = 0):
-    '''
-    Use demodulation matrices to demodulate data size (n_wave*S_POL,N,M)
-    ATTENTION: FDT40 is fixed to the one Johann is using!!!!
-    '''
-
-    if instrument == 'FDT40':
-        mod_matrix_40 = np.array([[1.0006,-0.7132, 0.4002,-0.5693],
-                    [1.0048, 0.4287,-0.7143, 0.5625],
-                    [0.9963, 0.4269,-0.3652,-0.8229],
-                    [0.9983,-0.4022, 0.9001, 0.1495]])
-        demodM = np.linalg.inv(mod_matrix_40)
-    # Johanns (it is the average in the central area of the one onboard)
-        demodM  = np.array([[0.168258,      0.357277,     0.202212,     0.273266],\
-            [-0.660351,     0.314981,     0.650029,    -0.299685],\
-            [ 0.421242,     0.336994,    -0.183068,    -0.576202],\
-            [-0.351933,     0.459820,    -0.582167,     0.455458]])
-    elif instrument == 'FDT45':
-        mod_matrix_45 = np.array([[1.0035,-0.6598, 0.5817,-0.4773],
-                        [1.0032, 0.5647, 0.5275, 0.6403],
-                        [0.9966, 0.4390,-0.5384,-0.7150],
-                        [0.9968,-0.6169,-0.6443, 0.4425]])
-        demodM = np.linalg.inv(mod_matrix_45)
-    elif instrument == 'HRT40':
-        mod_matrix_40 = np.array([[1.0040,-0.6647, 0.5928,-0.4527],
-                        [1.0018, 0.5647, 0.5093, 0.6483],
-                        [0.9964, 0.4348,-0.5135,-0.7325],
-                        [0.9978,-0.6128,-0.6567, 0.4283]]) #HREW
-        demodM = np.linalg.inv(mod_matrix_40)
-    elif instrument == 'HRT45':
-        mod_matrix_45_dos = np.array([[1.00159,-0.50032, 0.7093,-0.4931],
-                        [1.0040, 0.6615, 0.3925, 0.6494],
-                        [0.9954, 0.3356,-0.6126,-0.7143],
-                        [0.9989,-0.7474,-0.5179, 0.4126]]) #MIA
-        demodM = np.linalg.inv(mod_matrix_45_dos)
-    else:
-        printc('No demod available in demod_phi.py',color = bcolors.FAIL)
-        raise SystemError()
-    printc('Demodulation matrix for ', instrument,color = bcolors.WARNING)
-    printc(demodM,color = bcolors.WARNING)
-    if demod:
-        return demodM
-    ls,ps,ys,xs = data.shape
-    for i in range(ls):
-        data[i,:,:,:] = np.reshape(np.matmul(demodM,np.reshape(data[i,:,:,:],(ps,xs*ys))),(ps,ys,xs))
-    return data
-
-def crosstalk_ItoQUV(data_demod,verbose=0,npoints=2000):
-    
-    limit=0.2
-    PLT_RNG = 3
-    my = []
-    sy = []
-
-    x = data_demod[:,0,:,:].flatten()
-    ids = x > limit
-    x = x[ids].flatten()
-
-    N = x.size
-    idx = random.sample(range(N),npoints)
-    mx = x[idx].mean() 
-    sx = x[idx].std() 
-    xp = np.linspace(x.min(), x.max(), 100)
-
-    A = np.vstack([x, np.ones(len(x))]).T
-
-    # I to Q
-    yQ = data_demod[:,1,:,:].flatten()
-    yQ = yQ[ids].flatten()
-    my.append(yQ[idx].mean())
-    sy.append(yQ[idx].std())
-
-    # cQ = np.polyfit( x , yQ , 1)
-    # pQ = np.poly1d(cQ)
-    m, c = np.linalg.lstsq(A, yQ, rcond=None)[0]
-    cQ = [m,c]
-    pQ = np.poly1d(cQ)
-
-    # I to U
-    yU = data_demod[:,2,:,:].flatten()
-    yU = yU[ids].flatten()
-    my.append(yU[idx].mean())
-    sy.append(yU[idx].std())
-
-    # cU = np.polyfit( x , yU , 1)
-    # pU = np.poly1d(cU)
-    m, c = np.linalg.lstsq(A, yU, rcond=None)[0]
-    cU = [m,c]
-    pU = np.poly1d(cU)
-
-    # I to V
-    yV = data_demod[:,3,:,:].flatten()
-    yV = yV[ids].flatten()
-    my.append(yV[idx].mean())
-    sy.append(yV[idx].std())
-
-    # cV = np.polyfit( x , yV , 1)
-    # pV = np.poly1d(cV)
-    m, c = np.linalg.lstsq(A, yV, rcond=None)[0]
-    cV = [m,c]
-    pV = np.poly1d(cV)
-
-    if verbose:
-        
-        plt.figure(figsize=(8, 8))
-        plt.scatter(x[idx],yQ[idx],color='red',alpha=0.6,s=10)
-        plt.plot(xp, pQ(xp), color='red', linestyle='dashed',linewidth=3.0)
-
-        plt.scatter(x[idx],yU[idx],color='blue',alpha=0.6,s=10)
-        plt.plot(xp, pU(xp), color='blue', linestyle='dashed',linewidth=3.0)
-
-        plt.scatter(x[idx],yV[idx],color='green',alpha=0.6,s=10)
-        plt.plot(xp, pV(xp), color='green', linestyle='dashed',linewidth=3.0)
-
-        plt.xlim([mx - PLT_RNG * sx,mx + PLT_RNG * sx])
-        plt.ylim([min(my) - 1.8*PLT_RNG * statistics.mean(sy),max(my) + PLT_RNG * statistics.mean(sy)])
-        plt.xlabel('Stokes I')
-        plt.ylabel('Stokes Q/U/V')
-        plt.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.4*PLT_RNG * statistics.mean(sy), 'Cross-talk from I to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cQ[0],cQ[1],width=8,prec=4), style='italic',bbox={'facecolor': 'red', 'alpha': 0.1, 'pad': 1}, fontsize=15)
-        plt.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.55*PLT_RNG * statistics.mean(sy), 'Cross-talk from I to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cU[0],cU[1],width=8,prec=4), style='italic',bbox={'facecolor': 'blue', 'alpha': 0.1, 'pad': 1}, fontsize=15)
-        plt.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.7*PLT_RNG * statistics.mean(sy), 'Cross-talk from I to V: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cV[0],cV[1],width=8,prec=4), style='italic',bbox={'facecolor': 'green', 'alpha': 0.1, 'pad': 1}, fontsize=15)
-        plt.show()
-
-    print('Cross-talk from I to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cQ[0],cQ[1],width=8,prec=4))
-    print('Cross-talk from I to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cU[0],cU[1],width=8,prec=4))
-    print('Cross-talk from I to V: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cV[0],cV[1],width=8,prec=4))
-
-    return cQ,cU,cV
-
-def cross_talk_QUV(data,nran = 2000,nlevel=0.3,verbose=0,block=True):
-    
-    limit=0.1
-    PLT_RNG = 3
-    my = []
-    sy = []
-
-    #para el limite en I
-    lx = data[:,0,:,:].flatten()
-    lv = np.abs(data[:,3,:,:]).flatten()
-    if verbose:
-        print(lv)
-        print(nlevel/100.)
-    ids = ((lx > limit) & (lv > nlevel/100.))
-    ids = (lv > nlevel/100.) #and (lv > nlevel/100.)
-
-    x = data[:,3,:,:].flatten()
-    x = x[ids].flatten()
-    if verbose:
-        print(x.size)
-    N = x.size
-    if N > nran:
-        nran = N
-    idx = random.sample(range(N),nran)
-    mx = x[idx].mean() 
-    sx = x[idx].std() 
-    xp = np.linspace(x.min(), x.max(), 100)
-
-    A = np.vstack([x, np.ones(len(x))]).T
-
-    # V to Q
-    yQ = data[:,1,:,:].flatten()
-    yQ = yQ[ids].flatten()
-    my.append(yQ[idx].mean())
-    sy.append(yQ[idx].std())
-
-    m, c = np.linalg.lstsq(A, yQ, rcond=None)[0]
-    cVQ = [m,c]
-    pQ = np.poly1d(cVQ)
-
-    # V to U
-    yU = data[:,2,:,:].flatten()
-    yU = yU[ids].flatten()
-    my.append(yU[idx].mean())
-    sy.append(yU[idx].std())
-
-    m, c = np.linalg.lstsq(A, yU, rcond=None)[0]
-    cVU = [m,c]
-    p = np.poly1d(cVU)
-
-    if verbose:
-        plt.figure(figsize=(8, 8))
-        plt.scatter(x[idx],yQ[idx],color='red',alpha=0.6,s=10)#,c=dS[idx],cmap=cm.Paired)
-        plt.plot(xp, pQ(xp), color='red', linestyle='dashed',linewidth=3.0)
-
-        plt.scatter(x[idx],yU[idx],color='blue',alpha=0.6,s=10)
-        plt.plot(xp, pU(xp), color='blue', linestyle='dashed',linewidth=3.0)
-
-        plt.xlim([mx - PLT_RNG * sx,mx + PLT_RNG * sx])
-        plt.ylim([min(my) - 1.8*PLT_RNG * statistics.mean(sy),max(my) + PLT_RNG * statistics.mean(sy)])
-        plt.xlabel('Stokes V')
-        plt.ylabel('Stokes Q/U')
-
-        plt.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.4*PLT_RNG * statistics.mean(sy), 'Cross-talk from V to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cVQ[0],cVQ[1],width=8,prec=4), style='italic',bbox={'facecolor': 'red', 'alpha': 0.1, 'pad': 1}, fontsize=15)
-        plt.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.55*PLT_RNG * statistics.mean(sy), 'Cross-talk from V to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cVU[0],cVU[1],width=8,prec=4), style='italic',bbox={'facecolor': 'blue', 'alpha': 0.1, 'pad': 1}, fontsize=15)
-        plt.show(block=block)
-
-    print('Cross-talk from V to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cVQ[0],cVQ[1],width=8,prec=4))
-    print('Cross-talk from V to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cVU[0],cVU[1],width=8,prec=4))
-
-    return cVQ,cVU
-
-def crosstalk_ItoQUV2d(data_demod,size=4):
-    
-    from sklearn.feature_extraction import image
-    PLT_RNG = 3
-    limit=0.1
-
-    #datos son lambda, stokes
-    #hago primero I to Q 
-    #miro cuandos cuadraditos deben ser
-    nwave,npol,yy,xx = data_demod.shape
-    wave = 0
-    pol = 0
-    max_patches = xx//size * yy//size - 1
-    print('check1',nwave,npol,yy,xx,max_patches)
-    patches = image.extract_patches_2d(data_demod[wave,pol,:,:], (size, size))#,max_patches=max_patches)
-    npatches,yy,xx = patches.shape
-    print('check2',npatches,yy,xx)
-    patchy = np.zeros((npatches,nwave,npol,size,size),dtype='float32')
-    patchy[:,wave,pol,:,:] = patches
-    print('check3',patchy.shape)
-    for i in range(nwave):
-        print('doing ',i)
-        for j in range(npol):
-            print('doing ',i, j)
-            patchy[:,i,j,:,:] = image.extract_patches_2d(data_demod[i,j,:,:], (size, size))#,max_patches=max_patches)
-    
-    print('check4',patchy.shape,npatches)
-    #loop over npatches
-    #cV = np.zeros((yy,xx),dtype='float32')
-    cV0 = np.zeros((npatches),dtype='float32')
-    cV1 = np.zeros((npatches),dtype='float32')
-
-    print('check5',' before loop')
-    for i in range(npatches):
-        if np.remainder(i, npatches//100) == 0:
-            print(i, ' of ', npatches,end='', flush=True)
-        x = patchy[i,:,0,:,:].flatten()
-        ids = x > limit
-        x = x[ids].flatten()
-        A = np.vstack([x, np.ones(len(x))]).T
-
-        y = patchy[i,:,3,:,:].flatten()
-        y = y[ids].flatten()
-
-        m, c = np.linalg.lstsq(A, y, rcond=None)[0]
-        cV1[i] = c
-        cV0[i] = m
-
-    print(cV0.shape,xx,yy)
-    #cV0 = image.reconstruct_from_patches_2d(cV0, (yy,xx))
-    #cV1 = image.reconstruct_from_patches_2d(cV1, (yy,xx))
-    return cV0,cV1
-
 def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c = True,
     inner_radius = 250, outer_radius = 800, steps = 100, normalize = 0., flat_n = 1.,
     index = None, prefilter = 1, prefilter_fits = '0000990710_noMeta.fits',
-    realign = False, verbose = True, outfile=None, mask_margin = 2, fringes = False,
-    individualwavelengths = False,correct_ghost = False,putmediantozero=False,directory = './',
-    vqu = False, do2d = 0, rte = False, debug = False,nlevel = 0.3,center_method=None,loopthis=0):
+    realign = False, verbose = True, outfile=None, mask_margin = 2, correct_fringes = False,
+    individualwavelengths = False,correct_ghost = False,putmediantozero=True,directory = './',
+    rte = False, debug = False,nlevel = 0.3,center_method=None,loopthis=0,
+    cross_talk_IQUV = False, cross_talk_VQU = False, do2d = 0):
 
     '''
-    Keywords shat we should have in the header for making the FM and ground pipeline compatible (and modular wise).
- 
-   * CAL_DARK =             26181001 / Onboard calibrated for dark field ! Dark correction ( DID/file of dark if True) 
-   * CAL_FLAT =             26181101 / Onboard calibrated for gain table ! Dark correction ( DID/file of flat if True)             
-    CAL_PRE  =             Prefilter / Prefilter correction ( DID/file of flat if True)                    
-    CAL_GHST=              Prefilter / Ghost correction ( name+version of py module if True )           
-    CAL_REAL=              Prefilter / Prealigment of images before demodulation ( name+version of py module if True )             
-   * CAL_IPOL=               990510 / Onboard calibrated for instrumental polarizatio ! demodulation ( DID of demod matrix if True ) - demod matrix may be 4x4 or 2048x2048x4x4
-    CAL_CRT0=               float / cross-talk from I to Q (slope value, wrt normalized data in python) 
-    CAL_CRT1=               float / cross-talk from I to Q (off-set value, wrt normalized data in python) 
-    CAL_CRT2=               float / cross-talk from I to U (slope value, wrt normalized data in python) 
-    CAL_CRT3=               float / cross-talk from I to U (off-set value, wrt normalized data in python) 
-    CAL_CRT4=               float / cross-talk from I to V (slope value, wrt normalized data in python) 
-    CAL_CRT5=               float / cross-talk from I to V (off-set value, wrt normalized data in python) 
-    CAL_CRT6=               float / cross-talk from V to Q (slope value, wrt normalized data in python) 
-    CAL_CRT7=               float / cross-talk from V to Q (off-set value, wrt normalized data in python) 
-    CAL_CRT8=               float / cross-talk from V to U (slope value, wrt normalized data in python) 
-    CAL_CRT9=               float / cross-talk from V to U (off-set value, wrt normalized data in python) 
-    CAL_NORM=               990510 / Normalization (normalization constant PROC_Ic)
-    CAL_FRIN=               990510 / Fringe correction ( name+version of py module if True )  TBD (posibly we need the freqs.)  
-   * CAL_PSF=                990510 / Onboard calibrated for instrumental PSF  ! TBD
-   * CAL_RTE=                990510 / ok
-   * CAL_SCIP= 'None'               / Onboard scientific data analysis
-   * RTE_ITER=           4294967295 / Number RTE inversion iterations
-   * COMPRESS= 'none'               / Data compression quality
-   * COMPRAT =                   1. / Data compression ratio
-   * COMPVERS=                    0 / Version of Compression Core
-   * PHIDATID= '142010402'          / PHI dataset Id
-
-	FDT pipeline steps we have on ground:
+	FDT pipeline steps:
 
     1- Read data
     2- Check dimensions (open to bugs since only few data were tested)
@@ -486,11 +58,11 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     ----------
         Input:
     data_f : string
-        Fits file of the raw FDT data  
+        Fits file of the raw FDT data  (if differe t path use directory keyword)
     dark_f : string
-        Fits file of a Valid dark file (processed dark).   
+        Fits file of a Valid dark file (processed dark) (including path, if necessary)
     flat_f : string
-        Fits file of a Valid FDT flatfield.  
+        Fits file of a Valid FDT flatfield (including path, if necessary)
     ** Options:
     outfile = 'data_red.fits' : string
         File to store final processed data
@@ -511,6 +83,9 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     individualwavelengths = False : bool
         Correct crosstalk from I to QUV for individual wavelengths
 
+
+    index for ......
+
     Returns
     -------
     None 
@@ -529,6 +104,36 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     -----
     This program is not optimized for speed. It assumes that input data 
         is 6 wavelength 
+
+    Keywords shat we should have in the header for making the FM and ground pipeline compatible (and modular wise).
+ 
+   * CAL_DARK =             26181001 / Onboard calibrated for dark field ! Dark correction ( DID/file of dark if True) 
+   * CAL_FLAT =             26181101 / Onboard calibrated for gain table ! Dark correction ( DID/file of flat if True)             
+    CAL_PRE  =             Prefilter / Prefilter correction ( DID/file of flat if True)                    
+    CAL_GHST=              Prefilter / Ghost correction ( name+version of py module if True )           
+    CAL_REAL=              Prefilter / Prealigment of images before demodulation ( name+version of py module if True )             
+   * CAL_IPOL=               990510 / Onboard calibrated for instrumental polarizatio ! demodulation ( DID of demod matrix if True ) - demod matrix may be 4x4 or 2048x2048x4x4
+    CAL_CRT0=               float / cross-talk from I to Q (slope value, wrt normalized data in python) 
+    CAL_CRT1=               float / cross-talk from I to Q (off-set value, wrt normalized data in python) 
+    CAL_CRT2=               float / cross-talk from I to U (slope value, wrt normalized data in python) 
+    CAL_CRT3=               float / cross-talk from I to U (off-set value, wrt normalized data in python) 
+    CAL_CRT4=               float / cross-talk from I to V (slope value, wrt normalized data in python) 
+    CAL_CRT5=               float / cross-talk from I to V (off-set value, wrt normalized data in python) 
+    CAL_CRT6=               float / cross-talk from V to Q (slope value, wrt normalized data in python) 
+    CAL_CRT7=               float / cross-talk from V to Q (off-set value, wrt normalized data in python) 
+    CAL_CRT8=               float / cross-talk from V to U (slope value, wrt normalized data in python) 
+    CAL_CRT9=               float / cross-talk from V to U (off-set value, wrt normalized data in python) 
+    CAL_NORM=               990510 / Normalization (normalization constant PROC_Ic)
+    CAL_FRIN=               990510 / Fringe correction ( name+version of py module if True )  TBD (posibly we need the freqs.)  
+   * CAL_PSF=                990510 / Onboard calibrated for instrumental PSF  ! TBD
+   * CAL_RTE=                990510 / ok
+   * CAL_SCIP= 'None'               / Onboard scientific data analysis
+   * RTE_ITER=           4294967295 / Number RTE inversion iterations
+   * COMPRESS= 'none'               / Data compression quality
+   * COMPRAT =                   1. / Data compression ratio
+   * COMPVERS=                    0 / Version of Compression Core
+   * PHIDATID= '142010402'          / PHI dataset Id
+
     '''
 
     PLT_RNG = 5
@@ -549,17 +154,26 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     # PXEND2  =                 1664 ; Last read-out pixel in dimension 2             
 
     #  
+    data_filename = directory + data_f
     try:
-        data, header = fits_get(data_f)
+        data, header = fits_get(data_filename)
         printc('-->>>>>>> Reshaping data to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
         zd,yd,xd = data.shape
         data = np.reshape(data,(zd//4,4,yd, xd))
-        data = data / 256.
+        data = data / 256. #from fix to 32
+        data = np.ascontiguousarray(data)
+        DID = header['PHIDATID']
+
     except Exception:
-        printc("ERROR, Unable to open fits file: {}",data_f,color=bcolors.FAIL)
+        printc("ERROR, Unable to open fits file: {}",data_filename,color=bcolors.FAIL)
 
     if verbose:
-        plib.show_one(data[0,0,:,:],vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Data first wave',cbarlabel='DN',save=None,cmap='gray')
+        plib.show_one(data[0,0,:,:],vmin=0,xlabel='pixel',ylabel='pixel',title='Data first wave',cbarlabel='DN',save=None,cmap='gray')
+    
+#    * CAL_RTE=                990510 / ok
+#    * CAL_SCIP= 'None'               / Onboard scientific data analysis
+#    * RTE_ITER=           4294967295 / Number RTE inversion iterations
+#    * PHIDATID= '142010402'          / PHI dataset Id
 
     #-----------------
     # TAKE DATA DIMENSIONS 
@@ -568,6 +182,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     PXEND1  = int(header['PXEND1']) - 1          
     PXBEG2  = int(header['PXBEG2']) - 1           
     PXEND2  = int(header['PXEND2']) - 1   
+    printc('Dimensions: ',PXBEG1, PXEND1, PXBEG2, PXEND2,color=bcolors.OKGREEN)
+
     if xd != (PXEND1 - PXBEG1 + 1) or yd != (PXEND2 - PXBEG2 + 1):
         printc('ERROR, Keyword dimensions and data array dimensions dont match ',color=bcolors.FAIL)
         raise SystemExit
@@ -583,53 +199,60 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         printc('          Assumes they are already normalized to ONE ',color=bcolors.OKGREEN)
         printc('          input should be [wave X Stokes,y-dim,x-dim].',color=bcolors.OKGREEN)
         try:
-            flat,h = fits_get(flat_f)
+            dummy,flat_header = fits_get(flat_f)
+            flat = np.zeros([24,2048,2048]).astype(np.float32)
+            PXBEG1_f  = int(flat_header['PXBEG1']) - 1           
+            PXEND1_f  = int(flat_header['PXEND1']) - 1          
+            PXBEG2_f  = int(flat_header['PXBEG2']) - 1           
+            PXEND2_f  = int(flat_header['PXEND2']) - 1 
+            flat[:,PXBEG1_f:PXEND2_f+1,PXBEG2_f:PXEND2_f+1] = dummy
+            del dummy
             fz,fy,fx = flat.shape
             flat = np.reshape(flat,(fz//4,4,fy,fx))
             printc('-->>>>>>> Reshaping Flat to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
         except Exception:
             printc("ERROR, Unable to open flats file: {}",flat_f,color=bcolors.FAIL)
         if verbose:
-            plib.show_one(flat[0,0,:,:],vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Flat first wave',cbarlabel='DN',save=None,cmap='gray')
+            plib.show_one(flat[0,0,:,:],xlabel='pixel',ylabel='pixel',title='Flat first wave',cbarlabel='DN',save=None,cmap='gray')
 
     else:
         printc('-->>>>>>> No flats mode                    ',color=bcolors.WARNING)
-
 
     #-----------------
     # READ AND CORRECT DARK FIELD
     #-----------------
     if dark_c:
-        printc('-->>>>>>> Reading Darks                   ',color=bcolors.OKGREEN)
-        printc('          Input should be [y-dim,x-dim].',color=bcolors.OKGREEN)
-        printc('          DARK IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
-        try:
-            dark,h = fits_get(dark_f)
-            dark = dark / 256.
-        except Exception:
-            printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
+        data,header  = phi_correct_dark(dark_f,data_filename,header,data,verbose = verbose)
 
-        dy,dx = dark.shape
-        dark_scale = fits_get(dark_f,scaling = True)
-        data_scale = fits_get(data_f,scaling = True)
-        if dark_scale["Present"][0] == data_scale["Present"][0]:
-            scaling = dark_scale["scaling"][0] / data_scale["scaling"][0]
-        else:
-            scaling = dark_scale["scaling"][1] / data_scale["scaling"][1] * dark_scale["scaling"][0]
+        # printc('-->>>>>>> Reading Darks                   ',color=bcolors.OKGREEN)
+        # printc('          Input should be [y-dim,x-dim].',color=bcolors.OKGREEN)
+        # printc('          DARK IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
+        # try:
+        #     dark,h = fits_get(dark_f)
+        #     dark = dark / 256.
+        # except Exception:
+        #     printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
 
-        if scaling != 1:
-            printc('          checking scalling and correcting for it in the dark.',dark_scale,data_scale,scaling,color=bcolors.WARNING)
-            dark = dark * scaling
-        printc('-->>>>>>> Correcting dark current.',color=bcolors.OKGREEN)
-        data = data - dark[np.newaxis,np.newaxis,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
-        data = np.abs(data)
+        # dy,dx = dark.shape
+        # dark_scale = fits_get(dark_f,scaling = True)
+        # data_scale = fits_get(data_f,scaling = True)
+        # if dark_scale["Present"][0] == data_scale["Present"][0]:
+        #     scaling = dark_scale["scaling"][0] / data_scale["scaling"][0]
+        # else:
+        #     scaling = dark_scale["scaling"][1] / data_scale["scaling"][1] * dark_scale["scaling"][0]
 
-        if verbose:
-            plib.show_one(dark,vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Dark',cbarlabel='DN',save=None,cmap='gray')
-            plib.show_one(data[0,0,:,:],vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Data after dark',cbarlabel='DN',save=None,cmap='gray')
+        # if scaling != 1:
+        #     printc('          checking scalling and correcting for it in the dark.',dark_scale,data_scale,scaling,color=bcolors.WARNING)
+        #     dark = dark * scaling
+        # printc('-->>>>>>> Correcting dark current.',color=bcolors.OKGREEN)
+        # data = data - dark[np.newaxis,np.newaxis,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
+        # data = np.abs(data)
+
+        # if verbose:
+        #     plib.show_one(dark,vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Dark',cbarlabel='DN',save=None,cmap='gray')
+        #     plib.show_one(data[0,0,:,:],vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Data after dark',cbarlabel='DN',save=None,cmap='gray')
     else:
         printc('-->>>>>>> No darks mode                    ',color=bcolors.WARNING)
-
 
     #-----------------
     # FIND DATA CENTER 
@@ -637,16 +260,22 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
     printc('-->>>>>>> finding the center of the solar disk (needed for masking) ',color=bcolors.OKGREEN)
     if center_method == 'Hough':
-        c, r,threshold = find_circle_hough(data[0,0,:,:],inner_radius,outer_radius,steps,threshold = 0.01,normalize=False,verbose=False)
-        c = np.roll(c,1)
-        cy = c[0]
-        cx = c[1]
+        c, radius,threshold = find_circle_hough(data[0,0,:,:],inner_radius,outer_radius,steps,threshold = 0.01,normalize=False,verbose=False)
+        #c = np.roll(c,1)
+        cx = c[0]
+        cy = c[1]
+        #TBE PUT IN CORRECT UNITS
     else:
-        cx,cy,r=find_center(data[0,0,:,:])
-        c = np.array([int(cx),int(cy)])
-        r = int(r)
+        cy,cx,radius=find_center(data[0,0,:,:])  #OJO Cy... Cx
+        c = np.array([int(cx),int(cy)])   #El vector es [0,1,2,...] == [x,y,z,...] == [cx,cy,cz,...] Pero esto ultimo esta al reves
+        radius = int(radius)
+    #Uptade header with new centers
 
-    printc('          Center at: x=',c[1],' y=',c[0],' radius=',r,color=bcolors.OKBLUE)
+    printc('          Uptade header with new center:',color=bcolors.OKBLUE)
+    header['CRPIX1'] = (round(cx, 2))
+    header['CRPIX2'] = (round(cy, 2))
+    
+    printc('                  at: x=',c[0],' y=',c[1],' radius=',radius,color=bcolors.OKBLUE)
     #OJO.
     # find_circle_hough devuelve c = c[0] = x and c[1] = y !!!!!!!!!!!!!!
     # Esto viene porque en el KLL esta definido así (al reves) en la rutina votes()
@@ -655,18 +284,18 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     # TAKE ONLY DISK WITH MARGIN
     #-----------------
     printc('-->>>>>>> Creating a mask for RTE with ',mask_margin,' px margin')
-    size_of_mask = r - mask_margin
-    rx = [int(c[1]-size_of_mask),int(c[1]+size_of_mask)]
-    ry = [int(c[0]-size_of_mask),int(c[0]+size_of_mask)]
-    mask,coords = generate_circular_mask([yd-1,xd-1],size_of_mask,size_of_mask)
-    mask = shift(mask, shift=(c[1]-yd//2,c[0]-xd//2), fill_value=0)
-    printc('   XR = ', rx, 'YR = ', ry, color=bcolors.WARNING)
+    size_of_mask = radius - mask_margin
+    rx = [int(c[0]-size_of_mask),int(c[0]+size_of_mask)]
+    ry = [int(c[1]-size_of_mask),int(c[1]+size_of_mask)]
+    mask,coords = generate_circular_mask([xd-1,yd-1],size_of_mask,size_of_mask)
+    mask = shift(mask, shift=(c[0]-xd//2,c[1]-yd//2), fill_value=0)
+    printc('   RX = ', rx, 'RY = ', ry, color=bcolors.WARNING)
 
     #-----------------
     # GET INFO ABOUT VOLTAGES/WAVELENGTHS, determine continuum and new flat
     #-----------------
     printc('-->>>>>>> Obtaining voltages from data ',color=bcolors.OKGREEN)
-    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(data_f) 
+    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(data_filename) 
     printc('          Data FG voltages: ',voltagesData,color=bcolors.OKBLUE)
     printc('          Continuum position at wave: ', cpos,color=bcolors.OKBLUE)
     printc('          Data wave axis [mA]: ',wave_axis,color=bcolors.OKBLUE)
@@ -781,8 +410,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     # TODO: TAKE THE REAL FLAT 
     #-----------------
     factor = 0.05
-    rrx = [int(c[1]-r*factor),int(c[1]+r*factor)]
-    rry = [int(c[0]-r*factor),int(c[0]+r*factor)]
+    rrx = [int(c[0]-radius*factor),int(c[0]+radius*factor)]
+    rry = [int(c[1]-radius*factor),int(c[1]+radius*factor)]
 
     if flat_c:
         printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
@@ -802,6 +431,24 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
                 data[l,p,:,:] = data[l,p,:,:]/dummy_flat
         del dummy_flat
 
+        # locations = find_string(flat_f,'_')
+        # try:
+        #     DID_flat = flat_f[locations[-1]+1:locations[-1]+10]
+        #     print('DID: ',np.float(DID_flat))
+        # except:
+        #     DID_flat = flat_f[:-4]
+        #     printc("Unable to get DID from: {}",flat_f,color=bcolors.WARNING)         
+        #     locations = find_string(dark_f,'/')
+        #     DID_flat = flat_f[locations[-1]+1:]
+        #     printc('DID: ',DID_flat,' -->> WILL NOT BE A NUMBER',color=bcolors.WARNING)
+
+        DID_flat = flat_header['PHIDATID']
+
+        if 'CAL_FLAT' in header:  # Check for existence
+            header['CAL_FLAT'] = DID_flat
+        else:
+            header.set('CAL_FLAT', DID_flat, 'Onboard calibrated for gain table',after='CAL_DARK')
+
         if verbose:
             plib.show_one(data[cpos,0,:,:],vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Data / flat at continuum',cbarlabel='DN',save=None,cmap='gray')
 
@@ -809,259 +456,29 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     # CORRECT PREFILTER 
     #-----------------
     if prefilter == 1:
-        printc('-->>>>>>> Read prefilter and correct for it ')
-        printc('          ',prefilter_fits,'   ')
+        data,header  = phi_correct_prefilter(prefilter_fits,header,data,voltagesData,verbose = verbose)
 
-        prefdata,h = fits_get(prefilter_fits)
-        prefdata = prefdata.astype(float)
-        prefdata = prefdata[:,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
-        #PREFILTER INFO
-        #——————
-        #I call the prefilter correction from the python pipeline like this:
-        #data_corr = np.reshape(data_corr,(6,4,2048, 2048)) (6,4,y,x)
-        prefscale = 8388608./2.
-        # the scale of the prefilter is irrelevant because it is a relative variation
-        # data = data / prefilter. Scale = 2 makes the prefilter to be aroung 1
-        # later, everything is normalized wrt the continuum so this is not important.
-        scale = 1.
-        prefVoltages = [-1300, -1234, -1169, -1103, -1038, -972, -907, -841, -776,\
-            -710, -645, -579, -514, -448, -383, -317, -252, -186,-121, -56,9,74,\
-            140,205,271,336,402,467,533,598,664,729,795,860,926,991,1056,1122,1187,\
-            1253,1318,1384,1449,1515,1580,1646,1711,1777,1842]
-        if verbose:
-            datap = np.copy(data)
-        data = applyPrefilter_dos(data, voltagesData, prefdata, prefscale, prefVoltages, -1,scaledown = scale, verbose = verbose)
-        if verbose:
-            plt.plot(data[:,0,yd//2,xd//2],'o-',label='corrected')
-            plt.plot(datap[:,0,yd//2,xd//2],'--',label='original')
-            plt.legend()
-            plt.show()
-            del datap
-        printc('\n')
 
     #-----------------
     # GHOST CORRECTION  
     #-----------------
 
     if correct_ghost:
-        if verbose:
-            datap = np.copy(data)
-        printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
+        data,header = phi_correct_ghost(data,header,radius,verbose=verbose)
 
-        #common part
-        coef = [-1.98787669,1945.28944245] #empirically
-        coef = [-1.998,1945.28944245] #empirically
-        coef = [-1.9999,1946.3] #empirically
-        coef = [-1.9999,1942.7] #empirically
-        poly1d_fn = np.poly1d(coef)
-        sh = poly1d_fn(c).astype(int) 
-        sh_float = poly1d_fn(c)
-
-        #generate a ring mask out of the solar disk to see how much is the ghost image
-        #we will be using complex histrograms....
-        mask_anulus = bin_annulus([yd,xd],r + 20, 10, full = False)
-        mask_anulus = shift(mask_anulus, shift=(c[1]-yd//2,c[0]-xd//2), fill_value=0)
-        idx = np.where(mask_anulus == 1)
-        mask_anulus_big = bin_annulus([yd,xd],r - 200, 100, full = False)
-        mask_anulus_big = shift(mask_anulus_big, shift=(c[1]-yd//2,c[0]-xd//2), fill_value=0)
-        idx_big = np.where(mask_anulus_big == 1)
-
-        printc('          computing azimuthal averages  ',color=bcolors.OKGREEN)
-
-        centers = np.zeros((2,6))
-        radius = np.zeros((6))
-        ints = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
-        ints_rad = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
-        ints_fit = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
-        ints_syn = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
-        ints_fit_pars = np.zeros((6,5))
-        factor = np.zeros((6,4))
-        mean_intensity = np.zeros((6,4))
-
-        # LOOP in wavelengths!
-        for i in range(zd//4):
-
-            # STEP --->>> average data for fitting the limb
-            dummy_data = np.mean(data[i,:,:,:],axis=0)
-
-            # STEP --->>> Find center of average data
-            centers[0,i],centers[1,i],radius[i] = find_center(dummy_data)
-
-            # STEP --->>> Generate CLV from averaged data
-            intensity, rad = azimutal_average(dummy_data,[centers[1,i],centers[0,i]])
-            ints[i,0:len(intensity)] = intensity
-            ints_rad[i,0:len(intensity)] = rad
-
-            # STEP --->>> FIT LIMB DATA
-            rrange = int(radius[i] + 2) #2
-            clv = ints[i,0:rrange]
-            clv_r = ints_rad[i,0:rrange]
-            mu = np.sqrt( (1 - clv_r**2/clv_r[-1]**2) )
- 
-            # plt.plot(clv_r,clv)
-            # plt.xlabel('Solar radious [pixel]')
-            # plt.ylabel('Intensity [DN]')
-            # plt.show()
-
-            u = 0.5
-            I0 = 100
-            ande = np.where(mu > 0.1)
-            pars = newton(clv[ande],mu[ande],[I0,u,0.2,0.2,0.2],limb_darkening)
-            fit, _ = limb_darkening(mu,pars)
-            ints_fit[i,0:len(fit)] = fit
-            ints_fit_pars[i,:] = pars
-
-            # plt.plot(clv_r,clv,label='real clv')
-            # plt.plot(clv_r,fit,label='fit order = 4')
-            # plt.xlabel('Heliocentric angle ['+r'$\theta$]')
-            # plt.ylabel('Intensity [DN]')
-            # plt.legend()
-            # plt.show()
-
-            # STEP --->>> REPLICATE LIMB FIT WITH AVERAGE INTENSITY
-            #Now there are two options. Either we use the fitted CLV or the azimutally averged CLV.
-            #it is the second here but can be easily changed
-
-            ints_syn[i,:] = ints[i,:]
-            ints_syn[i,0:len(fit)] = fit
-
-            # STEP --->>> NORMALIZE
-            ints_syn[i,:] = ints_syn[i,:] / ints_fit_pars[i][0]
-            ints_fit[i,:] = ints_fit[i,:] / ints_fit_pars[i][0]
-            ints[i,:] = ints[i,:] / ints_fit_pars[i][0]
-
-            # plt.plot(ints_fit[i,:],label='fitted clv')
-            # plt.plot(ints[i,:],'.',label='real clv')
-            # plt.plot(ints_syn[i,:],'--',label='synt clv')
-            # plt.xlabel('Heliocentric angle ['+r'$\theta$]')
-            # plt.ylabel('Intensity [DN]')
-            # plt.legend()
-            # plt.show()
-
-            # STEP --->>> GENERATE GHOST
-
-       
-            nc = (PXEND2-PXBEG2+1)//2 #  center of frame
-            limb_2d = np.zeros((PXEND2-PXBEG2+1,PXEND1-PXBEG1+1)) #generate image for ghost
-            #fill the image with the revoluted fit
-            s_of_gh = int(radius[i]*1.1)
-            limb_2d[ nc - s_of_gh:nc + s_of_gh + 1, nc - s_of_gh:nc + s_of_gh + 1] = genera_2d(ints_syn[i,0:s_of_gh])
-            xl,yl = limb_2d.shape
-            # plt.imshow(limb_2d)
-            # plt.show()
-
-            # old down here
-            # limb_real = genera_2d(intensity)
-            # xl,yl = limb_real.shape
-            # limb_2d = np.zeros((PXEND2-PXBEG2+1,PXEND1-PXBEG1+1))
-            # limb_2d[ : , : ] = limb_real[xl//2 - yd//2 : xl//2 + yd//2 , yl//2 - xd//2:yl//2 + xd//2] #VERY SAME DATA
-
-            # nuevorango = np.linspace(0,rad[-1]+2,len(rad))
-            # f = interp1d(nuevorango, intensity)
-            # intensity = f(rad)
-
-            # STEP --->>> Smooth and SHIFT GHOST
-
-            limb_2d = gaussian_filter(limb_2d, sigma=(8, 8)) 
-
-            # #shift ghost to center of image
-            # limb_2d = shift(limb_2d, shift=(int(centers[1,i])-yd//2,int(centers[0,i])-xd//2), fill_value=0)
-            limb_2d = shift_subp(limb_2d, shift=[centers[0,i]-yd//2,centers[1,i]-xd//2])
-
-            # #shift to the position of the ghost
-            reflection = shift(limb_2d, shift=(sh[1]-1024,sh[0]-1024), fill_value=0) 
-            
-            #s_x,s_y,_ = PHI_shifts_FFT(data[i,:,:,:],prec=500,verbose=True,norma=False)
-
-            # STEP --->>> Correct each modulation
-
-            for j in range(4):
-
-                dummy = data[i,j,:,:] 
-                mean_intensity[i,j] = np.mean(dummy[idx_big])
-
-                # FORMA 1 - con anillo
-                values = dummy[idx].flatten() #Take the ring
-                #show the histogram
-                meanv = np.mean(values)
-                idx_l = np.where(values <= meanv)
-                m_l = np.mean(values[idx_l])
-                idx_r = np.where(values >= meanv)
-                m_r = np.mean(values[idx_r])
-                factor[i,j] = (m_r - m_l) * 100. / ints_fit_pars[i][0] 
-                print("factor",factor[i,j])
-
-                # FORMA 2 - ajustando histogramas
-
-                # y,x = np.histogram(values, bins=80)
-                # x = x[:-1]
-                # # weighted arithmetic mean (corrected - check the section below)
-                # # m_l = sum(x * y) / sum(y)
-                # # sigma = np.sqrt(sum(y * (x - m_l)**2) / sum(y))
-
-                # sigma_l = m_l * 0.1
-                # sigma_r = m_r * 0.1
-                # popt,pcov = curve_fit(Gauss2, x, y, p0=[max(y),m_l,sigma_l,max(y),m_r,sigma_r])
-                # _, m_l, _, _ ,m_r, _ = popt #unpack
-                # factor[i,j] = (m_r - m_l) * 100. / ints_fit_pars[i][0] 
-                # print("factor-n",factor[i,j])
-
-                # plt.plot(x, y, 'b+:', label='data')
-                # plt.plot(x, Gauss2(x, *popt), 'r-', label='fit')
-                # plt.legend()
-                # plt.title('Histo Fit wl: '+str(i)+' pol: '+str(j)+' factor: '+str(factor[i,j]))
-                # plt.xlabel('DN')
-                # plt.ylabel('Ad')
-                # plt.show()
-
-                # FORMA 3 - con cajitas
-                # bsize = 20
-                # box_right = data[i,j,int(centers[0,i]-bsize/2):int(centers[0,i]+bsize/2),int(centers[1,i]-radius[i]-bsize/2-20 ):int(centers[1,i]-radius[i]+bsize/2-20)]
-                # box_left = data[i,j,int(centers[0,i]-bsize/2):int(centers[0,i]+bsize/2),int(centers[1,i]+radius[i]-bsize/2+20):int(centers[1,i]+radius[i]+bsize/2+20)]
-                # # plib.show_one(box_left)
-                # # plib.show_one(box_right)
-                # m_l = np.mean(box_left)
-                # m_r = np.mean(box_right)
-                # factor[i,j] = (m_r - m_l) * 100. / ints_fit_pars[i][0] 
-                # print("factor",factor[i,j])
-
-                if verbose:
-                    plt.hist(values, bins=40)
-                    plt.axvline(meanv, lw=2, color='yellow', alpha=0.4)
-                    plt.axvline(m_l, lw=2, color='red', alpha=0.4)
-                    plt.axvline(m_r, lw=2, color='blue', alpha=0.4)
-                    plt.axvline(factor[i,j]*ints_fit_pars[i][0] / 100., lw=2, color='green', alpha=0.4)
-                    plt.show()
-
-                #sub-pixel shift to the position of the ghost
-                #reflection = shift_subp(reflection, shift=[s_x[j],s_y[j]])
-                #MINIMIZA EL ANILLO!!!
-                #The problem is that V works but QU there is a residual at the disk. I use 0.9 though 
-
-                # rms = np.zeros((100))
-                # for k in range(100):
-                #     dummy = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * (k+50)/100.#0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
-                #     rms[k] = np.std(dummy[idx])
-                # plt.plot((np.arange(100)+50)/100.,rms)
-                # plt.show()
-                # cf = np.where(rms == np.min(rms))
-                # data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * float((cf[0] + 50)/100.)#0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
-                # print('new',factor[i,j]*float((cf[0] + 50)/100.))
-
-                data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
-                # if verbose:
-                #     plib.show_one(datap[i,j,:,:],vmin=0,vmax=1)
-                #     plib.show_one(data[i,j,:,:],vmin=0,vmax=1)
     #-----------------
     # REALIGN DATA BEFORE DEMODULATION
     #-----------------
-
     if realign:
         printc('-->>>>>>> Realigning data...           ',color=bcolors.OKGREEN)
         for i in range(zd//4):
             s_x,s_y,_ = PHI_shifts_FFT(data[i,:,:,:],prec=500,verbose=verbose,norma=False)
             for j in range(4):
-                data[i,j,:,:] = shift_subp(data[i,j,:,:], shift=[s_x[j],s_y[j]])
+                data[i,j,:,:] = shift_subp(data[i,j,:,:], shift=[s_x[j],s_y[j]]) #estra y,z asi que esta al reves FFT
+        if 'CAL_REAL' in header:  # Check for existence
+            header['CAL_REAL'] = 'FFT'
+        else:
+            header.set('CAL_REAL', 'FFT', 'Realigment of data (phifdt_pipe_modules.py)',after='CAL_DARK')
 
     #-----------------
     # APPLY DEMODULATION 
@@ -1080,7 +497,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
                     datan[i,:,m,l] = np.matmul(demodM, ds[i,:,m,l] )
         plib.show_four_row(datan[3,0,:,:],datan[3,1,:,:],datan[3,2,:,:],datan[3,3,:,:],svmin=[0,-0.2,-0.2,-1.],svmax=[100,0.1,0.1,0.1])
 
-    data = demod_phi(data,instrument)
+    data = phi_apply_demodulation(data,header,instrument)
 
     if verbose == 1:
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'])
@@ -1092,6 +509,12 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     nrm = np.mean(data[cpos,0,rry[0]:rry[1],rrx[0]:rrx[1]])
     print('          Norma is: ',nrm,' evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']')
     data = data/nrm
+
+    if 'CAL_NORM' in header:  # Check for existence
+        header['CAL_NORM'] = nrm
+    else:
+        header.set('CAL_NORM', nrm, 'Normalization (normalization constant PROC_Ic)',after='CAL_DARK')
+
     if debug:
         datan = datan/nrm
 
@@ -1105,74 +528,104 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
-    printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V --',color=bcolors.OKGREEN)
-    factor = 0.80 # 80% of the disk
-    printc('          Using ',factor*100,'% of the disk                     ',color=bcolors.OKGREEN)
+    if cross_talk_IQUV:
+        printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V --',color=bcolors.OKGREEN)
+        factor = 0.80 # 80% of the disk
+        printc('          Using ',factor*100,'% of the disk                     ',color=bcolors.OKGREEN)
 
-    rrx = [int(c[1]-r*factor),int(c[1]+r*factor)]
-    rry = [int(c[0]-r*factor),int(c[0]+r*factor)]
+        rrx = [int(c[0]-radius*factor),int(c[0]+radius*factor)]
+        rry = [int(c[1]-radius*factor),int(c[1]+radius*factor)]
+        printc('          Crosstalk evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']',' using ',factor*100,"% of the disk",color=bcolors.OKBLUE)
 
-    if individualwavelengths:
-        for i in range(zd//4):
-            printc('          Crosstalk evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']',' using ',factor*100,"% of the disk",color=bcolors.OKBLUE)
-            printc('          Individual wavelengths....',color=bcolors.OKBLUE)
-            broadcastd = data[i,:,rry[0]:rry[1],rrx[0]:rrx[1]]
-            data_dummy = data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]]*0. + broadcastd[np.newaxis,:,:,:]
-            cQ,cU,cV = crosstalk_ItoQUV(data_dummy[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],npoints=10000,verbose=verbose)
-            #-----------------
-            # CROSS-TALK CORRECTION 
-            #-----------------
-            data[i,1,:,:] = data[i,1,:,:] - cQ[0]*data[i,0,:,:] - cQ[1]
-            data[i,2,:,:] = data[i,2,:,:] - cU[0]*data[i,0,:,:] - cU[1]
-            data[i,3,:,:] = data[i,3,:,:] - cV[0]*data[i,0,:,:] - cV[1]
+        if individualwavelengths:
+            for i in range(zd//4):
+                printc('          Individual wavelengths....',color=bcolors.OKBLUE)
+                broadcastd = data[i,:,rry[0]:rry[1],rrx[0]:rrx[1]]
+                data_dummy = data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]]*0. + broadcastd[np.newaxis,:,:,:]
+                cQ,cU,cV = crosstalk_ItoQUV(data_dummy[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],npoints=10000,verbose=verbose)
+                #-----------------
+                # CROSS-TALK CORRECTION 
+                #-----------------
+                printc('          Applying cross-talk correction...',color=bcolors.OKGREEN)
+                data[i,1,:,:] = data[i,1,:,:] - cQ[0]*data[i,0,:,:] - cQ[1]
+                data[i,2,:,:] = data[i,2,:,:] - cU[0]*data[i,0,:,:] - cU[1]
+                data[i,3,:,:] = data[i,3,:,:] - cV[0]*data[i,0,:,:] - cV[1]
+            if verbose:
+                plt.hist(data[4,1,900:1100,900:1100].flatten(), bins='auto')
+                plt.hist(data[4,2,900:1100,900:1100].flatten(), bins='auto')
+                plt.hist(data[4,3,900:1100,900:1100].flatten(), bins='auto')
+                plt.show()
+        else:
+            cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
+        # rrx = [int(c[1]),int(c[1]+r*factor)]
+        # rry = [int(c[0]-r*factor),int(c[0])]
+        # cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
+        # rrx = [int(c[1]-r*factor),int(c[1])]
+        # rry = [int(c[0]),int(c[0]+r*factor)]
+        # cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
+        # return
+        #-----------------
+        # CROSS-TALK CORRECTION 
+        #-----------------
+            printc('          Applying cross-talk correction...',color=bcolors.OKGREEN)
+            data[:,1,:,:] = data[:,1,:,:] - cQ[0]*data[:,0,:,:] - cQ[1]
+            data[:,2,:,:] = data[:,2,:,:] - cU[0]*data[:,0,:,:] - cU[1]
+            data[:,3,:,:] = data[:,3,:,:] - cV[0]*data[:,0,:,:] - cV[1]
+
         if verbose:
             plt.hist(data[4,1,900:1100,900:1100].flatten(), bins='auto')
             plt.hist(data[4,2,900:1100,900:1100].flatten(), bins='auto')
             plt.hist(data[4,3,900:1100,900:1100].flatten(), bins='auto')
             plt.show()
-    else:
-        printc('          Crosstalk evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']',' using ',factor*100,"% of the disk",color=bcolors.OKBLUE)
-        cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
-    # rrx = [int(c[1]),int(c[1]+r*factor)]
-    # rry = [int(c[0]-r*factor),int(c[0])]
-    # cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
-    # rrx = [int(c[1]-r*factor),int(c[1])]
-    # rry = [int(c[0]),int(c[0]+r*factor)]
-    # cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
-    # return
-    #-----------------
-    # CROSS-TALK CORRECTION 
-    #-----------------
-    printc('          Applying cross-talk correction...',color=bcolors.OKGREEN)
-    data[:,1,:,:] = data[:,1,:,:] - cQ[0]*data[:,0,:,:] - cQ[1]
-    data[:,2,:,:] = data[:,2,:,:] - cU[0]*data[:,0,:,:] - cU[1]
-    data[:,3,:,:] = data[:,3,:,:] - cV[0]*data[:,0,:,:] - cV[1]
+            plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I','Q','U','V'])
+        # PLT_RNG = 2
+        # plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t1_'+str(loopthis)+'.png')
+        # plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t3_'+str(loopthis)+'.png')
+        # plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t5_'+str(loopthis)+'.png')
 
-    if verbose:
-        plt.hist(data[4,1,900:1100,900:1100].flatten(), bins='auto')
-        plt.hist(data[4,2,900:1100,900:1100].flatten(), bins='auto')
-        plt.hist(data[4,3,900:1100,900:1100].flatten(), bins='auto')
-        plt.show()
-        plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I','Q','U','V'])
-    # PLT_RNG = 2
-    # plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t1_'+str(loopthis)+'.png')
-    # plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t3_'+str(loopthis)+'.png')
-    # plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])#,save='t5_'+str(loopthis)+'.png')
+        # np.save('data_dummy',data)
+        if 'CAL_CRT0' in header:  # Check for existence
+            header['CAL_CRT0'] = cQ[0]
+        else:
+            header.set('CAL_CRT0', cQ[0], 'cross-talk from I to Q (slope value, wrt normalized data in python) ',after='CAL_DARK')
 
-    # np.save('data_dummy',data)
+        if 'CAL_CRT1' in header:  # Check for existence
+            header['CAL_CRT1'] = cQ[1]
+        else:
+            header.set('CAL_CRT1', cQ[1], 'cross-talk from I to Q (off-set value, wrt normalized data in python) ',after='CAL_CRT0')
+
+        if 'CAL_CRT2' in header:  # Check for existence
+            header['CAL_CRT2'] = cU[0]
+        else:
+            header.set('CAL_CRT2', cU[0], 'cross-talk from I to U (slope value, wrt normalized data in python) ',after='CAL_CRT1')
+
+        if 'CAL_CRT3' in header:  # Check for existence
+            header['CAL_CRT3'] = cU[1]
+        else:
+            header.set('CAL_CRT3', cU[1], 'cross-talk from I to U (off-set value, wrt normalized data in python) ',after='CAL_CRT2')
+
+        if 'CAL_CRT4' in header:  # Check for existence
+            header['CAL_CRT4'] = cV[0]
+        else:
+            header.set('CAL_CRT4', cV[0], 'cross-talk from I to V (slope value, wrt normalized data in python) ',after='CAL_CRT3')
+
+        if 'CAL_CRT5' in header:  # Check for existence
+            header['CAL_CRT5'] = cV[1]
+        else:
+            header.set('CAL_CRT5', cV[1], 'cross-talk from I to V (off-set value, wrt normalized data in python) ',after='CAL_CRT4')
 
     #-----------------
     # CROSS-TALK CALCULATION FROM V TO QU (Interactive)
     #-----------------
     
-    if vqu:
+    if cross_talk_VQU:
         printc('-->>>>>>> Cross-talk correction from Stokes V to Stokes Q,U ',color=bcolors.OKGREEN)
 
         factor = 0.3 # 30% of the disk
-        rrx = [int(c[1]-r*factor),int(c[1]+r*factor)]
-        rry = [int(c[0]-r*factor),int(c[0]+r*factor)]
+        rrx = [int(c[0]-radius*factor),int(c[0]+radius*factor)]
+        rry = [int(c[1]-radius*factor),int(c[1]+radius*factor)]
         print(' Cross-talk evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']',' using ',factor*100,"% of the disk")
-        cVQ,cVU = cross_talk_QUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],nran = 2000,nlevel=nlevel, show = 1,block=False)
+        cVQ,cVU = cross_talk_QUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],nran = 2000,nlevel=nlevel,block=False)
 
         option = input('Do you want to apply the correction (y/n) [n]: ')
         if option == 'y':
@@ -1187,6 +640,26 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
                 data = np.copy(datao)
                 del datao
         plt.close()
+
+        if 'CAL_CRT6' in header:  # Check for existence
+            header['CAL_CRT6'] = cVQ[0]
+        else:
+            header.set('CAL_CRT6', cVQ[0], 'cross-talk from V to Q (slope value, wrt normalized data in python)',after='CAL_CRT5')
+
+        if 'CAL_CRT7' in header:  # Check for existence
+            header['CAL_CRT7'] = cVQ[1]
+        else:
+            header.set('CAL_CRT7', cVQ[1], 'cross-talk from V to Q (off-set value, wrt normalized data in python)',after='CAL_CRT6')
+
+        if 'CAL_CRT8' in header:  # Check for existence
+            header['CAL_CRT8'] = cVU[0]
+        else:
+            header.set('CAL_CRT8', cVU[0], 'cross-talk from V to U (slope value, wrt normalized data in python)',after='CAL_CRT7')
+
+        if 'CAL_CRT9' in header:  # Check for existence
+            header['CAL_CRT9'] = cVU[1]
+        else:
+            header.set('CAL_CRT9', cVU[1], 'cross-talk from V to U (off-set value, wrt normalized data in python)',after='CAL_CRT8')
 
     #-----------------
     # CROSS-TALK CALCULATION FROM I TO QUV (2D)
@@ -1209,157 +682,42 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             cV0*data[:,0,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] #- 0.95*cV1
 
     #-----------------
-    # FINGING - Need to include Ajusta senos contras!!!!
+    # FRINGING - 
     #-----------------
-    if fringes:
-        printc('-->>>>>>> Looking for fringes and removing them --',color=bcolors.OKGREEN)
-        freq_x = np.zeros((zd//4,3,50))  #Frecuencias Maximo de 10 ventanas
-        freq_y = np.zeros((zd//4,3,50))
-        freq_x2 = np.zeros((zd//4,3,50))  #Frecuencias Maximo de 10 ventanas
-        freq_y2 = np.zeros((zd//4,3,50))
-        rad_min = 10
-        rad_max = 30
-        wsize = 50
-        wbin = 1
 
-        win_halfw = 2 # for 0
-        #win_halfw = 4 # for gauss and win, 2 for 0
+    data, header = phi_correct_fringes(data,header,option=correct_fringes,verbose=verbose)
+    if verbose:
+        plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I','Q','U','V'])
 
-        win = apod(win_halfw*2+1,0.6)
-        x,y = np.ogrid[0:win_halfw*2 + 1, 0:win_halfw*2 + 1]
-        level_theshold = [1.5,1.5,2]
-        plt.ion()
-
-        for i in range(zd//4):
-            for j in np.arange(1,4):
-                i = 0
-                j = 3
-                print('Wavelengh ',i,' pol state: ',j)
-                data_fringes = rebin(data[i,j,:,:], [yd//wbin,xd//wbin])
-                F=np.fft.fft2(data_fringes)
-                F=np.fft.fftshift(F)
-                h  = F.shape[0]
-                w  = F.shape[1]
-                #First compute FFT of single image
-                power2d = np.log10( np.abs( (F*np.conj(F)).astype(np.float) ) ) 
-                power2d = gaussian_filter(power2d, sigma=(1, 1)) 
-
-                im = power2d[w//2-wsize:w//2+wsize+1,h//2-wsize:h//2+wsize+1]
-                imc = im[2:-2,2:-2]
-                # mean = np.mean(imc[wsize//2+5:,wsize//2+5:])
-                # rms = np.std(imc[wsize//2+5:,wsize//2+5:])
-                minimum = np.min(imc[wsize-rad_max:wsize+rad_max+1,wsize-rad_max:wsize+rad_max+1])
-                mean = np.mean(imc[wsize-rad_max:wsize+rad_max+1,wsize-rad_max:wsize+rad_max+1] - minimum)
-                rms = np.std(imc[wsize-rad_max:wsize+rad_max+1,wsize-rad_max:wsize+rad_max+1])
-
-                stack = ( 
-                    (im[2:-2,2:-2] > shift(im,[-2,-2])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[-2,-1])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[-2,0 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[-2,1 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[-2,2 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[-1,-2])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[-1,-1])[2:-2,2:-2])
-                    * (im[2:-2,2:-2] > shift(im,[-1,0 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[-1,1 ])[2:-2,2:-2])
-                    * (im[2:-2,2:-2] > shift(im,[-1,2 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[0 ,-2])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[0 ,-1])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[0 ,1 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[0 ,2 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[1 ,-2])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[1 ,-1])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[1 ,0 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[1 ,1 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[1 ,2 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[2 ,-2])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[2 ,-1])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[2 ,0 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[2 ,1 ])[2:-2,2:-2]) 
-                    * (im[2:-2,2:-2] > shift(im,[2 ,2 ])[2:-2,2:-2]) 
-                    )
-
-                # mask = ( 
-                #     (im[2:-2,2:-2] > shift(im,[-1,-1])[2:-2,2:-2])
-                #     * (im[2:-2,2:-2] > shift(im,[-1,0 ])[2:-2,2:-2]) 
-                #     * (im[2:-2,2:-2] > shift(im,[-1,1 ])[2:-2,2:-2])
-                #     * (im[2:-2,2:-2] > shift(im,[0 ,-1])[2:-2,2:-2]) 
-                #     * (im[2:-2,2:-2] > shift(im,[0 ,1 ])[2:-2,2:-2]) 
-                #     * (im[2:-2,2:-2] > shift(im,[1 ,-1])[2:-2,2:-2]) 
-                #     * (im[2:-2,2:-2] > shift(im,[1 ,0 ])[2:-2,2:-2]) 
-                #     * (im[2:-2,2:-2] > shift(im,[1 ,1 ])[2:-2,2:-2]) 
-                #     )
-
-                idx = np.where(stack == 1)
-                sm = imc.shape
-                plt.imshow(imc)
-                if len(idx[0]) > 0:
-                    loop = 0
-                    for idx_i in range(len(idx[0])):
-                        if (imc[idx[0][idx_i],idx[1][idx_i]] - minimum ) > level_theshold[j-1]*mean:
-                            if (np.abs(np.sqrt((idx[0][idx_i]-sm[0]//2)**2+(idx[1][idx_i]-sm[1]//2)**2)) > rad_min) and np.abs(np.sqrt((idx[0][idx_i]-sm[0]//2)**2+(idx[1][idx_i]-sm[1]//2)**2)) < rad_max:
-                                plt.plot(idx[1][idx_i],idx[0][idx_i],"og",markersize=3)
-                                subm = imc[idx[0][idx_i]-win_halfw:idx[0][idx_i]+win_halfw+1,idx[1][idx_i]-win_halfw:idx[1][idx_i]+win_halfw + 1]
-                                if np.max(subm < 0):
-                                    subm = 1 - subm
-                                height, xcoor, ycoor, width_x, width_y = moments(subm)
-                                freq_x2[i,j-1,loop] = (idx[0][idx_i] - win_halfw + xcoor - wsize + 2  )/h
-                                freq_y2[i,j-1,loop] = (idx[1][idx_i] - win_halfw + ycoor - wsize + 2  )/w
-                                freq_x[i,j-1,loop] = (idx[0][idx_i] - wsize + 2)/h
-                                freq_y[i,j-1,loop] = (idx[1][idx_i] - wsize + 2)/w
-                                # f_gauss = height * np.exp(-((x-xcoor)**2/(2*width_x**2) + (y-ycoor)**2/(2*width_y**2)))
-                                f_gauss = 1 - np.exp(-((x-xcoor)**2/(2*(width_x*3)**2) + (y-ycoor)**2/(2*(width_y*3)**2)))
-                                #plib.show_four_row(subm,f_gauss,subm - f_gauss,imc)
-                                F[ idx[0][idx_i] + (h//2 - wsize + 2) - win_halfw : idx[0][idx_i]  + (h//2 - wsize + 2) + win_halfw + 1 , idx[1][idx_i]  + (w//2 - wsize + 2) - win_halfw : idx[1][idx_i]  + (w//2 - wsize + 2) + win_halfw + 1] *= 1e-6#f_gauss #win
-                                power2d[ idx[0][idx_i] + (h//2 - wsize + 2) - win_halfw : idx[0][idx_i]  + (h//2 - wsize + 2) + win_halfw + 1, idx[1][idx_i]  + (w//2 - wsize + 2) - win_halfw : idx[1][idx_i]  + (w//2 - wsize + 2) + win_halfw + 1 ] *=  1e-6#f_gauss #win
-                                print(freq_x[i,j-1,loop],freq_y[i,j-1,loop])
-                                print(i,j,level_theshold[j-1]*mean,3.*level_theshold[j-1]*mean, rms, 3*rms, imc[idx[0][idx_i],idx[1][idx_i]] - minimum,freq_x[i,j-1,loop],freq_y[i,j-1,loop])
-                                loop += 1
-                    plt.colorbar()
-                    plt.show(block=True)
-                    plt.pause(1)
-                    plt.clf()
-                    dum = np.copy(data_fringes)
-                    data_fringes = np.fft.ifft2(np.fft.fftshift(F)).astype(np.float)
-                    #plib.show_four_row(data_fringes,dum,dum-data_fringes,power2d,svmin=[-0.002,-0.002,-0.0002,-3],svmax=[0.002,0.002,0.0002,3])
-                    data[i,j,:,:] = np.fft.ifft2(np.fft.fftshift(F)).astype(np.float)
-                quit()
-        plt.ioff()
-
-    #  fx = 0.012500000 ;16   PX/Size
-    #  fy = 0.0070312503 ;9
-    #  px = round(fx * sx)
-    #  py = round(fy * sy)
-        for i in range(zd//4):
-            for j in np.arange(1,3):
-                print(i,j,freq_y[i,j,:6],freq_x[i,j,:6])
-
-    #     PLT_RNG = 2
-    #     plib.show_four_row(data_d[1,0,:,:],data_d[1,1,:,:],data_d[1,2,:,:],data_d[1,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003],block=False)
-    #     plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])
-    #     plib.show_four_row(data_d[3,0,:,:],data_d[3,1,:,:],data_d[3,2,:,:],data_d[3,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003],block=False)
-    #     plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])
-    #     plib.show_four_row(data_d[5,0,:,:],data_d[5,1,:,:],data_d[5,2,:,:],data_d[5,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003],block=False)
-    #     plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],svmin=[0.1,-0.002,-0.002,-0.003],svmax=[1.1,0.002,0.002,0.003])
-
-    # np.save('data_f',data)
-    # return
     #-----------------
     # MEDIAN TO CERO
     #-----------------
 
     if putmediantozero:
+        factor = 0.8
+        rrx = [int(c[0]-radius*factor),int(c[0]+radius*factor)]
+        rry = [int(c[1]-radius*factor),int(c[1]+radius*factor)]
         printc('-->>>>>>> Putting median to zero ',color=bcolors.OKGREEN)
-        PQ = np.median(data[:,1,rry[0]:rry[1],rrx[0]:rrx[1]],axis=(1,2))
-        PU = np.median(data[:,2,rry[0]:rry[1],rrx[0]:rrx[1]],axis=(1,2))
-        PV = np.median(data[:,3,rry[0]:rry[1],rrx[0]:rrx[1]],axis=(1,2))
-        data[:,1,:,:] = data[:,1,:,:] - PQ[:,np.newaxis,np.newaxis]
-        data[:,2,:,:] = data[:,2,:,:] - PU[:,np.newaxis,np.newaxis]
-        data[:,3,:,:] = data[:,3,:,:] - PV[:,np.newaxis,np.newaxis]
-        printc(PQ,PU,PV)
+        printc('          Median evaluated in x = [',rrx[0],':',rrx[1],'] y = [',rry[0],':',rry[1],']',' using ',factor*100,"% of the disk",color=bcolors.OKBLUE)
+        maski,coords = generate_circular_mask([xd-1,yd-1],radius*factor,radius*factor)
+        maski = shift(maski, shift=(c[0]-xd//2,c[1]-yd//2), fill_value=0).astype(int)
+        for i in range(zd//4):
+            PQ = np.median( data[i,1, maski > 0])#,axis=(1,2))
+            PU = np.median( data[i,2, maski > 0])#,axis=(1,2))
+            PV = np.median( data[i,3, maski > 0])#,axis=(1,2))
+        # PQ = np.median(data[:,1,rry[0]:rry[1],rrx[0]:rrx[1]],axis=(1,2))
+        # PU = np.median(data[:,2,rry[0]:rry[1],rrx[0]:rrx[1]],axis=(1,2))
+        # PV = np.median(data[:,3,rry[0]:rry[1],rrx[0]:rrx[1]],axis=(1,2))
+            data[i,1,:,:] = data[i,1,:,:] - PQ#[:,np.newaxis,np.newaxis]
+            data[i,2,:,:] = data[i,2,:,:] - PU#[:,np.newaxis,np.newaxis]
+            data[i,3,:,:] = data[i,3,:,:] - PV#[:,np.newaxis,np.newaxis]
+            printc(PQ,PU,PV)
     if verbose == 1:
+        plt.hist(data[4,1,900:1100,900:1100].flatten(), bins='auto')
+        plt.hist(data[4,2,900:1100,900:1100].flatten(), bins='auto')
+        plt.hist(data[4,3,900:1100,900:1100].flatten(), bins='auto')
+        plt.show()
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'])
-
 
     #-----------------
     #CHECK FOR INFs
@@ -1373,31 +731,27 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     #-----------------
     printc('---------------------------------------------------------',color=bcolors.OKGREEN)
     if outfile == None:
-        outfile = data_f[:-4]
-    printc(' Saving data to: ',directory+outfile+'_L1.fits')
+        #basically replace L1 by L1.5
+        try:
+            outfile_L2 = set_level(data_f,'L1','L2')
+        except:
+            outfile_L2 = set_level(data_f,'L0','L2')
+
+    printc(' Saving data to: ',directory+outfile_L2)
 
     # hdu = pyfits.PrimaryHDU(data)
     # hdul = pyfits.HDUList([hdu])
     # hdul.writeto(outfile, overwrite=True)
 
-    with pyfits.open(data_f) as hdu_list:
+    with pyfits.open(data_filename) as hdu_list:
         hdu_list[0].data = data
-        header = hdu_list[0].header
-        # # Print the header keys from the file to the terminal
-        # header.keys
-        # Modify the key called 'CAL_DARK' to have a value of 100
-        header['CRPIX1'] = (round(cy, 2))
-        header['CRPIX2'] = (round(cx, 2))
-        if 'CAL_DARK' in header:  # Check for existence
-            header['CAL_DARK'] = ('darkID')
-        if 'CAL_GHST' in header:  # Check for existence
-            header['CAL_GHST'] = ('darkID')
-        else:
-            header.set('CAL_GHST', 'True', 'test',after='CAL_DARK')
+#        header = hdu_list[0].header
+        hdu_list[0].header = header
+
         # Add a new key to the header
-        header.insert(20, ('NEWKEY', 'OMIT', 'test'))
+        # header.insert(20, ('NEWKEY', 'OMIT', 'test'))
         #header.set('NEWKEY','50.5')
-        hdu_list.writeto(directory+outfile+'_testingonly.fits', clobber=True)
+        hdu_list.writeto(directory+outfile_L2, clobber=True)
 #        hdu_list.writeto(directory+outfile+'_L1.fits', clobber=True)
 
     # with pyfits.open(data_f) as hdu_list:
@@ -1492,7 +846,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
         rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
 
-        np.savez_compressed(directory+outfile+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
+        np.savez_compressed(directory+outfile_L2+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
 
         del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
         print(del_dummy)
@@ -1508,26 +862,26 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             plib.show_one(v_los,vmin=-2.5,vmax=2.5,title='LoS velocity')
             plib.show_one(b_los,vmin=-30,vmax=30,title='LoS magnetic field')
 
-        with pyfits.open(data_f) as hdu_list:
+        with pyfits.open(directory+data_f) as hdu_list:
             hdu_list[0].data = b_los
-            header = hdu_list[0].header
-            header['CRPIX1'] = (round(cy, 2))
-            header['CRPIX2'] = (round(cx, 2))
-            hdu_list.writeto(directory+outfile+'_blos_rte.fits', clobber=True)
+#            header = hdu_list[0].header
+            hdu_list[0].header = header
+            writeto = set_level(outfile_L2,'ilam','blos')
+            hdu_list.writeto(directory+writeto, clobber=True)
 
-        with pyfits.open(data_f) as hdu_list:
+        with pyfits.open(directory+data_f) as hdu_list:
             hdu_list[0].data = v_los
-            header = hdu_list[0].header
-            header['CRPIX1'] = (round(cy, 2))
-            header['CRPIX2'] = (round(cx, 2))
-            hdu_list.writeto(directory+outfile+'_vlos_rte.fits', clobber=True)
+#            header = hdu_list[0].header
+            hdu_list[0].header = header
+            writeto = set_level(outfile_L2,'ilam','vlos')
+            hdu_list.writeto(directory+writeto, clobber=True)
 
-        with pyfits.open(data_f) as hdu_list:
+        with pyfits.open(directory+data_f) as hdu_list:
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
-            header = hdu_list[0].header
-            header['CRPIX1'] = (round(cy, 2))
-            header['CRPIX2'] = (round(cx, 2))
-            hdu_list.writeto(directory+outfile+'_Icont_rte.fits', clobber=True)
+#            header = hdu_list[0].header
+            hdu_list[0].header = header
+            writeto = set_level(outfile_L2,'ilam','S01')
+            hdu_list.writeto(directory+writeto, clobber=True)
 
         printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
 
@@ -1556,7 +910,9 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         cbar.ax.tick_params(labelsize=16)
 
         #ax.imshow(Zm, cmap='gray')
-        plt.savefig('imagenes/velocity-map-'+outfile+'.png',dpi=300)
+        writeto = set_level(outfile_L2,'ilam','vlos')
+        writeto = set_level(writeto,'.fits','.png')
+        plt.savefig(directory+writeto,dpi=300)
         plt.close()
 
         #-----------------
@@ -1584,7 +940,9 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         cbar.ax.tick_params(labelsize=16)
         #ax.imshow(Zm, cmap='gray')
 
-        plt.savefig('imagenes/Blos-map-'+outfile+'.png',dpi=300)
+        writeto = set_level(outfile_L2,'ilam','blos')
+        writeto = set_level(writeto,'.fits','.png')
+        plt.savefig(directory+writeto,dpi=300)
         plt.close()
 
         printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
@@ -1593,7 +951,6 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         printc('---------------------RUNNING COG --------------------------',color=bcolors.OKGREEN)
         wavelength = 6173.3356
         v_los,b_los = cog(data,wavelength,wave_axis,lande_factor=3,cpos = cpos)
-
 
         #-----------------
         # MASK DATA AND SAVE
@@ -1608,12 +965,18 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             plib.show_one(b_los,vmin=-150,vmax=150)
 
         with pyfits.open(data_f) as hdu_list:
-            hdu_list[0].data = b_los
-            hdu_list.writeto(outfile+'_blos_ce.fits', clobber=True)
+            hdu_list[0].data = v_los
+            hdu_list[0].header = header
+            writeto = set_level(outfile_L2,'ilam','vlos-cog')
+            writeto = set_level(writeto,'.fits','.png')
+            plt.savefig(directory+writeto,dpi=300)
 
         with pyfits.open(data_f) as hdu_list:
-            hdu_list[0].data = v_los
-            hdu_list.writeto(outfile+'_vlos_ce.fits', clobber=True)
+            hdu_list[0].data = b_los
+            hdu_list[0].header = header
+            writeto = set_level(outfile_L2,'ilam','blos-cog')
+            writeto = set_level(writeto,'.fits','.png')
+            plt.savefig(directory+writeto,dpi=300)
 
     return
     #-----------------
@@ -1629,8 +992,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         pass
 
     factor = 0.5
-    rrx = [int(c[1]-r*factor),int(c[1]+r*factor)]
-    rry = [int(c[0]-r*factor),int(c[0]+r*factor)]
+    rrx = [int(c[0]-r*factor),int(c[0]+r*factor)]
+    rry = [int(c[1]-r*factor),int(c[1]+r*factor)]
     print(rrx,rry,' check these for los vel calib')
     off = np.mean(vl[rry[0]:rry[1],rrx[0]:rrx[1]])
     vl = vl - off #- cavity

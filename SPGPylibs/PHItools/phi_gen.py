@@ -390,10 +390,11 @@ def bin_annulus(shape,radius, width, full = False):
     This function creates a anulus mask of radius and width
     radius - width//2 < radius < radius + width//2 + 1
     """
-    try:
-        rho
-    except NameError:
-        circle_grid(shape)  # FOR GENERATING CENTERS GLOVAL VARIABLE
+    # try:
+    #     rho
+    # except NameError:
+        
+    rho = circle_grid(shape)  # FOR GENERATING CENTERS GLOVAL VARIABLE
 
     mask1 = rho <= radius + width//2 + 1
     mask2 = rho >= radius - width//2
@@ -413,14 +414,14 @@ def circle_grid(shape):
     N = shape[0]
     if N % 2 != 0:
         print('Number of pixels must be an even integer!', N, N % 2)
-        sys.exit()
+        raise Exception
     x = np.linspace(-N/2, N/2, N)
     y = np.copy(x)
     X, Y = np.meshgrid(x, y)
     rho = np.sqrt(X**2 + Y**2)
-    globals()['rho'] = rho
+    #globals()['rho'] = rho
 
-    return 
+    return rho
 
 def find_circle_hough(image,inner_radius, outer_radius, steps,method='prewitt',
             dhtr=10,normalize = False,verbose=False,Otsu = None,threshold = 0.15):

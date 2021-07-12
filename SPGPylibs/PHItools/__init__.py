@@ -7,5 +7,6 @@ from .phihrt_flat import *
 from .phifdt_pipe import *
 from .phihrt_pipe import *
 from .tools import *
+from .phifdt_pipe_modules import *
 
 #from SPGPylibs.PHItools import * WoRK

@@ -10,6 +10,7 @@
 from astropy.io import fits as pyfits
 from astropy.io.fits import getheader
 import numpy as np
+from .phi_utils import find_string
 
 def fits_get(file,info = False,head = 0,scaling = False):
     '''helper function to load FITS data set
@@ -28,7 +29,7 @@ def fits_get(file,info = False,head = 0,scaling = False):
             return pyfits.info(file)
         except Exception:
             print("Unable to open fits file: {}",file)        
-            return None
+            raise
     if scaling == True:
         index = 1
         scaling = {"Present": [False,True], "scaling": [0,0]}
@@ -37,7 +38,7 @@ def fits_get(file,info = False,head = 0,scaling = False):
                 dummy_head = getheader(file,index)
             except Exception:
                 print("Unable to open fits file: {}",file)        
-                return None
+                raise
             if dummy_head['EXTNAME'] == 'PHI_FITS_imageSummary':
                 with pyfits.open(file) as hdu_list:
                     header_data = hdu_list[index].data
@@ -100,14 +101,23 @@ def fits_get_fpatimes(file,offset = None):
     #     print("Unable to open fits file: {}",file,' Other resons may happen (bug)')        
     #     return None
 
-def list_fits(path = './'):
+def list_fits(path = './', contain = None,remove_dir = False):
     '''Find all fits in directory.'''
     import os
     list_of_files = []
     for (dirpath, dirnames, filenames) in os.walk(path):
         for filename in filenames:
-            if filename.endswith('.fits'): 
-                list_of_files.append(os.path.join(dirpath, filename)) 
+            if filename.endswith('.fits'):
+                if contain != None:
+                    _,exist = find_string(filename,contain)
+                    if exist != -1:
+                        print(exist)
+                        if remove_dir:
+                            list_of_files.append(filename)
+                        else:
+                            list_of_files.append(os.path.join(dirpath, filename)) 
+                else:
+                    list_of_files.append(os.path.join(dirpath, filename)) 
     return list_of_files
 
 def fits_get_sampling(file,verbose = False):
@@ -185,3 +195,8 @@ def write_shifts(file, content):
     #         formatted = [[format(v) for v in r] for r in content]
     #         writer.write(str(formatted))
     return 1
+
+def set_level(file,what,towhat):
+    _,exist = find_string(file,what)
+    if exist != -1:
+        return file.replace(what,towhat)        

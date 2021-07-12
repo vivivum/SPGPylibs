@@ -278,6 +278,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
         ##################################
         #FIND CENTERS - FM SEARCH STRATEGY
         ##################################
+        r_width = 2
         inner_radius = 128
         outer_radius = 1024
         steps = 32
@@ -633,7 +634,7 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
 
 def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 0, shifts = None, verbose = 1,
     correct_ghost = 0,expand = 1,thrd = 0,iter = 4, normalize = 1 , disp_method = 'Hough', c_term = 0,
-    inner_radius = 400, outer_radius = 800, steps = 20,shifts_file = './'):
+    inner_radius = 400, outer_radius = 800, steps = 20,shifts_file = False):
     '''
     The Dark, if provided, should have the same scaling as the data and same size!!!!!!!
     This program does not take care of sizes. For that go to fdt_pipeline
@@ -690,8 +691,10 @@ def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 
         if disp_method == 'Hough':
 
             centers, radius = do_hough(image, inner_radius, outer_radius, steps,verbose=False,threshold = 0.05)
-            _ = write_shifts(shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt', centers)
-            _ = write_shifts(shifts_file+'_rad_w'+str(wavelength)+'_n'+str(npol)+'.txt', radius )
+        
+            if shifts_file:
+                _ = write_shifts(shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt', centers)
+                _ = write_shifts(shifts_file+'_rad_w'+str(wavelength)+'_n'+str(npol)+'.txt', radius )
 
         elif disp_method == 'FFT':
             print('TB checked. Input par "expand" should be negative number representing solar disk')
@@ -778,10 +781,8 @@ def fdt_flat_testrun():
 
     allgain = []
     norma = np.zeros((24))
-    # for wavelength in range(6):
-      # for npol in range(4):
-    for wavelength in range(1):
-      for npol in range(1):
+    for wavelength in range(6):
+      for npol in range(4):
         print(wavelength,npol,'................')
         gain, norma_out = fdt_flat(files, wavelength, npol, method = 'kll', dark = dark,read_shits = False, 
             shifts_file = 'shifts/shifts', correct_ghost = 0 , expand = 10, normalize = 0, 
