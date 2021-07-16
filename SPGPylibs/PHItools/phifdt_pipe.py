@@ -157,12 +157,13 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     data_filename = directory + data_f
     try:
         data, header = fits_get(data_filename)
+        DID = header['PHIDATID']
+        printc('-->>>>>>> data DID '+DID,color=bcolors.OKGREEN)
         printc('-->>>>>>> Reshaping data to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
         zd,yd,xd = data.shape
         data = np.reshape(data,(zd//4,4,yd, xd))
         data = data / 256. #from fix to 32
         data = np.ascontiguousarray(data)
-        DID = header['PHIDATID']
 
     except Exception:
         printc("ERROR, Unable to open fits file: {}",data_filename,color=bcolors.FAIL)
@@ -272,10 +273,13 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     #Uptade header with new centers
 
     printc('          Uptade header with new center:',color=bcolors.OKBLUE)
+    printc('          OLD center:',color=bcolors.OKBLUE)
+    printc('                  at: CRPIX1[x]=',header['CRPIX1'],' CRPIX2[y]=',header['CRPIX2'],' radius=',radius,color=bcolors.OKBLUE)
     header['CRPIX1'] = (round(cx, 2))
     header['CRPIX2'] = (round(cy, 2))
+    printc('          NEW center:',color=bcolors.OKBLUE)
+    printc('                  at: CRPIX1[x]=',header['CRPIX1'],' CRPIX2[y]=',header['CRPIX2'],' radius=',radius,color=bcolors.OKBLUE)
     
-    printc('                  at: x=',c[0],' y=',c[1],' radius=',radius,color=bcolors.OKBLUE)
     #OJO.
     # find_circle_hough devuelve c = c[0] = x and c[1] = y !!!!!!!!!!!!!!
     # Esto viene porque en el KLL esta definido así (al reves) en la rutina votes()

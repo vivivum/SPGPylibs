@@ -306,19 +306,34 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
             init_date += timedelta(days=resolution)
 
     # Convert UTC to ephemeris time
-    sc_time_spice = [spiceypy.str2et(t.strftime('%Y-%m-%d %H:%M')) for t in sc_time]
+    if end_date != None:
+        sc_time_spice = [spiceypy.str2et(t.strftime('%Y-%m-%d %H:%M')) for t in sc_time]
 
-    solo, lT = spiceypy.spkezr(object, sc_time_spice, frame , 'NONE', 'Sun')
+        solo, lT = spiceypy.spkezr(object, sc_time_spice, frame , 'NONE', 'Sun')
 
-    pos_solo = np.array(solo)[:, :3] * u.km
-    vel_solo = np.array(solo)[:, 3:] * u.km / u.s
+        pos_solo = np.array(solo)[:, :3] * u.km
+        vel_solo = np.array(solo)[:, 3:] * u.km / u.s
 
-    sc_x = pos_solo[:, 0].to(u.au)
-    sc_y = pos_solo[:, 1].to(u.au)
-    sc_z = pos_solo[:, 2].to(u.au)
-    sc_vx = vel_solo[:, 0]
-    sc_vy = vel_solo[:, 1]
-    sc_vz = vel_solo[:, 2]
+        sc_x = pos_solo[:, 0].to(u.au)
+        sc_y = pos_solo[:, 1].to(u.au)
+        sc_z = pos_solo[:, 2].to(u.au)
+        sc_vx = vel_solo[:, 0]
+        sc_vy = vel_solo[:, 1]
+        sc_vz = vel_solo[:, 2]
+    
+    else:
+        sc_time_spice = spiceypy.str2et(sc_time.strftime('%Y-%m-%d %H:%M')) 
+        solo, lT = spiceypy.spkezr(object, sc_time_spice, frame , 'NONE', 'Sun')
+
+        pos_solo = np.array(solo)[:3] * u.km
+        vel_solo = np.array(solo)[3:] * u.km / u.s
+
+        sc_x = pos_solo[0].to(u.au)
+        sc_y = pos_solo[1].to(u.au)
+        sc_z = pos_solo[2].to(u.au)
+        sc_vx = vel_solo[0]
+        sc_vy = vel_solo[1]
+        sc_vz = vel_solo[2]
 
     sc_sp = np.sqrt(sc_vx**2 + sc_vy**2 + sc_vz**2)
 
@@ -342,7 +357,6 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
         dtype=[('time','f8'),('r','f8'),('lon','f8'),('lat','f8'),('x','f8'),\
         ('y','f8'),('z','f8'),('vx','f8'),('vy','f8'),('vz','f8'),('sp','f8'),\
         ('vr','f8'),('elevation','f8'),('angle','f8'),('s_size','f8')])
-    
 
     # #
     # # Compute the apparent state of the Sun as seen from solar orbiter in the SOLO_HEEQ frame.
