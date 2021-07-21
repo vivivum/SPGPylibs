@@ -592,6 +592,6 @@ def find_string(where,what):
         else:
             nothing = 1
             found.append(index)
-            print('ll found at', index)
+            # print('ll found at', index)
             index += add # +2 because len('_') == 1
     return found,nothing

@@ -111,7 +111,7 @@ def list_fits(path = './', contain = None,remove_dir = False):
                 if contain != None:
                     _,exist = find_string(filename,contain)
                     if exist != -1:
-                        print(exist)
+                        # print(exist)
                         if remove_dir:
                             list_of_files.append(filename)
                         else:

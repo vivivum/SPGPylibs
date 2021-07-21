@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from .tools import printc,bcolors
 from .phi_fits import fits_get
 from .phi_utils import find_string,azimutal_average,newton,limb_darkening,genera_2d
-from .phi_gen import bin_annulus,shift,find_center,apod,rebin
+from .phi_gen import bin_annulus,shift,find_center,apod,rebin,generate_circular_mask
 from .phi_reg import shift_subp,moments
 
 import SPGPylibs.GENtools.plot_lib as plib
@@ -937,21 +937,28 @@ def phi_correct_fringes(data,header,option,verbose=False):
         printc('freq_y_V [f,px] ',freq_y_V,px_y_V,color=bcolors.OKBLUE)
         printc('win_halfw ',win_halfw,color=bcolors.OKBLUE)
 
-        mask_QUV = np.ones((3,2048,2048))
+        mask_QUV = np.ones((3,yd,xd))
+        maski,coords = generate_circular_mask([2*win_halfw,2*win_halfw],win_halfw,win_halfw)
+        print(maski)
         for k in range(len(px_x_Q)):
-            print(k)
-            mask_QUV[0,px_y_Q[k]-win_halfw:px_y_Q[k]+win_halfw+1,px_x_Q[k]-win_halfw:px_x_Q[k]+win_halfw+1] = 1e-9
+            # mask_QUV[0,px_y_Q[k]-win_halfw:px_y_Q[k]+win_halfw+1,px_x_Q[k]-win_halfw:px_x_Q[k]+win_halfw+1] = 1e-9
+            mask_QUV[0,px_y_Q[k]-win_halfw:px_y_Q[k]+win_halfw+1,px_x_Q[k]-win_halfw:px_x_Q[k]+win_halfw+1] *= (1 - maski)
         for k in range(len(px_x_U)):
-            mask_QUV[1,px_y_U[k]-win_halfw:px_y_U[k]+win_halfw+1,px_x_U[k]-win_halfw:px_x_U[k]+win_halfw+1] = 1e-9
+            mask_QUV[1,px_y_U[k]-win_halfw:px_y_U[k]+win_halfw+1,px_x_U[k]-win_halfw:px_x_U[k]+win_halfw+1] *= (1 - maski)
         for k in range(len(px_x_V)):
-            mask_QUV[2,px_y_V[k]-win_halfw:px_y_V[k]+win_halfw+1,px_x_V[k]-win_halfw:px_x_V[k]+win_halfw+1] = 1e-9
-        if verbose:
-            plib.show_one(mask_QUV[0,0:100,0:100])
-            plib.show_one(mask_QUV[1,0:100,0:100])
-            plib.show_one(mask_QUV[2,0:100,0:100])
+            mask_QUV[2,px_y_V[k]-win_halfw:px_y_V[k]+win_halfw+1,px_x_V[k]-win_halfw:px_x_V[k]+win_halfw+1] *= (1 - maski)
+        # if verbose:
+        # plib.show_one(mask_QUV[0,0:30,0:30])
+        # plib.show_one(mask_QUV[1,0:30,0:30])
+        # plib.show_one(mask_QUV[2,0:30,0:30])
         for i in range(zd//4):
             for j in np.arange(1,4):
                 F = np.fft.fft2(data[i,j,:,:])
+                # power2d = np.abs( (F*np.conj(F)).astype(np.float) ) 
+                # power2d = gaussian_filter(power2d, sigma=(1, 1)) 
+                # im = np.log10( power2d[0:30,0:30] )
+                # plt.imshow(im,cmap='Greys')
+                # plt.show()
                 F *= mask_QUV[j - 1 , :, :]
                 data[i,j,:,:]= np.fft.ifft2(F)
 

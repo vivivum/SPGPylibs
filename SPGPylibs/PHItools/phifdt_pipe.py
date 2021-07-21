@@ -1,18 +1,15 @@
 import numpy as np 
-import os.path
+import os.path, datetime, subprocess
 #from astropy.io import fits as pyfits
 #from time import sleep
-import subprocess
-
-from scipy.ndimage import gaussian_filter#, rotate
+#from scipy.ndimage import gaussian_filter#, rotate
 #from scipy.interpolate import interp1d
 #from scipy.optimize import curve_fit
-
 from .tools import *
 from .phi_fits import *
 from .phi_gen import *
 from .phi_reg import *
-from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d,find_string
+#from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d,find_string
 from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_apply_demodulation,\
     crosstalk_ItoQUV,cross_talk_QUV,crosstalk_ItoQUV2d,phi_correct_ghost,phi_correct_fringes
 
@@ -20,11 +17,11 @@ import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
 
 def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c = True,
-    inner_radius = 250, outer_radius = 800, steps = 100, normalize = 0., flat_n = 1.,
-    index = None, prefilter = 1, prefilter_fits = '0000990710_noMeta.fits',
+    inner_radius = 250, outer_radius = 800, steps = 100, normalize_flat = 0., flat_n = 1.,
+    index = None, prefilter = True, prefilter_fits = '0000990710_noMeta.fits',
     realign = False, verbose = True, outfile=None, mask_margin = 2, correct_fringes = False,
     individualwavelengths = False,correct_ghost = False,putmediantozero=True,directory = './',
-    rte = False, debug = False,nlevel = 0.3,center_method=None,loopthis=0,
+    rte = False, debug = False,nlevel = 0.3,center_method='circlefit',loopthis=0,
     cross_talk_IQUV = False, cross_talk_VQU = False, do2d = 0):
 
     '''
@@ -63,16 +60,24 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         Fits file of a Valid dark file (processed dark) (including path, if necessary)
     flat_f : string
         Fits file of a Valid FDT flatfield (including path, if necessary)
-    ** Options:
-    outfile = 'data_red.fits' : string
-        File to store final processed data
+    
+    IMPORTANT: dark_f, flat_f, and prefilter file must be provided with the FULL PATH. 
+               the data has to be provided as a list of files (fits) and a directory: "directory="
+        The output directories (Depending on RTE on or off) are
+        A)  directory + Level 2: reduced raw data L2+ilam plus RTE output (so far, BLOS, VLOS and SO1: continuum) 
+        B)  directory + Level 2 + png: png figures of the RTE output (so far, BLOS and VLOS) 
+        B)  directory + Level 2 + npz: NPZ (python) reduced raw data L2
+        
+    ** OPTIONAL ARGUMENTS **
+
     instrument = 'FDT40' : select the instrument and PMP temperature (for demod)
         -> implemented cases: -- 'FDT40','FDT45' --
     flat_c = True : default is to apply flat field correction to the data
     dark_c = True : default is to apply dark field correction to the data
     inner_radius = 250, outer_radius = 600, steps = 100 : initial values for finding sun center
-    normalize = 0 : To normalize flats internally to the mean value of 5% of the disk (central) intensity  
+    normalize_flat = 0 : To normalize flats internally to the mean value of 5% of the disk (central) intensity  
     flat_n = 1.0 : flat scaling (flat = flat / flat_n) 
+
     index = None : in case you want a particular flat to be applied at another wave, e.g.,
         index = [5,1,2,3,4,0] exchange the first and last wave flats
         This is for testing stuff, mainly. 
@@ -82,9 +87,22 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         Realign all images before demodulating using FFT 
     individualwavelengths = False : bool
         Correct crosstalk from I to QUV for individual wavelengths
-
-
-    index for ......
+    vervose: True prints a lot of stuff (and plots)
+    mask_margin = 2: 'Number of pixels to contract the sun mask for output of RTE'
+    correct_fringes = False: Fringe correction
+        'manual': first FM version. Freq, mask applied to all images with fixed frequencies
+        'auto' : calculate fringes freq. automatically (in development).
+    correct_ghost = False; Correcto ghost images
+    putmediantozero=True; puts median value to zero before RTE
+    rte = False: Run RTE     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
+        'RTE': RTE only
+        'CE+RTE': RTE with classical estiamtes
+        'CE': Only classical estimates
+        'cog': Only Center of gravity (in testing)
+    cross_talk_IQUV= False: apply crostalk correction from Stokes I to Stokes Q, U, and V.
+    cross_talk_VQU= False: apply crostalk correction from Stokes V to Stokes Q and U.
+    nlevel = 0.3: Noise level above which to evaluate cross_talk_VQU (In testing)
+    center_method='circlefit' or 'hough'
 
     Returns
     -------
@@ -102,17 +120,18 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
     Notes
     -----
-    This program is not optimized for speed. It assumes that input data 
-        is 6 wavelength 
+    This program is not optimized for speed. It assumes that input data is 6 wavelength.
+    C-MILOS must be compiled in each specific machine (C)
+    The software update some of the information in the keyword:
 
-    Keywords shat we should have in the header for making the FM and ground pipeline compatible (and modular wise).
+    Keywords in the header (modified or added) within this program:
  
-   * CAL_DARK =             26181001 / Onboard calibrated for dark field ! Dark correction ( DID/file of dark if True) 
-   * CAL_FLAT =             26181101 / Onboard calibrated for gain table ! Dark correction ( DID/file of flat if True)             
+    CAL_DARK =             26181001 / Onboard calibrated for dark field ! Dark correction ( DID/file of dark if True) 
+    CAL_FLAT =             26181101 / Onboard calibrated for gain table ! Dark correction ( DID/file of flat if True)             
     CAL_PRE  =             Prefilter / Prefilter correction ( DID/file of flat if True)                    
     CAL_GHST=              Prefilter / Ghost correction ( name+version of py module if True )           
     CAL_REAL=              Prefilter / Prealigment of images before demodulation ( name+version of py module if True )             
-   * CAL_IPOL=               990510 / Onboard calibrated for instrumental polarizatio ! demodulation ( DID of demod matrix if True ) - demod matrix may be 4x4 or 2048x2048x4x4
+    CAL_IPOL=               990510 / Onboard calibrated for instrumental polarizatio ! demodulation ( DID of demod matrix if True ) - demod matrix may be 4x4 or 2048x2048x4x4
     CAL_CRT0=               float / cross-talk from I to Q (slope value, wrt normalized data in python) 
     CAL_CRT1=               float / cross-talk from I to Q (off-set value, wrt normalized data in python) 
     CAL_CRT2=               float / cross-talk from I to U (slope value, wrt normalized data in python) 
@@ -123,18 +142,22 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     CAL_CRT7=               float / cross-talk from V to Q (off-set value, wrt normalized data in python) 
     CAL_CRT8=               float / cross-talk from V to U (slope value, wrt normalized data in python) 
     CAL_CRT9=               float / cross-talk from V to U (off-set value, wrt normalized data in python) 
-    CAL_NORM=               990510 / Normalization (normalization constant PROC_Ic)
+    CAL_NORM=               990510 / Normalization constant PROC_Ic)
     CAL_FRIN=               990510 / Fringe correction ( name+version of py module if True )  TBD (posibly we need the freqs.)  
    * CAL_PSF=                990510 / Onboard calibrated for instrumental PSF  ! TBD
-   * CAL_RTE=                990510 / ok
+    CAL_RTE=                990510 / ok
    * CAL_SCIP= 'None'               / Onboard scientific data analysis
    * RTE_ITER=           4294967295 / Number RTE inversion iterations
-   * COMPRESS= 'none'               / Data compression quality
-   * COMPRAT =                   1. / Data compression ratio
-   * COMPVERS=                    0 / Version of Compression Core
-   * PHIDATID= '142010402'          / PHI dataset Id
+
+    (*) are not touched in this software.
+
+    Keywords CRPIX1 and CRPIX2 are updated following the new center calculation within the pipeline. Old values are stored in the history.
+    Keywords CRVAL1 and CRVAL2 are NOT updated but should be SET to zero!!!!
 
     '''
+
+    version = 'V1.0 July 2021'
+    version_cmilos = 'CMILOS v0.91 (July - 2021)'
 
     PLT_RNG = 5
 
@@ -155,6 +178,12 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
     #  
     data_filename = directory + data_f
+    print(data_filename)
+    if os.path.isfile(data_filename):
+        print("File exist")
+    else:
+        print("File not exist")
+
     try:
         data, header = fits_get(data_filename)
         DID = header['PHIDATID']
@@ -167,6 +196,14 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
     except Exception:
         printc("ERROR, Unable to open fits file: {}",data_filename,color=bcolors.FAIL)
+        return
+
+    header['history'] = ' Data processed with phifdt_pipe.py '+ version
+    header['history'] = '      and time '+ str(datetime.datetime.now())
+    header['history'] = ' Parameters normalize_flat: '+ str(normalize_flat)
+    header['history'] = ' Parameters flat_scaling: '+ str(flat_n)
+    header['history'] = ' Parameters mask_margin: '+ str(mask_margin)
+    header['history'] = ' Parameters center_method: '+ str(center_method)
 
     if verbose:
         plib.show_one(data[0,0,:,:],vmin=0,xlabel='pixel',ylabel='pixel',title='Data first wave',cbarlabel='DN',save=None,cmap='gray')
@@ -206,7 +243,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             PXEND1_f  = int(flat_header['PXEND1']) - 1          
             PXBEG2_f  = int(flat_header['PXBEG2']) - 1           
             PXEND2_f  = int(flat_header['PXEND2']) - 1 
-            flat[:,PXBEG1_f:PXEND2_f+1,PXBEG2_f:PXEND2_f+1] = dummy
+            flat[:,PXBEG1_f:PXEND1_f+1,PXBEG2_f:PXEND2_f+1] = dummy
             del dummy
             fz,fy,fx = flat.shape
             flat = np.reshape(flat,(fz//4,4,fy,fx))
@@ -260,26 +297,34 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     #-----------------
 
     printc('-->>>>>>> finding the center of the solar disk (needed for masking) ',color=bcolors.OKGREEN)
-    if center_method == 'Hough':
-        c, radius,threshold = find_circle_hough(data[0,0,:,:],inner_radius,outer_radius,steps,threshold = 0.01,normalize=False,verbose=False)
-        #c = np.roll(c,1)
-        cx = c[0]
-        cy = c[1]
-        #TBE PUT IN CORRECT UNITS
-    else:
-        cy,cx,radius=find_center(data[0,0,:,:])  #OJO Cy... Cx
-        c = np.array([int(cx),int(cy)])   #El vector es [0,1,2,...] == [x,y,z,...] == [cx,cy,cz,...] Pero esto ultimo esta al reves
-        radius = int(radius)
+    try:
+        if center_method == 'Hough':
+            c, radius,threshold = find_circle_hough(data[0,0,:,:],inner_radius,outer_radius,steps,threshold = 0.01,normalize=False,verbose=False)
+            #c = np.roll(c,1)
+            cx = c[0]
+            cy = c[1]
+            #TBE PUT IN CORRECT UNITS
+        elif center_method == 'circlefit':
+            cy,cx,radius=find_center(data[0,0,:,:])  #OJO Cy... Cx
+            c = np.array([int(cx),int(cy)])   #El vector es [0,1,2,...] == [x,y,z,...] == [cx,cy,cz,...] Pero esto ultimo esta al reves
+            radius = int(radius)
+        else:  
+            raise ValueError("ERROR in center determination method") 
+    except ValueError as err:
+        print(err.args)
+
     #Uptade header with new centers
 
     printc('          Uptade header with new center:',color=bcolors.OKBLUE)
     printc('          OLD center:',color=bcolors.OKBLUE)
     printc('                  at: CRPIX1[x]=',header['CRPIX1'],' CRPIX2[y]=',header['CRPIX2'],' radius=',radius,color=bcolors.OKBLUE)
+    header['history'] = ' CRPIX 1 and CRPIX2 uptated from ' + str(header['CRPIX1'])+ ' and ' + str(header['CRPIX2'])
     header['CRPIX1'] = (round(cx, 2))
     header['CRPIX2'] = (round(cy, 2))
     printc('          NEW center:',color=bcolors.OKBLUE)
     printc('                  at: CRPIX1[x]=',header['CRPIX1'],' CRPIX2[y]=',header['CRPIX2'],' radius=',radius,color=bcolors.OKBLUE)
-    
+    printc('ATTENTION: Keywords CRVAL1 and CRVAL2 are NOT updated but should be SET to zero!!!!',color=bcolors.FAIL)
+
     #OJO.
     # find_circle_hough devuelve c = c[0] = x and c[1] = y !!!!!!!!!!!!!!
     # Esto viene porque en el KLL esta definido así (al reves) en la rutina votes()
@@ -428,7 +473,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             for l in range(int(zd//4)):
                 print('          ... pol: ',p,' wave: ',l,' index: ',index[l])
                 dummy_flat = (flat[index[l],p,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]/flat_n)
-                if normalize ==1:
+                if normalize_flat ==1:
                     print('          normalizing flats using region x = [',rrx[0],':',rrx[1],'] y = ]',rry[0],':',rry[1],']')
                     mm = np.mean(dummy_flat[rry[0]:rry[1],rrx[0]:rrx[1]])
                     dummy_flat = dummy_flat / mm
@@ -515,9 +560,9 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     data = data/nrm
 
     if 'CAL_NORM' in header:  # Check for existence
-        header['CAL_NORM'] = nrm
+        header['CAL_NORM'] = np.round(nrm,6)
     else:
-        header.set('CAL_NORM', nrm, 'Normalization (normalization constant PROC_Ic)',after='CAL_DARK')
+        header.set('CAL_NORM', np.round(nrm,6), 'Normalization constant PROC_Ic',after='CAL_DARK')
 
     if debug:
         datan = datan/nrm
@@ -589,34 +634,34 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
         # np.save('data_dummy',data)
         if 'CAL_CRT0' in header:  # Check for existence
-            header['CAL_CRT0'] = cQ[0]
+            header['CAL_CRT0'] = np.round(cQ[0]*100,3)
         else:
-            header.set('CAL_CRT0', cQ[0], 'cross-talk from I to Q (slope value, wrt normalized data in python) ',after='CAL_DARK')
+            header.set('CAL_CRT0', np.round(cQ[0]*100,3), 'cross-talk I to Q (slope in %), wrt CAL_NROM ',after='CAL_DARK')
 
         if 'CAL_CRT1' in header:  # Check for existence
-            header['CAL_CRT1'] = cQ[1]
+            header['CAL_CRT1'] = np.round(cQ[1]*100,3)
         else:
-            header.set('CAL_CRT1', cQ[1], 'cross-talk from I to Q (off-set value, wrt normalized data in python) ',after='CAL_CRT0')
+            header.set('CAL_CRT1', np.round(cQ[1]*100,3), 'cross-talk I to Q (off-set in %),  wrt CAL_NROM ',after='CAL_CRT0')
 
         if 'CAL_CRT2' in header:  # Check for existence
-            header['CAL_CRT2'] = cU[0]
+            header['CAL_CRT2'] = np.round(cU[0]*100,3)
         else:
-            header.set('CAL_CRT2', cU[0], 'cross-talk from I to U (slope value, wrt normalized data in python) ',after='CAL_CRT1')
+            header.set('CAL_CRT2', np.round(cU[0]*100,3), 'cross-talk I to U (slope in %) alue,  wrt CAL_NROM ',after='CAL_CRT1')
 
         if 'CAL_CRT3' in header:  # Check for existence
-            header['CAL_CRT3'] = cU[1]
+            header['CAL_CRT3'] = np.round(cU[1]*100,3)
         else:
-            header.set('CAL_CRT3', cU[1], 'cross-talk from I to U (off-set value, wrt normalized data in python) ',after='CAL_CRT2')
+            header.set('CAL_CRT3', np.round(cU[1]*100,3), 'cross-talk I to U (off-set in %),  wrt CAL_NROM ',after='CAL_CRT2')
 
         if 'CAL_CRT4' in header:  # Check for existence
-            header['CAL_CRT4'] = cV[0]
+            header['CAL_CRT4'] = np.round(cV[0]*100,3)
         else:
-            header.set('CAL_CRT4', cV[0], 'cross-talk from I to V (slope value, wrt normalized data in python) ',after='CAL_CRT3')
+            header.set('CAL_CRT4', np.round(cV[0]*100,3), 'cross-talk I to V (slope in %),  wrt CAL_NROM',after='CAL_CRT3')
 
         if 'CAL_CRT5' in header:  # Check for existence
-            header['CAL_CRT5'] = cV[1]
+            header['CAL_CRT5'] = np.round(cV[1]*100,3)
         else:
-            header.set('CAL_CRT5', cV[1], 'cross-talk from I to V (off-set value, wrt normalized data in python) ',after='CAL_CRT4')
+            header.set('CAL_CRT5', np.round(cV[1]*100,3), 'cross-talk I to V (off-set in %),  wrt CAL_NROM ',after='CAL_CRT4')
 
     #-----------------
     # CROSS-TALK CALCULATION FROM V TO QU (Interactive)
@@ -646,24 +691,24 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         plt.close()
 
         if 'CAL_CRT6' in header:  # Check for existence
-            header['CAL_CRT6'] = cVQ[0]
+            header['CAL_CRT6'] = np.round(cVQ[0]*100,3)
         else:
-            header.set('CAL_CRT6', cVQ[0], 'cross-talk from V to Q (slope value, wrt normalized data in python)',after='CAL_CRT5')
+            header.set('CAL_CRT6', np.round(cVQ[0]*100,3), 'cross-talk V to Q  (slope in %),  wrt CAL_NROM ',after='CAL_CRT5')
 
         if 'CAL_CRT7' in header:  # Check for existence
-            header['CAL_CRT7'] = cVQ[1]
+            header['CAL_CRT7'] = np.round(cVQ[1]*100,3)
         else:
-            header.set('CAL_CRT7', cVQ[1], 'cross-talk from V to Q (off-set value, wrt normalized data in python)',after='CAL_CRT6')
+            header.set('CAL_CRT7', np.round(cVQ[1]*100,3), 'cross-talk V to Q (off-set in %),  wrt CAL_NROM ',after='CAL_CRT6')
 
         if 'CAL_CRT8' in header:  # Check for existence
-            header['CAL_CRT8'] = cVU[0]
+            header['CAL_CRT8'] = np.round(cVU[0]*100,3)
         else:
-            header.set('CAL_CRT8', cVU[0], 'cross-talk from V to U (slope value, wrt normalized data in python)',after='CAL_CRT7')
+            header.set('CAL_CRT8', np.round(cVU[0]*100,3), 'cross-talk V to U (slope in %),  wrt CAL_NROM ',after='CAL_CRT7')
 
         if 'CAL_CRT9' in header:  # Check for existence
-            header['CAL_CRT9'] = cVU[1]
+            header['CAL_CRT9'] = np.round(cVU[1]*100,3)
         else:
-            header.set('CAL_CRT9', cVU[1], 'cross-talk from V to U (off-set value, wrt normalized data in python)',after='CAL_CRT8')
+            header.set('CAL_CRT9', np.round(cVU[1]*100,3), 'cross-talk V to U (off-set in %),  wrt CAL_NROM ',after='CAL_CRT8')
 
     #-----------------
     # CROSS-TALK CALCULATION FROM I TO QUV (2D)
@@ -723,6 +768,8 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         plt.show()
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'])
 
+        header['history'] = ' Parameters putmediantozero [%]: '+ str(np.round(PQ*100,6))+ ' '+ str(np.round(PU*100,6))+ ' '+ str(np.round(PV*100,6))
+
     #-----------------
     #CHECK FOR INFs
     #-----------------
@@ -733,6 +780,18 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     #-----------------
     # SAVE DATA TODO: CMILOS FORMAT AND FITS
     #-----------------
+
+    #check if npz,pngs and level2 exist
+    dirs = ['npz','pngs','level2']
+        
+    for checkit in dirs:
+        check_dir = os.path.isdir(directory+checkit)
+        if not check_dir:
+            os.makedirs(directory+checkit)
+            print("created folder : ", directory+checkit)
+        else:
+            print(directory+checkit, "folder already exists.")
+
     printc('---------------------------------------------------------',color=bcolors.OKGREEN)
     if outfile == None:
         #basically replace L1 by L1.5
@@ -741,7 +800,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         except:
             outfile_L2 = set_level(data_f,'L0','L2')
 
-    printc(' Saving data to: ',directory+outfile_L2)
+    printc(' Saving data to: ',directory+'level2/'+outfile_L2)
 
     # hdu = pyfits.PrimaryHDU(data)
     # hdul = pyfits.HDUList([hdu])
@@ -755,7 +814,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         # Add a new key to the header
         # header.insert(20, ('NEWKEY', 'OMIT', 'test'))
         #header.set('NEWKEY','50.5')
-        hdu_list.writeto(directory+outfile_L2, clobber=True)
+        hdu_list.writeto(directory+'level2/'+outfile_L2, clobber=True)
 #        hdu_list.writeto(directory+outfile+'_L1.fits', clobber=True)
 
     # with pyfits.open(data_f) as hdu_list:
@@ -850,7 +909,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
         rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
 
-        np.savez_compressed(directory+outfile_L2+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
+        np.savez_compressed(directory+'npz/'+outfile_L2+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
 
         del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
         print(del_dummy)
@@ -866,26 +925,34 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             plib.show_one(v_los,vmin=-2.5,vmax=2.5,title='LoS velocity')
             plib.show_one(b_los,vmin=-30,vmax=30,title='LoS magnetic field')
 
+        header['history'] = ' RTE CMILOS INVERTER: '+ rte
+        header['history'] = ' CMILOS VER: '+ version_cmilos
+        
+        if 'RTE_ITER' in header:  # Check for existence
+            header['RTE_ITER'] = 'FFT'
+        else:
+            header.set('RTE_ITER', str(15), 'Number RTE inversion iterations',after='CAL_SCIP')
+
         with pyfits.open(directory+data_f) as hdu_list:
             hdu_list[0].data = b_los
 #            header = hdu_list[0].header
             hdu_list[0].header = header
             writeto = set_level(outfile_L2,'ilam','blos')
-            hdu_list.writeto(directory+writeto, clobber=True)
+            hdu_list.writeto(directory+'level2/'+writeto, clobber=True)
 
         with pyfits.open(directory+data_f) as hdu_list:
             hdu_list[0].data = v_los
 #            header = hdu_list[0].header
             hdu_list[0].header = header
             writeto = set_level(outfile_L2,'ilam','vlos')
-            hdu_list.writeto(directory+writeto, clobber=True)
+            hdu_list.writeto(directory+'level2/'+writeto, clobber=True)
 
         with pyfits.open(directory+data_f) as hdu_list:
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
 #            header = hdu_list[0].header
             hdu_list[0].header = header
-            writeto = set_level(outfile_L2,'ilam','S01')
-            hdu_list.writeto(directory+writeto, clobber=True)
+            writeto = set_level(outfile_L2,'ilam','icont')
+            hdu_list.writeto(directory+'level2/'+writeto, clobber=True)
 
         printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
 
@@ -916,7 +983,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         #ax.imshow(Zm, cmap='gray')
         writeto = set_level(outfile_L2,'ilam','vlos')
         writeto = set_level(writeto,'.fits','.png')
-        plt.savefig(directory+writeto,dpi=300)
+        plt.savefig(directory+'pngs/'+writeto,dpi=300)
         plt.close()
 
         #-----------------
@@ -946,7 +1013,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
 
         writeto = set_level(outfile_L2,'ilam','blos')
         writeto = set_level(writeto,'.fits','.png')
-        plt.savefig(directory+writeto,dpi=300)
+        plt.savefig(directory+'pngs/'+writeto,dpi=300)
         plt.close()
 
         printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
@@ -980,7 +1047,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             hdu_list[0].header = header
             writeto = set_level(outfile_L2,'ilam','blos-cog')
             writeto = set_level(writeto,'.fits','.png')
-            plt.savefig(directory+writeto,dpi=300)
+            plt.savefig(directory+'pngs/'+writeto,dpi=300)
 
     return
     #-----------------
