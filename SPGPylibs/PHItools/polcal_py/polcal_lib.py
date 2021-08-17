@@ -11,14 +11,15 @@ pardata = {'delta1': np.array([225, 225, 315, 315]),
             'rot_inst' : 0}
 
 def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True, 
-    weights = 1.0, w_cut=1e-10, chi2_stop = 1e-3, cvm = True,istep = 10.):
+    weights = 1.0, w_cut = 1e-10, chi2_stop = 1e-3, cvm = True,istep = 10.,
+    fix = 1):
     """
     Levemberg Marquardt algorithm
     D. Orozco Suarez (¡¡¡¡ ofu summer 2021, quetetorras!!!!)
     All inputs numpy arrays please, be serious or use C.
     x - independent values
     y - dependent values
-    pars - parameters (initial estimate) #TODO Add structure. More confortable for handling functions.
+    pars - parameters (initial estimate) 
     funct - funtion to fit 
         called as y, jac = funct(x,pars) if njacobian = False
         called as y, _   = funct(x,pars) if njacobian = True
@@ -35,12 +36,21 @@ def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True,
 
     #Check length of x (can be anything provided it is flatten()
     x_length = len(x)
-    pars_length = len(pars) #TODO check if structure - more pragmatical for func calls
+    pars_length = len(pars) 
+
     if isinstance(weights, float) : 
         print,"weights is float"
         w = np.ones(x_length)
     else:
         w = np.copy(weights)
+
+    if isinstance(fix, int) : 
+        print,"Fix is int"
+        fix = np.ones(pars_length)
+    else:
+        if len(fix) != pars_length:
+            print('Fix ne x_length')
+            return
         
     free = x_length - pars_length
     if free <= 1:
@@ -53,6 +63,8 @@ def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True,
         yfit, jac = numerical_der(x,pars,funct)
     else:
         yfit, jac = funct(x,pars)
+    jac = jac * fix[np.newaxis,:]
+
     #determine jacobian of merit function
     chi = (y - yfit) * w
     J = np.matmul(chi, jac)
@@ -65,65 +77,77 @@ def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True,
             covar = np.sqrt(np.outer(H.diagonal(),H.diagonal()))
             H /= covar
             np.fill_diagonal(H, (1+ilambda))
-            Hi = svd_solve(H)
+            Hi = svd_solve(H,w_cut =w_cut)
             new_pars = pars + np.matmul(Hi/covar,J)
         else:
             np.fill_diagonal(H, H.diagonal()*(1+ilambda))
-            delta = svd_solve(H, b = J)
-            new_pars = pars + delta        
+            delta = svd_solve(H, b = J,w_cut =w_cut)
+            new_pars = pars + delta * fix        
 
         yfit, jac = funct(x,new_pars)
         chi = (y - yfit) * w
         chi2 = np.sum(chi**2)/free
         
         if chi2 - ochi2 < 0:
-            print('{:<6s}{:>3.0f}{:<8s}{:>12.4f}{:<6s}{:>1.2e}'.format('Iter: ',loop,' Lambda: ',ilambda,' chi2: ',(ochi2 - chi2)*100/chi2),' Yes')
+            print('{:<6s}{:>3.0f}{:<8s}{:>12.4e}{:<6s}{:>1.2e}'.format('Iter: ',loop,' Lambda: ',ilambda,' chi2: ',(ochi2 - chi2)*100/chi2),' Yes')
             ilambda /= istep
             pars = np.copy(new_pars)
+
             # calculate jacobian
             if njacobian:
                 #numerically calculate the jacobian
                 yfit, jac = numerical_der(x,pars,funct)
             else:
                 yfit, jac = funct(x,pars)
+            jac = jac * fix[np.newaxis,:]
+
             #determine jacobian of merit function
             chi = (y - yfit) * w
             J = np.matmul(chi, jac)
             H = np.matmul(np.transpose(jac), jac*w[:,np.newaxis])
             if np.abs((ochi2 - chi2)/chi2)*100 < chi2_stop:
+                print('STOP because (ochi2 - chi2)/chi2)*100 < chi2_stop')
                 break
             ochi2 = np.sum(chi**2)/free
 
         else:
-            print('{:<6s}{:>3.0f}{:<8s}{:>12.4f}{:<6s}{:>1.2e}'.format('Iter: ',loop,' Lambda: ',ilambda,' chi2: ',(ochi2 - chi2)*100/chi2),' No')
+            print('{:<6s}{:>3.0f}{:<8s}{:>12.4e}{:<6s}{:>1.2e}'.format('Iter: ',loop,' Lambda: ',ilambda,' chi2: ',(ochi2 - chi2)*100/chi2),' No')
             ilambda *= istep
             
+        if (ilambda < 1e-12) or (ilambda > 1e12):
+            print('STOP because ilambda reached a limit')
+            break
         loop += 1
+    if loop == niter:
+        print('STOP because max niter')
 
-        chi2 = np.sum(chi**2)/free
-        Hi = svd_solve(H)
-        sigma = np.sqrt(Hi.diagonal())
+    chi2 = np.sum(chi**2)/free
+    Hi = svd_solve(H)
+    sigma = np.sqrt(Hi.diagonal())
 
     return pars, yfit, sigma, chi2
 
-def numerical_der(x,pars,funct):
-    h = 1e-6
+def numerical_der(x,pars,funct,h=0.1):
+    
     x_length = len(x)
     pars_length = len(pars)
-    perturbation = np.copy(pars)
     jac = np.zeros((x_length,pars_length))
     y, _ = funct(x,pars)
+    perturbation = np.copy(pars)
+
     for i in range(pars_length):
-        if pars[i] < 1e-3:
-            perturbation[i] = pars[i] * (1. + h)
-            y_d, _ = funct(x,perturbation)
-            perturbation[i] = pars[i] * (1. - h)
-            y_i, _ = funct(x,perturbation)
-        else:
-            perturbation[i] = pars[i] + h
-            y_d, _ = funct(x,perturbation)
-            perturbation[i] = pars[i] - h
-            y_i, _ = funct(x,perturbation)
+    #     if abs(pars[i]) > 1e-9:
+    #         perturbation[i] = pars[i] * (1. + h)
+    #         y_d, _ = funct(x,perturbation)
+    #         perturbation[i] = pars[i] / (1. + h) * (1. - h)
+    #         y_i, _ = funct(x,perturbation)
+    #         perturbation[i] = pars[i] / (1. - h)
+    #     else:
+        perturbation[i] = pars[i] + h
+        y_d, _ = funct(x,perturbation)
+        perturbation[i] = pars[i] - 2*h
+        y_i, _ = funct(x,perturbation)
+        perturbation[i] = pars[i] + h
         jac[:,i] = (y_d - y_i)/(2.*h)
 
     return y,jac
@@ -208,16 +232,16 @@ def svd_solve(A, b=None, w_cut=1e-10):
         delta_a = np.dot(Ainv, b)
         return delta_a
 
-def cal_unit(alpha, delta, theta, angle_rot=None):
+def cal_unit(pol_angle, retardance, ret_angle, angle_rot=None):
     '''
     #TODO implement derivatives (it is in lib_pmp_v1.4)
     #theta = off set of the retarder
     #delta = retardance
     #alpha = off set of the polarizer(angle)
     '''
-    theta_r = theta * np.pi/180.
-    delta_r = delta * np.pi/180.
-    alpha_r = alpha * np.pi/180.
+    theta_r = ret_angle * np.pi/180.
+    delta_r = retardance * np.pi/180.
+    alpha_r = pol_angle * np.pi/180.
     c2 = np.cos(2*theta_r)
     s2 = np.sin(2*theta_r)
 
@@ -228,10 +252,16 @@ def cal_unit(alpha, delta, theta, angle_rot=None):
                         c2*s2*(1-np.cos(delta_r))*np.cos(2*alpha_r),
                         s2*np.sin(delta_r)*np.cos(2*alpha_r)-c2*np.sin(delta_r)*np.sin(2*alpha_r)] ).T
                         #transpose just to have a column matrix
+    # if angle_rot is None:
+    #     return cl
+    # else:
+    #     return np.matmul(rotation_matrix(angle_rot),cl)
+
+    cal_unit_state = np.matmul(retarder(ret_angle,retardance),polarizer(pol_angle))
     if angle_rot is None:
-        return cl
+        return cal_unit_state[:,0]
     else:
-        return np.matmul(rotation_matrix(angle_rot),cl)
+        return np.matmul(rotation_matrix(angle_rot),cal_unit_state)[:,0]
 
     # theta_r = THETA * !dpi/180d0
     # delta_r = DELTA * !dpi/180d0
@@ -273,6 +303,53 @@ def rotation_matrix(angle_rot):
 def test_rotation_matrix():
     return
 
+def polarizer(alpha):
+    #OJO ALPHA IS = 0 WHEN THE POLARIZER IS HORIZONTAL!!!! Vertical = > THETA = 90
+    #this is a right handed system
+    # y
+    # |
+    # |
+    # |
+    # --------- -> X
+
+    cd = np.cos( np.deg2rad(2*alpha))
+    sd = np.sin( np.deg2rad(2*alpha))
+    c2 = cd**2
+    s2 = sd**2
+
+    pl = 0.5*np.matrix([[ 1 , cd    , sd    , 0],
+                        [ cd, c2    , cd*sd , 0],
+                        [ sd, cd*sd , s2    , 0],
+                        [ 0 , 0     , 0     , 0]])
+
+    return pl
+
+def retarder(alpha,retardance):
+    '''
+    a retarder
+    '''
+    #OJO ALPHA IS = 0 fast axis horizontal  
+    #this is a right handed system
+    # y
+    # |
+    # |
+    # |
+    # --------- -> X
+
+    cd = np.cos( np.deg2rad(2*alpha))
+    sd = np.sin( np.deg2rad(2*alpha))
+    c2 = cd**2
+    s2 = sd**2
+    cr = np.cos( np.deg2rad(retardance))
+    sr = np.sin( np.deg2rad(retardance))
+
+    rt = np.matrix([[1, 0            , 0             , 0      ],
+                    [0, c2+s2*cr     , cd*sd*(1-cr)  , -sd*sr ],
+                    [0, cd*sd*(1-cr) , s2+c2*cr      , cd*sr  ],
+                    [0, sd*sr        , -cd*sr        , cr     ]])
+
+    return rt
+
 def pol_lin(alpha):
     #OJO ALPHA IS = 0 WHEN THE POLARIZER IS HORIZONTAL!!!! Vertical = > THETA = 90
     #this is a right handed system
@@ -282,14 +359,15 @@ def pol_lin(alpha):
     # |
     # --------- -> X
 
-    angle = alpha * np.float64(np.pi/180.)
-    c2 = np.cos(2*angle, dtype=np.float64)
-    s2 = np.sin(2*angle, dtype=np.float64)
+    cd = np.cos( np.deg2rad(2*alpha))
+    sd = np.sin( np.deg2rad(2*alpha))
+    c2 = cd**2
+    s2 = sd**2
 
-    pl = 0.5*np.matrix([[1 , c2    , s2   , 0],
-                        [c2, c2**2 , c2*s2, 0],
-                        [s2, c2*s2 , s2**2, 0],
-                        [0 , 0     , 0    , 0]])
+    pl = 0.5*np.matrix([[ 1 , cd    , sd    , 0],
+                        [ cd, c2    , cd*sd , 0],
+                        [ sd, cd*sd , s2    , 0],
+                        [ 0 , 0     , 0     , 0]])
 
     return pl
 
@@ -305,15 +383,17 @@ def rotating_wp(alpha,retardance):
     # |
     # --------- -> X
 
-    c2 = np.cos(2*alpha * np.pi/180.)
-    s2 = np.sin(2*alpha * np.pi/180.)
-    cr = np.cos(retardance * np.pi/180.)
-    sr = np.sin(retardance * np.pi/180.)
+    cd = np.cos( np.deg2rad(2*alpha))
+    sd = np.sin( np.deg2rad(2*alpha))
+    c2 = cd**2
+    s2 = sd**2
+    cr = np.cos( np.deg2rad(retardance))
+    sr = np.sin( np.deg2rad(retardance))
 
-    rt = np.matrix([[1,              0,              0,      0],
-                    [0, c2**2+s2**2*sr, c2*s2*(1-cr)  , -s2*sr],
-                    [0, c2*s2*(1-cr)  , c2**2+c2**2*sr, c2*sr ],
-                    [0, s2*sr         , c2*sr         , cr    ]])
+    rt = np.matrix([[1, 0            , 0             , 0      ],
+                    [0, c2+s2*cr     , cd*sd*(1-cr)  , -sd*sr ],
+                    [0, cd*sd*(1-cr) , s2+c2*cr      , cd*sr  ],
+                    [0, sd*sr        , -cd*sr        , cr     ]])
 
     return rt
 
@@ -399,6 +479,49 @@ def instrument_model(pardata=pardata):
     #   ;  MR=rotacion(angrot)
     #   ;  TELESCOPE = LCVR(10d0,angrot)
 
+def lm_pol_model(theta_input,input_parameters,plot=False):
+
+    '''
+    #TODO implement derivatives (it is in lib_pmp_v1.4)
+    #theta = off set of the retarder
+    #delta = retardance
+    #alpha = off set of the polarizer(angle)
+    '''
+
+    theta = theta_input[0:len(theta_input)//4]
+    #    theta = theta_input
+    
+    pars = {'delta1' : input_parameters[0:4],
+       'delta2' : input_parameters[4:8],
+       'theta1' : input_parameters[8],
+       'theta2' : input_parameters[9],
+       'pol_angle' : input_parameters[10],
+       'rot_inst' : input_parameters[11]}
+
+    alpha = input_parameters[12]
+    delta = input_parameters[13]
+    angle_rot = input_parameters[14]
+
+    out = np.zeros((len(theta),4))
+    pm = 2.*instrument_model(pardata=pars)
+    
+    for i in range(len(theta)):
+        dummy = np.matmul(pm, cal_unit(
+            alpha, delta, theta[i], angle_rot=angle_rot))
+        out[i, :] = dummy.flatten()
+    if plot:
+        plt.plot(theta, out[:, 0], label='I1')
+        plt.plot(theta, out[:, 1], label='I2')
+        plt.plot(theta, out[:, 2], label='I3')
+        plt.plot(theta, out[:, 3], label='I4')
+        plt.legend()
+        plt.show()
+    else:
+        pass
+    jac = 0
+    return out.flatten(order='F'), jac
+#    return out[:,0], jac
+
 def pol_cal_model(alpha=0, delta=75, theta=0,pardata=pardata, angle_rot=None,plot=None):
 
     if not isinstance(theta, np.ndarray):
@@ -416,7 +539,7 @@ def pol_cal_model(alpha=0, delta=75, theta=0,pardata=pardata, angle_rot=None,plo
     #    polange = np.arange(0, 90, 0.25)
     out = np.zeros((len(theta),4))
     pm = 2.*instrument_model(pardata=pardata)
-    ipm = svd_solve(pm)
+    # ipm = svd_solve(pm)
     for i in range(len(theta)):
         dummy = np.matmul(pm, cal_unit(
             alpha, delta, theta[i], angle_rot=angle_rot))
