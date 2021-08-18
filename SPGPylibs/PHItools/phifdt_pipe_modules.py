@@ -272,15 +272,15 @@ def phi_apply_demodulation(data,header,instrument,demod=False,verbose = 0):
 
     if instrument == 'FDT40':
         mod_matrix_40 = np.array([[1.0006,-0.7132, 0.4002,-0.5693],
-                    [1.0048, 0.4287,-0.7143, 0.5625],
-                    [0.9963, 0.4269,-0.3652,-0.8229],
-                    [0.9983,-0.4022, 0.9001, 0.1495]])
+                                  [1.0048, 0.4287,-0.7143, 0.5625],
+                                  [0.9963, 0.4269,-0.3652,-0.8229],
+                                  [0.9983,-0.4022, 0.9001, 0.1495]])
         demodM = np.linalg.inv(mod_matrix_40)
     # Johanns (it is the average in the central area of the one onboard)
         demodM  = np.array([[0.168258,      0.357277,     0.202212,     0.273266],\
-            [-0.660351,     0.314981,     0.650029,    -0.299685],\
-            [ 0.421242,     0.336994,    -0.183068,    -0.576202],\
-            [-0.351933,     0.459820,    -0.582167,     0.455458]])
+                            [-0.660351,     0.314981,     0.650029,    -0.299685],\
+                            [ 0.421242,     0.336994,    -0.183068,    -0.576202],\
+                            [-0.351933,     0.459820,    -0.582167,     0.455458]])
     elif instrument == 'FDT45':
         mod_matrix_45 = np.array([[1.0035,-0.6598, 0.5817,-0.4773],
                         [1.0032, 0.5647, 0.5275, 0.6403],
@@ -903,13 +903,20 @@ def phi_correct_fringes(data,header,option,verbose=False):
     #-----------------
     elif option == 'manual':
         
-        printc('Freq. provided 9-July-2021 (H. Strecker and D. Orozco Suarez',color=bcolors.WARNING)
-        freq_x_Q = np.array([0.01328125,0.01328125]) 
-        freq_y_Q = np.array([0.00234375,0.00703125])
-        freq_x_U = np.array([0.01328125,0.01328125]) 
-        freq_y_U = np.array([0.00234375,0.00703125])
-        freq_x_V = np.array([0.01328125,0.01328125,0.0078125,0.01015625]) 
-        freq_y_V = np.array([0.00234375,0.00703125,0.0109375,0.00859375])
+        # printc('Freq. provided 9-July-2021 (H. Strecker and D. Orozco Suarez',color=bcolors.WARNING)
+        # freq_x_Q = np.array([0.01328125,0.01328125]) 
+        # freq_y_Q = np.array([0.00234375,0.00703125])
+        # freq_x_U = np.array([0.01328125,0.01328125]) 
+        # freq_y_U = np.array([0.00234375,0.00703125])
+        # freq_x_V = np.array([0.01328125,0.01328125,0.0078125,0.01015625]) 
+        # freq_y_V = np.array([0.00234375,0.00703125,0.0109375,0.00859375])
+        printc('Freq. updated on 11-August-2021 (H. Strecker and D. Orozco Suarez',color=bcolors.WARNING)
+        freq_x_Q = np.array([0.01318359375 ,0.01318359375]) 
+        freq_y_Q = np.array([0.00195312500 ,0.00732421875])
+        freq_x_U = np.array([0.01318359375 ,0.01318359375]) 
+        freq_y_U = np.array([0.00195312500 ,0.00732421875])
+        freq_x_V = np.array([0.01318359375 ,0.01318359375, 0.007812500, 0.01074218750]) 
+        freq_y_V = np.array([0.00195312500 ,0.00732421875, 0.009765625, 0.00830078125])
 
         #freq to pixel yd,xd
         px_x_Q = freq_x_Q*xd
