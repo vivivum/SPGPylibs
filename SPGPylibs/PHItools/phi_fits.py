@@ -160,7 +160,7 @@ def fits_get_sampling(file,verbose = False):
         if verbose:
             print('     Data wave axis [mA]: ',wave_axis)
 
-        return wave_axis,voltagesData,tunning_constant,cpos
+        return wave_axis,voltagesData,tunning_constant,cpos,ref_wavelength
 
     except Exception:
         print("Unable to open fits file: {}",file)        

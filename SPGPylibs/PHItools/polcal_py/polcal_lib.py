@@ -11,11 +11,11 @@ pardata = {'delta1': np.array([225, 225, 315, 315]),
             'rot_inst' : 0}
 
 def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True, 
-    weights = 1.0, w_cut = 1e-10, chi2_stop = 1e-3, cvm = True,istep = 10.,
-    fix = 1):
+    weights = 1.0, w_cut = 1e-10, chi2_stop = 1e-3, cvm = False,istep = 10.,
+    fix = 1,limits = None, autolambda = False):
     """
     Levemberg Marquardt algorithm
-    D. Orozco Suarez (¡¡¡¡ ofu summer 2021, quetetorras!!!!)
+    D. Orozco Suarez (summer 2021)
     All inputs numpy arrays please, be serious or use C.
     x - independent values
     y - dependent values
@@ -33,6 +33,11 @@ def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True,
 
     Example: lm_test() is just a full example. 
     """
+    if autolambda:
+        print('Auto lambda')
+        def orderOfMagnitude(number):
+            import math
+            return 10**math.floor(math.log(number, 10)) 
 
     #Check length of x (can be anything provided it is flatten()
     x_length = len(x)
@@ -57,6 +62,39 @@ def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True,
         print('not enough points')
         return
 
+
+    # if limits.any() != None:
+    #     sl_x,sl_y = limits.shape
+    #     if sl_x >= pars_length:
+    #         print('limits cannot be greater than number of input paramenters')
+    #         return
+    #     if sl_y != 3:
+    #         print('limits should be (3 row, max npar columns) tupple or numpy array')
+    #         return
+    # else:
+    #     print,"limits is undefined"
+
+    def check_limits(input,limits):
+        if limits.any() != None:
+            if len(limits.flatten()) > 3:
+                for lim in np.arange(len(limits[0,:])-1):
+                    pos = int(lim)
+                    idx = int(limits[pos,0])
+                    if input[idx] > limits[pos,2]:
+                        input[idx] = limits[pos,2]
+                    if input[idx] < limits[pos,1]:
+                        input[idx] = limits[pos,1]
+            else:
+                idx = int(limits[0])
+                if input[idx] > limits[2]:
+                    input[idx] = limits[2]
+                if input[idx] < limits[1]:
+                    input[idx] = limits[1]
+
+        return input
+
+    check_limits(pars,limits)
+
     # calculate jacobian
     if njacobian:
         #numerically calculate the jacobian
@@ -71,25 +109,31 @@ def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True,
     H = np.matmul(np.transpose(jac), jac*w[:,np.newaxis])
     ochi2 = np.sum(chi**2)/free
     loop = 0
+    if autolambda:
+        ilambda = orderOfMagnitude(autolambda*np.sqrt(np.linalg.norm(J)))
+
     while loop < niter:
 
         if cvm:
             covar = np.sqrt(np.outer(H.diagonal(),H.diagonal()))
             H /= covar
+            H = np.nan_to_num(H)
             np.fill_diagonal(H, (1+ilambda))
-            Hi = svd_solve(H,w_cut =w_cut)
-            new_pars = pars + np.matmul(Hi/covar,J)
+            Hi = svd_solve(H,w_cut =w_cut) / covar
+            Hi = np.nan_to_num(Hi)
+            new_pars = pars + np.matmul(Hi,J)
         else:
             np.fill_diagonal(H, H.diagonal()*(1+ilambda))
             delta = svd_solve(H, b = J,w_cut =w_cut)
             new_pars = pars + delta * fix        
+        check_limits(new_pars,limits)
 
-        yfit, jac = funct(x,new_pars)
+        yfit, basurilla = funct(x,new_pars)
         chi = (y - yfit) * w
         chi2 = np.sum(chi**2)/free
         
         if chi2 - ochi2 < 0:
-            print('{:<6s}{:>3.0f}{:<8s}{:>12.4e}{:<6s}{:>1.2e}'.format('Iter: ',loop,' Lambda: ',ilambda,' chi2: ',(ochi2 - chi2)*100/chi2),' Yes')
+            print('{:<6s}{:>3.0f}{:<8s}{:>12.4e}{:<6s}{:>1.2e}{:<6s}'.format('Iter: ',loop,' Lambda: ',ilambda,' chi2: ',ochi2,' better'))
             ilambda /= istep
             pars = np.copy(new_pars)
 
@@ -101,6 +145,7 @@ def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True,
                 yfit, jac = funct(x,pars)
             jac = jac * fix[np.newaxis,:]
 
+
             #determine jacobian of merit function
             chi = (y - yfit) * w
             J = np.matmul(chi, jac)
@@ -111,7 +156,7 @@ def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True,
             ochi2 = np.sum(chi**2)/free
 
         else:
-            print('{:<6s}{:>3.0f}{:<8s}{:>12.4e}{:<6s}{:>1.2e}'.format('Iter: ',loop,' Lambda: ',ilambda,' chi2: ',(ochi2 - chi2)*100/chi2),' No')
+            print('{:<6s}{:>3.0f}{:<8s}{:>12.4e}{:<6s}{:>1.2e}{:<6s}'.format('Iter: ',loop,' Lambda: ',ilambda,' chi2: ',ochi2,' worse'))
             ilambda *= istep
             
         if (ilambda < 1e-12) or (ilambda > 1e12):
@@ -152,7 +197,7 @@ def numerical_der(x,pars,funct,h=0.1):
 
     return y,jac
 
-def lm_test(cvm=True,istep=10.,niter=100,njacobian=True):
+def lm_test(cvm=True,istep=10.,niter=100,njacobian=True,autolambda=False,limits = None):
     def test_func(x,a): 
         x_length = len(x)
         pars_length = len(pars)
@@ -168,7 +213,7 @@ def lm_test(cvm=True,istep=10.,niter=100,njacobian=True):
     y = y + y*np.random.uniform(-1,1,50)*1e-2
     pars = [.70,1.10,0.45]
     #new_pars,yfit = lm(x, y, pars, test_func)
-    pars,yfit,_,_ = lm(x, y, pars,test_func,njacobian=njacobian,niter=niter,cvm=cvm,istep=istep)
+    pars,yfit , _  ,_ = lm(x, y, pars,test_func,njacobian=njacobian,niter=niter,cvm=cvm,istep=istep,autolambda=autolambda,limits=limits)
     plt.plot(x,y,'o')
     plt.plot(x,yfit)
     print([.75,1.70,2.45],pars)
@@ -463,9 +508,9 @@ def instrument_model(pardata=pardata):
 
     mod_matrix = np.zeros((4,4),dtype=np.float64)
     for i in range(4):
-        LC1 = lcvr(theta1,delta1[i])
-        LC2 = lcvr(theta2,delta2[i])
-        PL = pol_lin(pol_angle)
+        LC1 = retarder(theta1,delta1[i])
+        LC2 = retarder(theta2,delta2[i])
+        PL = polarizer(pol_angle)
         MR = rotation_matrix(rot_inst)
         dummy = np.matmul(np.matmul(PL, np.matmul(LC2, LC1)),MR)
         mod_matrix[i, :] = dummy[0,:]
@@ -479,7 +524,7 @@ def instrument_model(pardata=pardata):
     #   ;  MR=rotacion(angrot)
     #   ;  TELESCOPE = LCVR(10d0,angrot)
 
-def lm_pol_model(theta_input,input_parameters,plot=False):
+def lm_pol_model(ret_angle,input_parameters,plot=False):
 
     '''
     #TODO implement derivatives (it is in lib_pmp_v1.4)
@@ -488,7 +533,7 @@ def lm_pol_model(theta_input,input_parameters,plot=False):
     #alpha = off set of the polarizer(angle)
     '''
 
-    theta = theta_input[0:len(theta_input)//4]
+    theta = ret_angle[0:len(ret_angle)//4]
     #    theta = theta_input
     
     pars = {'delta1' : input_parameters[0:4],

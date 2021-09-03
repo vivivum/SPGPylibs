@@ -13,7 +13,7 @@ from .phi_reg import shift_subp,moments
 import SPGPylibs.GENtools.plot_lib as plib
 
 
-def phi_correct_dark(dark_f,data_f,header,data,verbose = None,get_dark = False):
+def phi_correct_dark(dark_f,data_f,header,data,verbose = False,get_dark = False):
 
     #-----------------
     # READ AND CORRECT DARK FIELD
@@ -80,7 +80,7 @@ def interpolateImages(image1, image2, dist1I, distI2):
     imageInterp = (image1 * distI2 + image2 * dist1I) / (dist1I + distI2)
     return imageInterp
 
-def phi_correct_prefilter(prefilter_fits,header,data,voltagesData,verbose = 0):
+def phi_correct_prefilter(prefilter_fits,header,data,voltagesData,verbose = False):
 
     printc('-->>>>>>> Read prefilter and correct for it ')
     printc('          ',prefilter_fits,'   ')
@@ -124,7 +124,7 @@ def phi_correct_prefilter(prefilter_fits,header,data,voltagesData,verbose = 0):
         header.set('CAL_PRE', prefilter_fits[slash[-1]+1:-4], 'prefilter file',after='CAL_DARK')
     return data,header
 
-def applyPrefilter(data, wvltsData, prefilter, prefScale, wvltsPref, direction, scaledown=8,verbose = 0):
+def applyPrefilter(data, wvltsData, prefilter, prefScale, wvltsPref, direction, scaledown=8,verbose = False):
     '''PHI prefilter. Version from K. Albert.
     '''
     prefToApply = np.zeros((6,prefilter.shape[1],prefilter.shape[2]))
@@ -196,7 +196,7 @@ def applyPrefilter(data, wvltsData, prefilter, prefScale, wvltsPref, direction, 
     # */
     #define RNG_RES_APPL_PREF 8  -> reason for division by 8.
 
-def applyPrefilter_dos(data, wvltsData, prefilter, prefScale, wvltsPref, direction, scaledown=8,verbose = 0):
+def applyPrefilter_dos(data, wvltsData, prefilter, prefScale, wvltsPref, direction, scaledown=8,verbose = False):
     '''PHI prefilter. Modified version from K. Albert.
     '''
     prefToApply = np.zeros((6,prefilter.shape[1],prefilter.shape[2]))
@@ -264,7 +264,7 @@ def applyPrefilter_dos(data, wvltsData, prefilter, prefScale, wvltsPref, directi
             print("Ivnalid direction! Must be 1 (mult) or -1 (div).")
     return dataPrefApplied
 
-def phi_apply_demodulation(data,header,instrument,demod=False,verbose = 0):
+def phi_apply_demodulation(data,header,instrument,demod=False,verbose = False):
     '''
     Use demodulation matrices to demodulate data size (n_wave*S_POL,N,M)
     ATTENTION: FDT40 is fixed to the one Johann is using!!!!
@@ -316,7 +316,7 @@ def phi_apply_demodulation(data,header,instrument,demod=False,verbose = 0):
 
     return data
 
-def crosstalk_ItoQUV(data_demod,verbose=0,npoints=2000):
+def crosstalk_ItoQUV(data_demod,verbose=False,npoints=2000):
     
     limit=0.2
     PLT_RNG = 3
@@ -398,7 +398,7 @@ def crosstalk_ItoQUV(data_demod,verbose=0,npoints=2000):
 
     return cQ,cU,cV
 
-def cross_talk_QUV(data,nran = 2000,nlevel=0.3,verbose=0,block=True):
+def cross_talk_QUV(data,nran = 2000,nlevel=0.3,verbose=False,block=True):
     
     limit=0.1
     PLT_RNG = 3
@@ -902,7 +902,9 @@ def phi_correct_fringes(data,header,option,verbose=False):
     # FINGING - Need to include Ajusta senos contras!!!!
     #-----------------
     elif option == 'manual':
-        
+        printc('-->>>>>>> Removing fringes with fixed freq. --',color=bcolors.OKGREEN)
+        printc('          ',version,'--',color=bcolors.OKGREEN)
+
         # printc('Freq. provided 9-July-2021 (H. Strecker and D. Orozco Suarez',color=bcolors.WARNING)
         # freq_x_Q = np.array([0.01328125,0.01328125]) 
         # freq_y_Q = np.array([0.00234375,0.00703125])
@@ -915,15 +917,15 @@ def phi_correct_fringes(data,header,option,verbose=False):
         freq_y_Q = np.array([0.00195312500 ,0.00732421875])
         freq_x_U = np.array([0.01318359375 ,0.01318359375]) 
         freq_y_U = np.array([0.00195312500 ,0.00732421875])
-        freq_x_V = np.array([0.01318359375 ,0.01318359375, 0.007812500, 0.01074218750]) 
-        freq_y_V = np.array([0.00195312500 ,0.00732421875, 0.009765625, 0.00830078125])
+        freq_x_V = np.array([0.01318359375 ,0.01318359375, 0.00976562500, 0.0078125000]) 
+        freq_y_V = np.array([0.00195312500 ,0.00732421875, 0.00830078125, 0.0107421875])
 
         #freq to pixel yd,xd
         px_x_Q = freq_x_Q*xd
         px_y_Q = freq_y_Q*yd
         px_x_U = freq_x_U*xd
         px_y_U = freq_y_U*yd
-        px_x_V = freq_x_V*xd
+        px_x_V = freq_x_V*xd 
         px_y_V = freq_y_V*yd
         #reflection
         px_x_Q = np.append(px_x_Q,xd - px_x_Q).astype(int)

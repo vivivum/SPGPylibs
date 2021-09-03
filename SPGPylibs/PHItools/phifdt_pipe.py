@@ -344,14 +344,16 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     # GET INFO ABOUT VOLTAGES/WAVELENGTHS, determine continuum and new flat
     #-----------------
     printc('-->>>>>>> Obtaining voltages from data ',color=bcolors.OKGREEN)
-    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(data_filename) 
+    wave_axis,voltagesData,tunning_constant,cpos,ref_wavelength = fits_get_sampling(data_filename)  
     printc('          Data FG voltages: ',voltagesData,color=bcolors.OKBLUE)
     printc('          Continuum position at wave: ', cpos,color=bcolors.OKBLUE)
+    printc('          Data ref_wavelength [mA]: ',ref_wavelength,color=bcolors.OKBLUE)
     printc('          Data wave axis [mA]: ',wave_axis,color=bcolors.OKBLUE)
-    rubish = (voltagesData-np.roll(voltagesData,-1))/tunning_constant/1e4
-    sampling = np.mean(np.sort(np.abs(rubish[0:-2])))
-    printc('          Data sampling [mA]: ',sampling,color=bcolors.OKBLUE)
-
+    printc('          Data wave axis - axis[0] [mA]: ',wave_axis - wave_axis[0],color=bcolors.OKBLUE)
+    dummy_1 = (voltagesData-np.roll(voltagesData,-1))*(tunning_constant*1000)
+    dummy_2 = np.sort(np.abs(dummy_1))
+    sampling = np.mean(dummy_2[0:-2])
+    printc('          Data average sampling [mA]: ',sampling,' using tunning constant: ',(tunning_constant*1000),color=bcolors.OKBLUE)
     #-----------------
     # ROLL DATA IF CONTINUUM IS IN DIFFERENT POSITION 
     # Probably before demodulation and flat is better!!!!
@@ -363,6 +365,18 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         if voltagesData[cpos] < voltagesData[0]:
         #continuum is on the right but it is in the blue!!!!
             printc('          Rolling data to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
+            printc('            * the continuum was TAKEN in the BLUE, stored in the RED, but we want it in the BLUE *',color=bcolors.WARNING)
+            for i in range(zd//4):
+                #print((i+1)%(zd//4),i%(zd//4),i,(zd//4))
+                datar[(i+1)%(zd//4),:,:,:] = data[i%(zd//4),:,:,:] # np.roll(data, 4, axis=0)
+                voltagesDatar[(i+1)%(zd//4)] = voltagesData[i%(zd//4)] # np.roll(data, 4, axis=0)
+                wave_axisr[(i+1)%(zd//4)] = wave_axis[i%(zd//4)] # np.roll(data, 4, axis=0)
+        if voltagesData[cpos] > voltagesData[0]:
+        #continuum is on the right but it is in the blue!!!!
+            printc('          Rolling data to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
+            printc('            * the continuum was TAKEN in the RED but we want it in the BLUE',color=bcolors.WARNING)
+            printc('            * Notice that this is necessary for the FLAT correction',color=bcolors.FAIL)
+            printc('            *  but the wavelength axis has changed the continuum point *',color=bcolors.FAIL)
             for i in range(zd//4):
                 #print((i+1)%(zd//4),i%(zd//4),i,(zd//4))
                 datar[(i+1)%(zd//4),:,:,:] = data[i%(zd//4),:,:,:] # np.roll(data, 4, axis=0)
@@ -386,13 +400,17 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
         printc('-->>>>>>> Obtaining voltages from flats ',color=bcolors.OKGREEN)
         #ff =  '../Nov-2020-STP122/solo_L0_phi-fdt-flat_0645767986_V202012091123I_0066181100.fits'
 
-        wave_axis_f,voltagesFlat,tunning_constant_f,cpos_f = fits_get_sampling(flat_f) 
+        wave_axis_f,voltagesFlat,tunning_constant_f,cpos_f,ref_wavelength_f = fits_get_sampling(flat_f) 
         printc('          FLAT FG voltages: ',voltagesFlat,color=bcolors.OKBLUE)
         printc('          FLAT Continuum position at wave: ', cpos_f,color=bcolors.OKBLUE)
         printc('          FLAT wave axis [mA]: ',wave_axis_f,color=bcolors.OKBLUE)
-        rubish = (voltagesFlat-np.roll(voltagesFlat,-1))/tunning_constant/1e4
-        sampling_f = np.mean(np.sort(np.abs(rubish[0:-2])))
-        printc('          FLAT sampling [mA]: ',sampling_f,color=bcolors.OKBLUE)
+        printc('          FLAT ref_wavelength [mA]: ',ref_wavelength_f,color=bcolors.OKBLUE)
+        printc('          FLAT wave axis [mA]: ',wave_axis_f,color=bcolors.OKBLUE)
+        printc('          FLAT wave axis - ref_wavelength [mA]: ',wave_axis_f - ref_wavelength_f,color=bcolors.OKBLUE)
+        dummy_1 = (voltagesFlat-np.roll(voltagesFlat,-1))*(tunning_constant*1000)
+        dummy_2 = np.sort(np.abs(dummy_1))
+        sampling_f = np.mean(dummy_2[0:-2])
+        printc('          FLAT average sampling [mA]: ',sampling_f,color=bcolors.OKBLUE)
 
         printc('-->>>>>>> Reshaping flat to [wave,Stokes,y-dim,x-dim]',color=bcolors.OKGREEN)
         flat = np.reshape(flat,(fz//4,4,fy, fx))
@@ -409,6 +427,18 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             if voltagesFlat[cpos_f] < voltagesFlat[0]:
             #continuum is on the right but it is in the blue!!!!
                 printc('          Rolling flat to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
+                printc('            * the continuum was TAKEN in the BLUE, stored in the RED, but we want it in the BLUE *',color=bcolors.WARNING)
+                for i in range(fz//4):
+                    #print((i+1)%(fz//4),i%(fz//4),i)
+                    flatr[(i+1)%(fz//4),:,:,:] = flat[i%(fz//4),:,:,:] # np.roll(data, 4, axis=0)
+                    voltagesFlatr[(i+1)%6] = voltagesFlat[i%(fz//4)] # np.roll(data, 4, axis=0)
+                    wave_axis_fr[(i+1)%(zd//4)] = wave_axis_f[i%(zd//4)] # np.roll(data, 4, axis=0)
+            if voltagesFlat[cpos_f] > voltagesFlat[0]:
+            #continuum is on the right but it is in the blue!!!!
+                printc('          Rolling flat to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
+                printc('            * the continuum was TAKEN in the RED but we want it in the BLUE',color=bcolors.WARNING)
+                printc('            * Notice that this is necessary for the FLAT correction',color=bcolors.FAIL)
+                printc('            *  but the wavelength axis has changed the continuum point *',color=bcolors.FAIL)
                 for i in range(fz//4):
                     #print((i+1)%(fz//4),i%(fz//4),i)
                     flatr[(i+1)%(fz//4),:,:,:] = flat[i%(fz//4),:,:,:] # np.roll(data, 4, axis=0)
@@ -513,7 +543,7 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
     #-----------------
 
     if correct_ghost:
-        data,header = phi_correct_ghost(data,header,radius,verbose=verbose)
+        data,header = phi_correct_ghost(data,header,radius,verbose = verbose)
 
     #-----------------
     # REALIGN DATA BEFORE DEMODULATION
@@ -840,15 +870,15 @@ def phifdt_pipe(data_f,dark_f,flat_f,instrument = 'FDT40',flat_c = True,dark_c =
             printc(err.args[1],color=bcolors.FAIL)
             return        
 
-        wavelength = 6173.3356
+        wavelength = 6173.3354
         #OJO, REMOVE. NEED TO CHECK THE REF WAVE FROM S/C-PHI H/K
         shift_w =  wave_axis[3] - wavelength
         wave_axis = wave_axis - shift_w
         #wave_axis = np.array([-300,-160,-80,0,80,160])/1000.+wavelength
-        # wave_axis = np.array([-300,-140,-70,0,70,140])
+        #wave_axis = np.array([-300,-140,-70,0,70,140])
         printc('   It is assumed the wavelength is given by the header info ')
-        printc(wave_axis,color = bcolors.WARNING)
-        printc((wave_axis - wavelength)*1000.,color = bcolors.WARNING)
+        printc('         wave axis: ', wave_axis,color = bcolors.WARNING)
+        printc('         wave axis (step):  ',(wave_axis - wavelength)*1000.,color = bcolors.WARNING)
         printc('   saving data into dummy_in.txt for RTE input')
 
         sdata = data[:,:,ry[0]:ry[1],rx[0]:rx[1]]
