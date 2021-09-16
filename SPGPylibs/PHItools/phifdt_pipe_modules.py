@@ -61,6 +61,7 @@ def phi_correct_dark(dark_f,data_f,header,data,verbose = False,get_dark = False)
     PXEND1  = int(header['PXEND1']) - 1          
     PXBEG2  = int(header['PXBEG2']) - 1           
     PXEND2  = int(header['PXEND2']) - 1   
+    dummy = data[0,0,:,:]
     data = data - dark[np.newaxis,np.newaxis,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
     data = np.abs(data)
 
@@ -69,8 +70,12 @@ def phi_correct_dark(dark_f,data_f,header,data,verbose = False,get_dark = False)
 
     if verbose:
         md = np.mean(dark)
-        plib.show_one(dark,vmax=md*2,vmin=0,xlabel='pixel',ylabel='pixel',title='Dark',cbarlabel='DN',save=None,cmap='gray')
-        plib.show_one(data[0,0,:,:],vmax=md*2,vmin=0,xlabel='pixel',ylabel='pixel',title='Data after dark',cbarlabel='DN',save=None,cmap='gray')
+        if verbose != True:
+            plib.show_three(dark,dummy,data[0,0,:,:],vmin=[-md,-md,-md],vmax=[md*2,md*2,md*2],block=True,pause=0.1,title=['Dark','Data','Data after dark correction'],
+                xlabel='Pixel',ylabel='Pixel',cmap='gray',save=verbose)
+        else:
+            plib.show_three(dark,dummy,data[0,0,:,:],vmin=[-md,-md,-md],vmax=[md*2,md*2,md*2],block=True,pause=0.1,title=['Dark','Data','Data after dark correction'],
+                xlabel='Pixel',ylabel='Pixel',cmap='gray')
 
     return data,header
 
@@ -545,6 +550,7 @@ def phi_correct_ghost(data,header,rad,verbose=False):
 
     if verbose and only_one_vorbose:
         datap = np.copy(data)
+
     printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
 
     #common part
@@ -669,15 +675,13 @@ def phi_correct_ghost(data,header,rad,verbose=False):
         limb_2d = shift_subp(limb_2d, shift=[centers[1,i]-yd//2,centers[0,i]-xd//2])
         #OJO, shift_subp coge como parametros los de shift pero al reves!!!!!!
         if verbose and only_one_vorbose:
-            plt.imshow(limb_2d)
-            plt.show()
+            plib.show_one(limb_2d,vmax=1,vmin=0,xlabel='pixel',ylabel='pixel',title='limb 2D',cbarlabel=' ',cmap='gray')
 
         # #shift to the position of the ghost
         reflection = shift(limb_2d, shift=(sh[0],sh[1]), fill_value=0) 
         # reflection = shift_subp(limb_2d, shift=[sh_float[1],sh_float[0]])
         if verbose and only_one_vorbose:
-            plt.imshow(reflection)
-            plt.show()
+            plib.show_one(reflection,vmax=1,vmin=0,xlabel='pixel',ylabel='pixel',title='reflection',cbarlabel=' ',cmap='gray')
         
         #s_x,s_y,_ = PHI_shifts_FFT(data[i,:,:,:],prec=500,verbose=True,norma=False)
 
@@ -735,6 +739,7 @@ def phi_correct_ghost(data,header,rad,verbose=False):
 
             if verbose and only_one_vorbose:
                 plt.hist(values, bins=40)
+                plt.title('signal')
                 plt.axvline(meanv, lw=2, color='yellow', alpha=0.4)
                 plt.axvline(m_l, lw=2, color='red', alpha=0.4)
                 plt.axvline(m_r, lw=2, color='blue', alpha=0.4)
@@ -758,8 +763,8 @@ def phi_correct_ghost(data,header,rad,verbose=False):
 
             data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
             if verbose and only_one_vorbose:
-                plib.show_one(datap[i,j,:,:],vmin=0,vmax=1)
-                plib.show_one(data[i,j,:,:],vmin=0,vmax=1)
+                plib.show_two(datap[i,j,:,:],data[i,j,:,:],vmin=[0,0],vmax=[1,1],block=True,pause=0.1,title=['Before','After'],xlabel='Pixel',ylabel='Pixel')
+
             only_one_vorbose = 0
             
     if 'CAL_GHST' in header:  # Check for existence
@@ -928,12 +933,15 @@ def phi_correct_fringes(data,header,option,verbose=False):
         px_x_V = freq_x_V*xd 
         px_y_V = freq_y_V*yd
         #reflection
-        px_x_Q = np.append(px_x_Q,xd - px_x_Q).astype(int)
-        px_y_Q = np.append(px_y_Q,yd - px_y_Q).astype(int)
-        px_x_U = np.append(px_x_U,xd - px_x_U).astype(int)
-        px_y_U = np.append(px_y_U,yd - px_y_U).astype(int)
-        px_x_V = np.append(px_x_V,xd - px_x_V).astype(int)
-        px_y_V = np.append(px_y_V,yd - px_y_V).astype(int)
+        printc(px_x_Q,xd - px_x_Q,color=bcolors.OKBLUE)
+        printc(px_x_Q,(xd - px_x_Q).astype(int),color=bcolors.OKBLUE)
+
+        px_x_Q = np.append(px_x_Q,xd - px_x_Q - 1).astype(int)
+        px_y_Q = np.append(px_y_Q,yd - px_y_Q - 1).astype(int)
+        px_x_U = np.append(px_x_U,xd - px_x_U - 1).astype(int)
+        px_y_U = np.append(px_y_U,yd - px_y_U - 1).astype(int)
+        px_x_V = np.append(px_x_V,xd - px_x_V - 1).astype(int)
+        px_y_V = np.append(px_y_V,yd - px_y_V - 1).astype(int)
 
         wsize = 50
         win_halfw = 2 
@@ -949,8 +957,10 @@ def phi_correct_fringes(data,header,option,verbose=False):
         mask_QUV = np.ones((3,yd,xd))
         maski,coords = generate_circular_mask([2*win_halfw,2*win_halfw],win_halfw,win_halfw)
         print(maski)
+        print(KeyboardInterrupt)
         for k in range(len(px_x_Q)):
             # mask_QUV[0,px_y_Q[k]-win_halfw:px_y_Q[k]+win_halfw+1,px_x_Q[k]-win_halfw:px_x_Q[k]+win_halfw+1] = 1e-9
+            print(k,px_y_Q[k]-win_halfw,px_y_Q[k]+win_halfw+1,px_x_Q[k]-win_halfw,px_x_Q[k]+win_halfw+1)
             mask_QUV[0,px_y_Q[k]-win_halfw:px_y_Q[k]+win_halfw+1,px_x_Q[k]-win_halfw:px_x_Q[k]+win_halfw+1] *= (1 - maski)
         for k in range(len(px_x_U)):
             mask_QUV[1,px_y_U[k]-win_halfw:px_y_U[k]+win_halfw+1,px_x_U[k]-win_halfw:px_x_U[k]+win_halfw+1] *= (1 - maski)

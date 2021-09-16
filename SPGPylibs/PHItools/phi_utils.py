@@ -163,7 +163,7 @@ def get_time(h):
     print('TIME: ',time)
     return time
 
-def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resolution = 1, kernel = None, kernel_dir = None):
+def phi_orbit(init_date, object, end_date = None, frame = 'SOLO_HEEQ', resolution = 1, kernel = None, kernel_dir = None):
     ''' get basic orbitar parameters using Spice kernels
     Need to have spicepy installed.
     The program goes to the kernel dir for loading the mk (meta-kernel) file that takes into account all stuff.
@@ -309,7 +309,10 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
     if end_date != None:
         sc_time_spice = [spiceypy.str2et(t.strftime('%Y-%m-%d %H:%M')) for t in sc_time]
 
-        solo, lT = spiceypy.spkezr(object, sc_time_spice, frame , 'NONE', 'Sun')
+        # solo, lT = spiceypy.spkezr(object, sc_time_spice, frame , 'NONE', 'Sun')
+        # solo, lT = spiceypy.spkezr(object, sc_time_spice, frame , 'NONE', 'Sun')
+        solo,  lT = spiceypy.spkezr(object, sc_time_spice, frame , 'NONE', 'SUN')
+        earth, lT = spiceypy.spkezr("EARTH", sc_time_spice, frame , 'NONE', 'SUN')
 
         pos_solo = np.array(solo)[:, :3] * u.km
         vel_solo = np.array(solo)[:, 3:] * u.km / u.s
@@ -341,6 +344,12 @@ def phi_orbit(init_date, object, end_date = None, frame = 'ECLIPJ2000', resoluti
     elevation = np.rad2deg(np.arcsin(sc_z / sc_r))
     angle = np.rad2deg(np.arcsin((sc_x.to_value()**2 + sc_y.to_value()**2 + sc_z.to_value()**2 ) / sc_r.to_value()))
     sc_r, sc_lat, sc_lon = cart2sphere(sc_x,sc_y,sc_z)
+    _, sc_lon, sc_lat = spiceypy.reclat(solo[:3])
+    # print(sc_r, sc_lat, sc_lon)
+
+    # ECL2EQU_MAT = spiceypy.pxform(fromstr='SOLO_HEEQ', \
+    #                             tostr='SUN_EARTH_CEQU', \
+    #                             et=sc_time_spice)
 
     rad_sun = 1391016 # solar radius in km
     dit_sun = 149597870 #Sun-Earth distance 1 AU

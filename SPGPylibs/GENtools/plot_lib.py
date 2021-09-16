@@ -21,7 +21,7 @@ def colorbar(mappable):
     cax = divider.append_axes("right", size="5%", pad=0.05)
     return fig.colorbar(mappable, cax=cax)
 
-def show_one(img,vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Image no title',cbarlabel='Some units',save=None,cmap='gray'):
+def show_one(img,vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Image no title',cbarlabel='Some units',save=False,cmap='gray'):
 
     plt.figure(figsize=(6, 6))
     ax = plt.gca()
@@ -81,12 +81,12 @@ def show_two(im1,im2,vmin=[None,None],vmax=[None,None],block=True,pause=0.1,titl
     plt.close()
     return
 
-def show_three(im1,im2,im3,vmin=[None,None,None],vmax=[None,None,None],block=True,pause=0.1,title=['','',''],xlabel='Pixel',ylabel='Pixel'):
+def show_three(im1,im2,im3,vmin=[None,None,None],vmax=[None,None,None],block=True,pause=0.1,title=['','',''],xlabel='Pixel',ylabel='Pixel',save=False,cmap='gray'):
 
     #vmin = [None,None,None]
     #vmax = [None,None,None]
 
-    fig, maps = plt.subplots(1,3,figsize=(9,3))
+    fig, maps = plt.subplots(1,3,figsize=(12,5))
     #fig, maps = plt.subplots(1,3, sharex=True, sharey=True,figsize=(15,5))
     plt.subplots_adjust(hspace=0.3, wspace=0.3)
 
@@ -100,25 +100,29 @@ def show_three(im1,im2,im3,vmin=[None,None,None],vmax=[None,None,None],block=Tru
         vmin[2]=im3.mean() - PLT_RNG * im3.std()
         vmax[2]=im3.mean() + PLT_RNG * im3.std()
 
-    im = maps[0].imshow(im1, cmap='gray',vmin=vmin[0],vmax=vmax[0], interpolation='none')
+    im = maps[0].imshow(im1,vmin=vmin[0],vmax=vmax[0], interpolation='none',cmap=cmap)
     maps[0].set_title(title[0])
     maps[0].set_xlabel(xlabel)
     maps[0].set_ylabel(ylabel)
     colorbar(im)
 
-    im = maps[1].imshow(im2, cmap='gray',vmin=vmin[1],vmax=vmax[1], interpolation='none')
+    im = maps[1].imshow(im2,vmin=vmin[1],vmax=vmax[1], interpolation='none',cmap=cmap)
     maps[1].set_title(title[1])
     maps[1].set_xlabel(xlabel)
     colorbar(im)
 
-    im = maps[2].imshow(im3, cmap='gray',vmin=vmin[2],vmax=vmax[2], interpolation='none')
+    im = maps[2].imshow(im3,vmin=vmin[2],vmax=vmax[2], interpolation='none',cmap=cmap)
     maps[2].set_title(title[2])
     maps[2].set_xlabel(xlabel)
     colorbar(im)
 
-    plt.show(block=block)
-    plt.pause(pause)
-    plt.close()
+    if save:
+        plt.savefig(save,dpi=300)
+        plt.close()
+    else:
+        plt.show(block=block)
+        plt.pause(pause)
+        plt.close()
     return
 
 def show_four_row(im1,im2,im3,im4,svmin=0,svmax=0,title=['','','',''],xlabel='Pixel',ylabel='Pixel',save=False,zoom=1,block=True):
@@ -165,6 +169,16 @@ def show_four_row(im1,im2,im3,im4,svmin=0,svmax=0,title=['','','',''],xlabel='Pi
     plt.show(block = block)
 
     return
+
+def show_hist(x,bins=40,title=' ',xlabel='',ylabel='',leave='close',color='green'):
+
+    n, bins, patches = plt.hist(x, bins, facecolor=color, alpha=0.75)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.grid(True)
+    if leave == 'close':
+        plt.show()
 
 def show_six_row(image,plrt = 0,title='n/a',vmin=None,vmax=None):
 
