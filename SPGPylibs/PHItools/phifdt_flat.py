@@ -342,7 +342,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
 
 @timeit  
 def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
-    bit_trun = 0,verbose = 0, expand=0, c_term = 0):
+    bit_trun = 0,verbose = 0, expand=0, c_term = 0,imasize=[2048,2048]):
     '''
     Khun-Lin-Lorantz algorithm ()
     Input: 
@@ -368,6 +368,7 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
         Do not touch
     c_term = 0 : float np.array(n_images)      
         intensity factor correction for chae method        
+    imasize = [2048,2048] : Image size     
     '''
 
     imsize = image[0].shape
@@ -457,7 +458,7 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
             k = np.int32(k * 256) / 256  # bit truncation
 
         for itera in range(iter):
-            r_res = np.zeros([2048, 2048], dtype=np.float64)
+            r_res = np.zeros(imasize, dtype=np.float64)
             for iq in range(1,n_images):
                 for ir in range(iq):
                     # shift of iq with respect ir
@@ -634,11 +635,12 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
 
 def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 0, shifts = None, verbose = 1,
     correct_ghost = 0,expand = 1,thrd = 0,iter = 4, normalize = 1 , disp_method = 'Hough', c_term = 0,
-    inner_radius = 400, outer_radius = 800, steps = 20,shifts_file = False):
+    inner_radius = 400, outer_radius = 800, steps = 20,shifts_file = False,imasize = [2048,2048]):
     '''
     The Dark, if provided, should have the same scaling as the data and same size!!!!!!!
     This program does not take care of sizes. For that go to fdt_pipeline
     USES OLD CORRECT GHOST ROUTINE!!!! TO BE MODIFIED
+    TBD: GET SIZE FROM HEADERSSS
     '''
 
     ############################
@@ -745,9 +747,9 @@ def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 
         pass
 
     if thrd != 0:
-        gain = fdt_flat_gen(image, centers,method,iter=iter,thrd=thrd,verbose = verbose, c_term = c_term)
+        gain = fdt_flat_gen(image, centers,method,iter=iter,thrd=thrd,verbose = verbose, c_term = c_term,imasize = imasize)
     else:
-        gain = fdt_flat_gen(image, centers,method,iter=iter,radious=mean_radii,expand=expand,verbose = verbose, c_term = c_term)
+        gain = fdt_flat_gen(image, centers,method,iter=iter,radious=mean_radii,expand=expand,verbose = verbose, c_term = c_term, imasize = imasize)
 
         return gain, norma
 

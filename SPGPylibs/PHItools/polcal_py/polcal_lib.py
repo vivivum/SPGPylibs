@@ -77,7 +77,7 @@ def lm(x, y, pars, funct, ilambda = 10, niter = 20, njacobian = True,
     def check_limits(input,limits):
         if limits.any() != None:
             if len(limits.flatten()) > 3:
-                for lim in np.arange(len(limits[0,:])-1):
+                for lim in np.arange(len(limits[:,0])):
                     pos = int(lim)
                     idx = int(limits[pos,0])
                     if input[idx] > limits[pos,2]:

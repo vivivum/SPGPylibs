@@ -288,21 +288,21 @@ def phi_apply_demodulation(data,header,instrument,demod=False,verbose = False):
                             [-0.351933,     0.459820,    -0.582167,     0.455458]])
     elif instrument == 'FDT45':
         mod_matrix_45 = np.array([[1.0035,-0.6598, 0.5817,-0.4773],
-                        [1.0032, 0.5647, 0.5275, 0.6403],
-                        [0.9966, 0.4390,-0.5384,-0.7150],
-                        [0.9968,-0.6169,-0.6443, 0.4425]])
+                                  [1.0032, 0.5647, 0.5275, 0.6403],
+                                  [0.9966, 0.4390,-0.5384,-0.7150],
+                                  [0.9968,-0.6169,-0.6443, 0.4425]])
         demodM = np.linalg.inv(mod_matrix_45)
     elif instrument == 'HRT40':
         mod_matrix_40 = np.array([[1.0040,-0.6647, 0.5928,-0.4527],
-                        [1.0018, 0.5647, 0.5093, 0.6483],
-                        [0.9964, 0.4348,-0.5135,-0.7325],
-                        [0.9978,-0.6128,-0.6567, 0.4283]]) #HREW
+                                  [1.0018, 0.5647, 0.5093, 0.6483],
+                                  [0.9964, 0.4348,-0.5135,-0.7325],
+                                  [0.9978,-0.6128,-0.6567, 0.4283]]) #HREW
         demodM = np.linalg.inv(mod_matrix_40)
     elif instrument == 'HRT45':
         mod_matrix_45_dos = np.array([[1.00159,-0.50032, 0.7093,-0.4931],
-                        [1.0040, 0.6615, 0.3925, 0.6494],
-                        [0.9954, 0.3356,-0.6126,-0.7143],
-                        [0.9989,-0.7474,-0.5179, 0.4126]]) #MIA
+                                      [1.0040, 0.6615, 0.3925, 0.6494],
+                                      [0.9954, 0.3356,-0.6126,-0.7143],
+                                      [0.9989,-0.7474,-0.5179, 0.4126]]) #MIA
         demodM = np.linalg.inv(mod_matrix_45_dos)
     else:
         printc('No demod available in demod_phi.py',color = bcolors.FAIL)
@@ -555,10 +555,19 @@ def phi_correct_ghost(data,header,rad,verbose=False):
 
     #common part
     coef = [-1.98787669,1945.28944245] #empirically (first version)
-    #coef = [-1.9999,1942.7] #empirically (updated by trial and error)
+    coef = [-1.9999,1942.7] #empirically (updated by trial and error)
+    #coef = [-1.999,1944] #empirically (updated by trial and error)
+    #TBD FINETUNING!!!!!
+
+    #correct center:
+    center_c = np.copy(center)
+    center_c[0] += PXBEG1 
+    center_c[1] += PXBEG2 
     poly1d_fn = np.poly1d(coef)
-    sh = poly1d_fn(center).astype(int) 
-    sh_float = poly1d_fn(center)
+    sh = poly1d_fn(center_c).astype(int) 
+    sh_float = poly1d_fn(center_c)
+    printc('          image center: x: ',center[0],' y: ',center[1],color=bcolors.OKGREEN)
+    printc('          image center [for 2048]: x: ',center_c[0],' y: ',center_c[1],color=bcolors.OKGREEN)
     printc('          ghost displacements: x: ',sh_float[0],' y: ',sh_float[1],color=bcolors.OKGREEN)
 
     #generate a ring mask out of the solar disk to see how much is the ghost image
@@ -676,13 +685,12 @@ def phi_correct_ghost(data,header,rad,verbose=False):
         #OJO, shift_subp coge como parametros los de shift pero al reves!!!!!!
         if verbose and only_one_vorbose:
             plib.show_one(limb_2d,vmax=1,vmin=0,xlabel='pixel',ylabel='pixel',title='limb 2D',cbarlabel=' ',cmap='gray')
-
         # #shift to the position of the ghost
         reflection = shift(limb_2d, shift=(sh[0],sh[1]), fill_value=0) 
+
         # reflection = shift_subp(limb_2d, shift=[sh_float[1],sh_float[0]])
         if verbose and only_one_vorbose:
             plib.show_one(reflection,vmax=1,vmin=0,xlabel='pixel',ylabel='pixel',title='reflection',cbarlabel=' ',cmap='gray')
-        
         #s_x,s_y,_ = PHI_shifts_FFT(data[i,:,:,:],prec=500,verbose=True,norma=False)
 
         # STEP --->>> Correct each modulation
@@ -761,12 +769,257 @@ def phi_correct_ghost(data,header,rad,verbose=False):
             # data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * float((cf[0] + 50)/100.)#0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
             # print('new',factor[i,j]*float((cf[0] + 50)/100.))
 
-            data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
+            data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  # * mean_intensity[i,j] / mean_intensity[i,0]
+            #data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
             if verbose and only_one_vorbose:
                 plib.show_two(datap[i,j,:,:],data[i,j,:,:],vmin=[0,0],vmax=[1,1],block=True,pause=0.1,title=['Before','After'],xlabel='Pixel',ylabel='Pixel')
+                plt.plot(datap[0,0,0:200,200])
+                plt.plot(data[0,0,0:200,200])
+                plt.ylim([0, 5])
+                plt.show()
+                plt.plot(datap[0,0,200,0:200])
+                plt.plot(data[0,0,200,0:200])
+                plt.ylim([0, 5])
+                plt.show()
 
             only_one_vorbose = 0
-            
+        
+    if 'CAL_GHST' in header:  # Check for existence
+        header['CAL_GHST'] = version
+    else:
+        header.set('CAL_GHST', version, 'ghost correction version py module (phifdt_pipe_modules.py)',after='CAL_DARK')
+    
+    return data, header
+
+def phi_correct_ghost_dm(data,header,rad,verbose=False):
+    '''
+    Startup version on Jun 2021
+    '''
+    version = 'phi_correct_ghost_dm V1.0 Sep 2021 - appied to demodulated images'
+
+    only_one_vorbose = 1
+    center = np.array([header['CRPIX1'],header['CRPIX2']]).astype(int)
+    printc('        Read center from header (updated): x=',center[0],' y=',center[1],color=bcolors.OKBLUE)
+    xd  = int(header['NAXIS1'])    
+    yd  = int(header['NAXIS2'])    
+    zd  = int(header['NAXIS3'])    
+    PXBEG1  = int(header['PXBEG1']) - 1           
+    PXEND1  = int(header['PXEND1']) - 1          
+    PXBEG2  = int(header['PXBEG2']) - 1           
+    PXEND2  = int(header['PXEND2']) - 1   
+
+    if verbose and only_one_vorbose:
+        datap = np.copy(data)
+
+    printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
+
+    #common part
+    coef = [-1.98787669,1945.28944245] #empirically (first version)
+
+    #find center of ghost (empirically determined - TBD Newton minimization):
+    center_c = np.copy(center)
+    center_c[0] += PXBEG1 
+    center_c[1] += PXBEG2 
+    poly1d_fn = np.poly1d(coef)
+    sh = poly1d_fn(center_c).astype(int) 
+    sh_float = poly1d_fn(center_c)
+    printc('          image center: x: ',center[0],' y: ',center[1],color=bcolors.OKGREEN)
+    printc('          image center [for 2048]: x: ',center_c[0],' y: ',center_c[1],color=bcolors.OKGREEN)
+    printc('          ghost displacements: x: ',sh_float[0],' y: ',sh_float[1],color=bcolors.OKGREEN)
+
+    #generate a ring mask out of the solar disk to see how much is the ghost image
+    #we will be using complex histrograms....
+    mask_anulus = bin_annulus([yd,xd],rad - 20, 10, full = False)
+    mask_anulus = shift(mask_anulus, shift=(center[0]-xd//2,center[1]-yd//2), fill_value=0)
+
+    idx = np.where(mask_anulus == 1)
+    # mask_anulus_big = bin_annulus([yd,xd],rad - 150, 100, full = False)
+    # mask_anulus_big = shift(mask_anulus_big, shift=(center[0]-xd//2,center[1]-yd//2), fill_value=0)
+    # idx_big = np.where(data[0,0,:,:]*mask_anulus_big == 1)
+
+    printc('          computing azimuthal averages  ',color=bcolors.OKGREEN)
+
+    centers = np.zeros((2,6))
+    radius = np.zeros((6))
+    ints = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
+    ints_rad = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
+    ints_fit = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
+    ints_syn = np.zeros((6,int(np.sqrt(xd**2+yd**2))))
+    ints_fit_pars = np.zeros((6,5))
+    factor = np.zeros((6,4))
+    mean_intensity = np.zeros((6,4))
+
+    #do for QUV in continuum (first wavelength)
+    dummy = data[0,1,:,:] 
+    mean_intensity[0,1] = np.mean(dummy[idx])
+
+    # FORMA 1 - con anillo
+    values = dummy[idx].flatten() #Take the ring
+    #show the histogram
+    meanv = np.mean(values)
+    idx_l = np.where(values <= meanv)
+    m_l = np.mean(values[idx_l])
+    idx_r = np.where(values >= meanv)
+    m_r = np.mean(values[idx_r])
+    factor[0,1] = (m_r - m_l)# * 100. / ints_fit_pars[i][0] 
+    print("factor",factor[0,1])
+
+    plt.hist(values, bins=40)
+    plt.title('signal')
+    plt.axvline(meanv, lw=2, color='yellow', alpha=0.4)
+    plt.axvline(m_l, lw=2, color='red', alpha=0.4)
+    plt.axvline(m_r, lw=2, color='blue', alpha=0.4)
+    # plt.axvline(factor[0,1]*ints_fit_pars[0][0] / 100., lw=2, color='green', alpha=0.4)
+    plt.axvline(factor[0,1], lw=2, color='green', alpha=0.4)
+    plt.show()
+
+    stop
+
+    # LOOP in wavelengths!
+    for i in range(zd//4):
+
+        # STEP --->>> average data in polarization for fitting the limb
+        dummy_data = np.mean(data[i,:,:,:],axis=0)
+
+        # STEP --->>> Find center of average data
+        centers[1,i],centers[0,i],radius[i] = find_center(dummy_data)  #cy,cx....
+
+        # STEP --->>> Generate CLV from averaged data
+        intensity, rad = azimutal_average(dummy_data,[centers[0,i],centers[1,i]])
+        ints[i,0:len(intensity)] = intensity
+        ints_rad[i,0:len(intensity)] = rad
+
+        # STEP --->>> FIT LIMB DATA
+        rrange = int(radius[i] + 2) #2
+        clv = ints[i,0:rrange]
+        clv_r = ints_rad[i,0:rrange]
+        mu = np.sqrt( (1 - clv_r**2/clv_r[-1]**2) )
+
+        if verbose and only_one_vorbose:
+            plt.plot(clv_r,clv)
+            plt.xlabel('Solar radious [pixel]')
+            plt.ylabel('Intensity [DN]')
+            plt.show()
+
+        u = 0.5
+        I0 = 100
+        ande = np.where(mu > 0.1)
+        pars = newton(clv[ande],mu[ande],[I0,u,0.2,0.2,0.2],limb_darkening)
+        fit, _ = limb_darkening(mu,pars)
+        ints_fit[i,0:len(fit)] = fit
+        ints_fit_pars[i,:] = pars
+
+        # STEP --->>> REPLICATE LIMB FIT WITH AVERAGE INTENSITY
+        #Now there are two options. Either we use the fitted CLV or the azimutally averged CLV.
+        #it is the second here but can be easily changed
+
+        ints_syn[i,:] = ints[i,:]
+        ints_syn[i,0:len(fit)] = fit
+
+        # STEP --->>> NORMALIZE
+        ints_syn[i,:] = ints_syn[i,:] / ints_fit_pars[i][0]
+        ints_fit[i,:] = ints_fit[i,:] / ints_fit_pars[i][0]
+        ints[i,:] = ints[i,:] / ints_fit_pars[i][0]
+
+        # STEP --->>> GENERATE GHOST
+
+    
+        nc = (PXEND2-PXBEG2+1)//2 #  center of frame
+        limb_2d = np.zeros((PXEND2-PXBEG2+1,PXEND1-PXBEG1+1)) #generate image for ghost
+        #fill the image with the revoluted fit
+        s_of_gh = int(radius[i]*1.1)
+        limb_2d[ nc - s_of_gh:nc + s_of_gh + 1, nc - s_of_gh:nc + s_of_gh + 1] = genera_2d(ints_syn[i,0:s_of_gh])
+        xl,yl = limb_2d.shape
+        # plt.imshow(limb_2d)
+        # plt.show()
+
+        # old down here
+        # limb_real = genera_2d(intensity)
+        # xl,yl = limb_real.shape
+        # limb_2d = np.zeros((PXEND2-PXBEG2+1,PXEND1-PXBEG1+1))
+        # limb_2d[ : , : ] = limb_real[xl//2 - yd//2 : xl//2 + yd//2 , yl//2 - xd//2:yl//2 + xd//2] #VERY SAME DATA
+
+        # nuevorango = np.linspace(0,rad[-1]+2,len(rad))
+        # f = interp1d(nuevorango, intensity)
+        # intensity = f(rad)
+
+        # STEP --->>> Smooth and SHIFT GHOST
+
+        #limb_2d = gaussian_filter(limb_2d, sigma=(8, 8)) 
+
+        # #shift ghost to center of image
+        # limb_2d = shift(limb_2d, shift=(int(centers[1,i])-yd//2,int(centers[0,i])-xd//2), fill_value=0)
+        limb_2d = shift_subp(limb_2d, shift=[centers[1,i]-yd//2,centers[0,i]-xd//2])
+        #OJO, shift_subp coge como parametros los de shift pero al reves!!!!!!
+        if verbose and only_one_vorbose:
+            plib.show_one(limb_2d,vmax=1,vmin=0,xlabel='pixel',ylabel='pixel',title='limb 2D',cbarlabel=' ',cmap='gray')
+        # #shift to the position of the ghost
+        reflection = shift(limb_2d, shift=(sh[0],sh[1]), fill_value=0) 
+
+        # reflection = shift_subp(limb_2d, shift=[sh_float[1],sh_float[0]])
+        if verbose and only_one_vorbose:
+            plib.show_one(reflection,vmax=1,vmin=0,xlabel='pixel',ylabel='pixel',title='reflection',cbarlabel=' ',cmap='gray')
+        #s_x,s_y,_ = PHI_shifts_FFT(data[i,:,:,:],prec=500,verbose=True,norma=False)
+
+        # STEP --->>> Correct each modulation
+
+        for j in range(4):
+
+            dummy = data[i,j,:,:] 
+            mean_intensity[i,j] = np.mean(dummy[idx_big])
+
+            # FORMA 1 - con anillo
+            values = dummy[idx].flatten() #Take the ring
+            #show the histogram
+            meanv = np.mean(values)
+            idx_l = np.where(values <= meanv)
+            m_l = np.mean(values[idx_l])
+            idx_r = np.where(values >= meanv)
+            m_r = np.mean(values[idx_r])
+            factor[i,j] = (m_r - m_l) * 100. / ints_fit_pars[i][0] 
+            print("factor",factor[i,j])
+
+
+            if verbose and only_one_vorbose:
+                plt.hist(values, bins=40)
+                plt.title('signal')
+                plt.axvline(meanv, lw=2, color='yellow', alpha=0.4)
+                plt.axvline(m_l, lw=2, color='red', alpha=0.4)
+                plt.axvline(m_r, lw=2, color='blue', alpha=0.4)
+                plt.axvline(factor[i,j]*ints_fit_pars[i][0] / 100., lw=2, color='green', alpha=0.4)
+                plt.show()
+
+            #sub-pixel shift to the position of the ghost
+            #reflection = shift_subp(reflection, shift=[s_x[j],s_y[j]])
+            #MINIMIZA EL ANILLO!!!
+            #The problem is that V works but QU there is a residual at the disk. I use 0.9 though 
+
+            # rms = np.zeros((100))
+            # for k in range(100):
+            #     dummy = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * (k+50)/100.#0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
+            #     rms[k] = np.std(dummy[idx])
+            # plt.plot((np.arange(100)+50)/100.,rms)
+            # plt.show()
+            # cf = np.where(rms == np.min(rms))
+            # data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * float((cf[0] + 50)/100.)#0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
+            # print('new',factor[i,j]*float((cf[0] + 50)/100.))
+
+            data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  # * mean_intensity[i,j] / mean_intensity[i,0]
+            #data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
+            if verbose and only_one_vorbose:
+                plib.show_two(datap[i,j,:,:],data[i,j,:,:],vmin=[0,0],vmax=[1,1],block=True,pause=0.1,title=['Before','After'],xlabel='Pixel',ylabel='Pixel')
+                plt.plot(datap[0,0,0:200,200])
+                plt.plot(data[0,0,0:200,200])
+                plt.ylim([0, 5])
+                plt.show()
+                plt.plot(datap[0,0,200,0:200])
+                plt.plot(data[0,0,200,0:200])
+                plt.ylim([0, 5])
+                plt.show()
+
+            only_one_vorbose = 1
+        
+        stop
     if 'CAL_GHST' in header:  # Check for existence
         header['CAL_GHST'] = version
     else:
@@ -880,8 +1133,8 @@ def phi_correct_fringes(data,header,option,verbose=False):
                                 # f_gauss = height * np.exp(-((x-xcoor)**2/(2*width_x**2) + (y-ycoor)**2/(2*width_y**2)))
                                 f_gauss = 1 - np.exp(-((x-xcoor)**2/(2*(width_x*3)**2) + (y-ycoor)**2/(2*(width_y*3)**2)))
                                 #plib.show_four_row(subm,f_gauss,subm - f_gauss,imc)
-                                F[ idx[0][idx_i] + (h//2 - wsize + 2) - win_halfw : idx[0][idx_i]  + (h//2 - wsize + 2) + win_halfw + 1 , idx[1][idx_i]  + (w//2 - wsize + 2) - win_halfw : idx[1][idx_i]  + (w//2 - wsize + 2) + win_halfw + 1] *= 1e-6#f_gauss #win
-                                power2d[ idx[0][idx_i] + (h//2 - wsize + 2) - win_halfw : idx[0][idx_i]  + (h//2 - wsize + 2) + win_halfw + 1, idx[1][idx_i]  + (w//2 - wsize + 2) - win_halfw : idx[1][idx_i]  + (w//2 - wsize + 2) + win_halfw + 1 ] *=  1e-6#f_gauss #win
+                                F[ idx[0][idx_i] + (h//2 - wsize + 2) - win_halfw : idx[0][idx_i]  + (h//2 - wsize + 2) + win_halfw + 1 , idx[1][idx_i]  + (w//2 - wsize + 2) - win_halfw : idx[1][idx_i]  + (w//2 - wsize + 2) + win_halfw + 1] *= f_gauss #win 1e-6#
+                                power2d[ idx[0][idx_i] + (h//2 - wsize + 2) - win_halfw : idx[0][idx_i]  + (h//2 - wsize + 2) + win_halfw + 1, idx[1][idx_i]  + (w//2 - wsize + 2) - win_halfw : idx[1][idx_i]  + (w//2 - wsize + 2) + win_halfw + 1 ] *=  f_gauss #win 1e-6#
                                 print(freq_x[i,j-1,loop],freq_y[i,j-1,loop])
                                 print(i,j,level_theshold[j-1]*mean,3.*level_theshold[j-1]*mean, rms, 3*rms, imc[idx[0][idx_i],idx[1][idx_i]] - minimum,freq_x[i,j-1,loop],freq_y[i,j-1,loop])
                                 loop += 1

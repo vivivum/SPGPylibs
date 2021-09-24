@@ -26,6 +26,8 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
     ItoQUV = False, VtoQU = False, 
     do2d = 0, outfile=None): # NOT IN USE
 
+# hello(name: str) -> None:
+
     '''
     TODO:
     # data_f -> input data (single file for FDT - ADD MULTIPLE FILES!!!! )
@@ -228,9 +230,9 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         ind_wave = CONFIG['ind_wave']
         nlevel = CONFIG['nlevel']
 
-    import pprint
-    # Prints the nicely formatted dictionary
-    pprint.pprint(CONFIG)#, sort_dicts=False)
+        import pprint
+        # Prints the nicely formatted dictionary
+        pprint.pprint(CONFIG)#, sort_dicts=False)
 
     PLT_RNG = 5
 
@@ -582,7 +584,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
             header.set('CAL_FLAT', DID_flat, 'Onboard calibrated for gain table',after='CAL_DARK')
 
         if verbose:
-            plib.show_one(data[cpos,0,:,:],vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Data / flat at continuum',cbarlabel='DN',save=None,cmap='gray')
+            plib.show_one(data[cpos,0,:,:],vmax=None,vmin=0,xlabel='pixel',ylabel='pixel',title='Data / flat at continuum',cbarlabel='DN',save=None,cmap='gray')
 
     #-----------------
     # CORRECT PREFILTER 
@@ -635,6 +637,11 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
     if verbose == 1:
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom = 3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
 
+    # with pyfits.open(data_filename) as hdu_list:
+    #     hdu_list[0].data = data
+    #     hdu_list[0].header = header
+    #     hdu_list.writeto('dummy.fits', clobber=True)
+
     #-----------------
     # APPLY NORMALIZATION 
     #-----------------
@@ -657,6 +664,13 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
 
     if verbose == 1:
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom = 3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+
+    #-----------------
+    # GHOST CORRECTION  AFTER DEMODULATION
+    #-----------------
+
+    # if correct_ghost:
+    #     data,header = phi_correct_ghost_dm(data,header,radius,verbose = verbose)
 
     #-----------------
     # CROSS-TALK CALCULATION 
@@ -1003,6 +1017,9 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         print(del_dummy)
 
         b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
+        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
+        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
+        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
         # b_los = np.zeros((2048,2048))
         # b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = b_los_cropped
 
@@ -1020,6 +1037,27 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
             header['RTE_ITER'] = 'FFT'
         else:
             header.set('RTE_ITER', str(15), 'Number RTE inversion iterations',after='CAL_SCIP')
+
+        with pyfits.open(data_filename) as hdu_list:
+            hdu_list[0].data = rte_invs_noth[2,:,:] * mask
+#            header = hdu_list[0].header
+            hdu_list[0].header = header
+            writeto = set_level(outfile_L2,'ilam','bstr')
+            hdu_list.writeto(out_dir+'level2/'+writeto, clobber=True)
+
+        with pyfits.open(data_filename) as hdu_list:
+            hdu_list[0].data = rte_invs_noth[3,:,:] * mask
+#            header = hdu_list[0].header
+            hdu_list[0].header = header
+            writeto = set_level(outfile_L2,'ilam','incl')
+            hdu_list.writeto(out_dir+'level2/'+writeto, clobber=True)
+
+        with pyfits.open(data_filename) as hdu_list:
+            hdu_list[0].data = rte_invs[4,:,:] * mask
+#            header = hdu_list[0].header
+            hdu_list[0].header = header
+            writeto = set_level(outfile_L2,'ilam','azim')
+            hdu_list.writeto(out_dir+'level2/'+writeto, clobber=True)
 
         with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = b_los

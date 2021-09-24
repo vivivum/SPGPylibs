@@ -179,7 +179,7 @@ def fits_get_part(file, wave, npol):
     except Exception:
         print("Unable to open fits file: {}",file)        
 
-        return None
+        return
 
 def read_shifts(file):
     print('Reading ', file)
