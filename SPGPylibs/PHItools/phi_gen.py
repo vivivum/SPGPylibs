@@ -1,9 +1,20 @@
+#=============================================================================
+# Project: SoPHI
+# File:    phi_gen.py
+# Author:  David Orozco Suárez (orozco@iaa.es)
+# Contributors: 
+#-----------------------------------------------------------------------------
+# Description: 
+#-----------------------------------------------------------------------------
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import fftconvolve, tukey, savgol_filter
 from itertools import combinations
 from .tools import * 
 import SPGPylibs.GENtools.plot_lib as plib
+
+# __all__ = ['bar', 'baz']
 
 def shift(matrix, shift=[0, 0], fill_value=0):
     '''Shift operator
@@ -249,7 +260,7 @@ def histogram(image, nbins=256):
 
 def FindEdges(xs, threshold, method='simply', dthr=1, Otsu=None, verbose=False):
     """
-    Use a method = [simply, previtt, prewittsmooth] 
+    Use a method = [simply, prewitt, prewittsmooth] 
     for calculatin the image gradient and find the edges
     Otsu = True use Otsu to automatically threshold the image
     Threshold is input parameter for thresholding (factor wrt max)
@@ -308,7 +319,7 @@ def FindEdges(xs, threshold, method='simply', dthr=1, Otsu=None, verbose=False):
     # show_one(imgbin)
     if verbose == True:
         print('Stop in FindEdges. Close plot window to continue.')
-        show_one(image, title='FindEdges thresholded image')
+        plib.show_one(image, title='FindEdges thresholded image')
     if dthr == 1:
         return image
     else:

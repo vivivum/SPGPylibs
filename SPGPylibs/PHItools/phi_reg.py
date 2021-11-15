@@ -1,10 +1,19 @@
+#=============================================================================
+# Project: SoPHI
+# File:    phi_reg.py
+# Author:  David Orozco Suárez (orozco@iaa.es)
+# Contributors: 
+#-----------------------------------------------------------------------------
+# Description: 
+#-----------------------------------------------------------------------------
+
 import numpy as np
 import matplotlib.pyplot as plt
 from photutils import CircularAperture
 from scipy.optimize import curve_fit
 from .phi_gen import *
 from .tools import * 
-
+ 
 def sampling(N):
     """
     This function creates a grid of points with NxN dimensions for calling the
@@ -14,7 +23,7 @@ def sampling(N):
     """
     if N%2 != 0:
         print('Number of pixels must be an even integer!')
-        sys.exit()
+        return
     x=np.linspace(-N/2,N/2,N)
     y=np.copy(x)
     X,Y=np.meshgrid(x,y)

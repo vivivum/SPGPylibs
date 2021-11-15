@@ -13,7 +13,7 @@ from .phi_reg import shift_subp,moments
 import SPGPylibs.GENtools.plot_lib as plib
 
 
-def phi_correct_dark(dark_f,data_f,header,data,verbose = False,get_dark = False):
+def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = False):
 
     #-----------------
     # READ AND CORRECT DARK FIELD
@@ -42,7 +42,7 @@ def phi_correct_dark(dark_f,data_f,header,data,verbose = False,get_dark = False)
     DID = dark_header['PHIDATID']
     printc('Dark DID: ',DID,color=bcolors.OKBLUE)
     dark_scale = fits_get(dark_f,scaling = True)
-    data_scale = fits_get(data_f,scaling = True)
+
     if dark_scale["Present"][0] == data_scale["Present"][0]:
         scaling = dark_scale["scaling"][0] / data_scale["scaling"][0]
     else:
@@ -61,7 +61,15 @@ def phi_correct_dark(dark_f,data_f,header,data,verbose = False,get_dark = False)
     PXEND1  = int(header['PXEND1']) - 1          
     PXBEG2  = int(header['PXBEG2']) - 1           
     PXEND2  = int(header['PXEND2']) - 1   
-    dummy = data[0,0,:,:]
+    #CHECK NACC
+    acc = int(header['ACCACCUM']) * int(header['ACCCOLIT'])
+    acc_dark = int(dark_header['ACCACCUM']) * int(dark_header['ACCCOLIT'])
+    if acc != acc_dark:
+        printc('WARNING - NACC NOT IDENTICAL DURING DARK CORRECTION',color=bcolors.FAIL)
+        printc('DARK NACC ',acc_dark,' DATA NACC ',acc,color=bcolors.FAIL)
+        
+    if verbose:
+        dummy = data[0,0,:,:]
     data = data - dark[np.newaxis,np.newaxis,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
     data = np.abs(data)
 

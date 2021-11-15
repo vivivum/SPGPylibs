@@ -2,7 +2,7 @@
 # Project: SoPHI
 # File:    phi_fits.py
 # Author:  David Orozco Suárez (orozco@iaa.es)
-# Contributors: 
+# Contributors:  
 #-----------------------------------------------------------------------------
 # Description: programs for accesing data and fits files
 #-----------------------------------------------------------------------------
@@ -74,10 +74,41 @@ def fits_get(file,info = False,head = 0,scaling = False):
 def fits_get_fpatimes(file,offset = None):
     '''
     for the moment provide the time corresponding to first exposure/wavelength 
+    old version below
     '''
-    from datetime import datetime,timedelta
+
+    from datetime import datetime
     fpa_head = 4
-    # try:  
+
+    dummy_head = getheader(file,0)
+    NAXIS3 = dummy_head['NAXIS3'] # 6 or 24
+    ACCCOLIT = dummy_head['ACCCOLIT'] # Cycles
+
+    dummy_head = getheader(file,fpa_head)
+    if dummy_head['EXTNAME'] != 'PHI_FITS_FPA_settings':
+        print('ERROR .... fpa_head is not number 4')
+        return
+    
+    adq_times = np.zeros((NAXIS3),dtype=float)
+    
+    with pyfits.open(file) as hdu_list:
+        dat_fpa = hdu_list[fpa_head].data
+
+    init = datetime.strptime(dat_fpa[0][1], '%Y-%m-%dT%H:%M:%S.%f')
+    for i in range(0,NAXIS3*ACCCOLIT,ACCCOLIT):
+        the_time = datetime.strptime(dat_fpa[i][1], '%Y-%m-%dT%H:%M:%S.%f')
+        adq_times[i//ACCCOLIT] = float((the_time - init).total_seconds()) 
+        # print(i,i/ACCCOLIT)
+
+    if offset:
+        diff = init - offset
+        print('diff: ', adq_times)
+        print('diff: ', float(diff.total_seconds()) )
+        adq_times = adq_times + float(diff.total_seconds()) 
+
+    return adq_times,init
+
+    fpa_head = 4
     dummy_head = getheader(file,0)
     NAXIS3 = dummy_head['NAXIS3']
     dummy_head = getheader(file,fpa_head)
@@ -97,13 +128,13 @@ def fits_get_fpatimes(file,offset = None):
             print('diff: ', float(diff.total_seconds()) )
             adq_times = adq_times + float(diff.total_seconds()) 
     return adq_times,init
-    # except Exception:
-    #     print("Unable to open fits file: {}",file,' Other resons may happen (bug)')        
-    #     return None
+
 
 def list_fits(path = './', contain = None,remove_dir = False):
-    '''Find all fits in directory.'''
+    '''Find all fits in directory.''' 
+    # from os import path.isdir,walk
     import os
+    assert os.path.isdir(path)
     list_of_files = []
     for (dirpath, dirnames, filenames) in os.walk(path):
         for filename in filenames:
@@ -111,7 +142,6 @@ def list_fits(path = './', contain = None,remove_dir = False):
                 if contain != None:
                     _,exist = find_string(filename,contain)
                     if exist != -1:
-                        # print(exist)
                         if remove_dir:
                             list_of_files.append(filename)
                         else:
@@ -189,6 +219,14 @@ def read_shifts(file):
     return content
 
 def write_shifts(file, content):
+    #check if dir exist
+    import os
+    dirname = os.path.dirname(file)
+    try:
+        os.makedirs(dirname)
+        print('directory created ', file)
+    except:
+        pass
     print('writing ', file)
     np.savetxt(file, content, fmt='%5.0d')
     #     with open(file, 'w') as writer:

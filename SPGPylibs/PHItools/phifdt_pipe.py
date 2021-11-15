@@ -10,6 +10,7 @@ from .tools import *
 from .phi_fits import *
 from .phi_gen import *
 from .phi_reg import *
+from .phi_rte import *
 #from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d,find_string
 from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_apply_demodulation,\
     crosstalk_ItoQUV,cross_talk_QUV,crosstalk_ItoQUV2d,phi_correct_ghost,phi_correct_fringes
@@ -17,24 +18,116 @@ from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_appl
 import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
 
-def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_data_dir='./',instrument = 'FDT40',
-    flat_c = True,dark_c = True,hough_params = [250, 800, 100], norm_f = False, flat_scaling = 1.,
-    flat_index = None, prefilter = True, prefilter_fits = '0000990710_noMeta.fits',
-    realign = False, verbose = True, shrink_mask = 2, correct_fringes = False,
-    ind_wave = False,correct_ghost = False,putmediantozero=True,out_dir = './',
-    rte = False, debug = False,nlevel = 0.3,center_method='circlefit',loopthis=0,
-    ItoQUV = False, VtoQU = False, 
-    do2d = 0, outfile=None): # NOT IN USE
+#global variables 
+PLT_RNG = 5
+from platform import node
+MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
 
-# hello(name: str) -> None:
-
+def phifdt_pipe(json_input = None, 
+    data_f: str = None,  dark_f: str = None,  flat_f: str = None,
+    input_data_dir: str = './',   output_dir:str = './',
+    instrument: str = 'FDT40',
+    flat_c:bool = True, dark_c:bool = True, ItoQUV:bool = False, VtoQU:bool = False, ind_wave:bool = False,                         #correction options
+    hough_params:list = [250, 800, 100], 
+    norm_f:bool = False, flat_scaling:float = 1., flat_index:list = None,                                          #flatfield options
+    prefilter:bool = True, prefilter_fits:str = '0000990710_noMeta.fits',
+    realign:bool = False, verbose:bool = True, shrink_mask:int = 2, correct_fringes:str = False,
+    correct_ghost:bool = False, putmediantozero:bool = True,
+    rte = False, debug:bool = False, nlevel:float = 0.3, center_method:str = 'circlefit',
+    loopthis = 0,            #developing purpose
+    do2d = 0, outfile = None #not in use
+    ) -> int: 
+    
     '''
+    Parameters
+    ----------
+    :param str data_f: 
+
+    Input parameters
+    ----------    
+    json_input = json input (for convenience). All parameters are then described there).
+    data_f = data_f : string
+        Fits file of the raw FDT data  (for path use input_data_dir keyword)
+    dark_f = dark_f : string
+        Fits file of a Valid dark file (processed dark) (including path, if necessary)
+    flat_f = flat_f : string
+        Fits file of a Valid FDT flatfield (including path, if necessary)
+
+    input_data_dir: directory where input data is located. Default is local directory
+    output_dir: output directory. If default, takes local './'  
+
+    IMPORTANT: dark_f, flat_f, and prefilter file must be provided with the FULL PATH. 
+               the data has to be provided as a list of files (fits) and the directory via "input_data_dir = "
+        The output directories (Depending on RTE on or off) are
+        A)  directory + Level 2: reduced raw data L2+ilam plus RTE output (so far, BLOS, VLOS and SO1: continuum) 
+        B)  directory + Level 2 + png: png figures of the RTE output (so far, BLOS and VLOS) 
+        B)  directory + Level 2 + npz: NPZ (python) reduced raw data L2
+        
+    ** OPTIONAL ARGUMENTS **
+
+    instrument = 'FDT40' : select the instrument and PMP temperature (for demod)
+        -> implemented cases: -- 'FDT40','FDT45' --
+    flat_c = True : default is to apply flat field correction to the data
+    dark_c = True : default is to apply dark field correction to the data
+    norm_f = False : To normalize flats internally to the mean value of 5% of the disk (central) intensity  
+    flat_scaling = 1.0 : flat scaling (flat = flat / flat_scaling) 
+    flat_index = None : in case you want a particular flat to be applied at another wave, e.g.,
+        flat_index = [5,1,2,3,4,0] exchange the first and last wave flats
+        This is for testing stuff, mainly. 
+    prefilter = 1 : To correct for the prefilter 
+    prefilter_fits = '../RSW1/0000990710_noMeta.fits' : User should provide prefilter data fits file location
+    realign = False : bool
+        Realign all images before demodulating using FFT 
+    ind_wave = False : bool
+        Correct crosstalk from I to QUV for individual wavelengths
+    vervose: True prints a lot of stuff (and plots)
+    shrink_mask = 2: 'Number of pixels to contract the sun mask for output of RTE'
+    correct_fringes = False: Fringe correction
+        'manual': first FM version. Freq, mask applied to all images with fixed frequencies
+        'auto' : calculate fringes freq. automatically (in development).
+    correct_ghost = False; Correcto ghost images
+    putmediantozero=True; puts median value to zero before RTE
+    rte = False: Run RTE     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
+        'RTE': RTE only
+        'CE+RTE': RTE with classical estiamtes
+        'CE': Only classical estimates
+        'cog': Only Center of gravity (To be implemented)
+    ItoQUV= False: apply crostalk correction from Stokes I to Stokes Q, U, and V.
+    VtoQU= False: apply crostalk correction from Stokes V to Stokes Q and U.
+    nlevel = 0.3: Noise level above which to evaluate cross_talk_VQU (To be implemented)
+
+    center_method = ['circlefit','hough']
+        Default is 'circlefit'. If set to 'hough' uses the given find_center parameters 
+        If find_center is set to None then uses header information, in any case
+    hough_params = [250, 800, 100]; inner_radius = 250, outer_radius = 600, steps = 100 : initial values for finding sun center
+
+    verbose: increase the verbosity (many plots here) - default False
+
+    Returns
+    -------
+    0 if fail, 1 any other case 
+
+    Raises
+    ------
+
+    References
+    ----------
+    
+    Examples
+    --------
+    >>> import SPGPylibs as spg
+
+    Notes
+    -----
+    This program is not optimized for speed. It assumes that input data is 6 wavelength.
+    C-MILOS must be compiled in each specific machine (C)
+    The software update some of the information in the fits keyword:
+
     TODO:
     # data_f -> input data (single file for FDT - ADD MULTIPLE FILES!!!! )
     keyword to provide fixed cross-talk coefficients 
     keyword to provide fixed data normalization (based on a first obs) 
-    keyword option for updating the sun center and radious or getting it from header.  TBD
-    # pending to add if __name__ == "__main__": for general use (outside python)
+    # pending to add class stile (for module development)
 
 	FDT pipeline steps:
 
@@ -60,91 +153,6 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
     18- save
     19- RTE (RTE or CE or CE+RTE)
     20- plots
-
-
-    Parameters
-    ----------
-        Input:
-    data_f : string
-        Fits file of the raw FDT data  (for path use input_data_dir keyword)
-    input_data_dir: directory of data input
-    out_dir: output directory. If default, takes local './'  
-    dark_f : string
-        Fits file of a Valid dark file (processed dark) (including path, if necessary)
-    flat_f : string
-        Fits file of a Valid FDT flatfield (including path, if necessary)
-    
-    IMPORTANT: dark_f, flat_f, and prefilter file must be provided with the FULL PATH. 
-               the data has to be provided as a list of files (fits) and a directory: "directory="
-        The output directories (Depending on RTE on or off) are
-        A)  directory + Level 2: reduced raw data L2+ilam plus RTE output (so far, BLOS, VLOS and SO1: continuum) 
-        B)  directory + Level 2 + png: png figures of the RTE output (so far, BLOS and VLOS) 
-        B)  directory + Level 2 + npz: NPZ (python) reduced raw data L2
-        
-    ** OPTIONAL ARGUMENTS **
-
-    instrument = 'FDT40' : select the instrument and PMP temperature (for demod)
-        -> implemented cases: -- 'FDT40','FDT45' --
-    flat_c = True : default is to apply flat field correction to the data
-    dark_c = True : default is to apply dark field correction to the data
-    inner_radius = 250, outer_radius = 600, steps = 100 : initial values for finding sun center
-    norm_f = False : To normalize flats internally to the mean value of 5% of the disk (central) intensity  
-    flat_scaling = 1.0 : flat scaling (flat = flat / flat_scaling) 
-
-    flat_index = None : in case you want a particular flat to be applied at another wave, e.g.,
-        flat_index = [5,1,2,3,4,0] exchange the first and last wave flats
-        This is for testing stuff, mainly. 
-    prefilter = 1 : To correct for the prefilter 
-    prefilter_fits = '../RSW1/0000990710_noMeta.fits' : User should provide prefilter data fits file location
-    realign = False : bool
-        Realign all images before demodulating using FFT 
-    ind_wave = False : bool
-        Correct crosstalk from I to QUV for individual wavelengths
-    vervose: True prints a lot of stuff (and plots)
-    shrink_mask = 2: 'Number of pixels to contract the sun mask for output of RTE'
-    correct_fringes = False: Fringe correction
-        'manual': first FM version. Freq, mask applied to all images with fixed frequencies
-        'auto' : calculate fringes freq. automatically (in development).
-    correct_ghost = False; Correcto ghost images
-    putmediantozero=True; puts median value to zero before RTE
-    rte = False: Run RTE     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
-        'RTE': RTE only
-        'CE+RTE': RTE with classical estiamtes
-        'CE': Only classical estimates
-        'cog': Only Center of gravity (in testing)
-    ItoQUV= False: apply crostalk correction from Stokes I to Stokes Q, U, and V.
-    VtoQU= False: apply crostalk correction from Stokes V to Stokes Q and U.
-    nlevel = 0.3: Noise level above which to evaluate cross_talk_VQU (In testing)
-
-    find_center = [...,...,...] -> three values array
-        inner_radius = 250, outer_radius = 600, steps = 100 : initial values for finding sun center
-        if not present or none uses data header information
-        default is set to [250,600,100] 
-    center_method = ['circlefit','hough']
-        Default is 'circlefit'. If set to 'hough' uses the given find_center parameters 
-        If find_center is set to None then uses header information, in any case
-
-    verbose: increase the verbosity (many plots here) - default False
-
-    Returns
-    -------
-    None 
-
-    Raises
-    ------
-
-    References
-    ----------
-    
-    Examples
-    --------
-    >>> import SPGPylibs as spg
-
-    Notes
-    -----
-    This program is not optimized for speed. It assumes that input data is 6 wavelength.
-    C-MILOS must be compiled in each specific machine (C)
-    The software update some of the information in the keyword:
 
     Keywords in the header (modified or added) within this program:
  
@@ -180,6 +188,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
 
     version = 'V1.0 July 2021'
     version = 'V1.0 13th September 2021'
+    version = 'V1.0 3th November 2021'
     #added json configuration and modify all keyword names to be consistent with HRT pipe
 
     version_cmilos = 'CMILOS v0.91 (July - 2021)'
@@ -217,7 +226,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         flat_scaling = CONFIG['flat_scaling']
         prefilter_fits = CONFIG['prefilter_fits']
         prefilter = CONFIG['prefilter']
-        out_dir = CONFIG['out_dir']
+        output_dir = CONFIG['output_dir']
         rte = CONFIG['rte']
         correct_fringes = CONFIG['correct_fringes']
         correct_ghost = CONFIG['correct_ghost']
@@ -234,13 +243,11 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         # Prints the nicely formatted dictionary
         pprint.pprint(CONFIG)#, sort_dicts=False)
 
-    PLT_RNG = 5
-
     #-----------------
     # READ DATA
     #-----------------
     
-    data_filename = input_data_dir+data_f
+    data_filename = input_data_dir + data_f
 
     if os.path.isfile(data_filename):
         print("File exist")
@@ -257,6 +264,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         # PXEND2  =                 1664 ; Last read-out pixel in dimension 2             
 
         DID = header['PHIDATID']
+        ACC = header['ACCACCUM']
         printc('-->>>>>>> data DID '+DID,color=bcolors.OKGREEN)
         printc('          DATA IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
         printc('-->>>>>>> Reshaping data to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
@@ -265,9 +273,27 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         data = data / 256. #from fix to 32
         data = np.ascontiguousarray(data)
 
+        #/ PHI_FITS_FPA_settings 
+        # FPIMGCMD= 8 / FPA image command 
+        # FPA_SROW= 0 / FPA start row setting FPA_EROW= 1022 / FPA end row setting 
+        # FPA_NIMG= 20 / FPA number of images set FPEXPSTC= 1592452786 / [s] FPA exposure start time coarse 
+        # FPEXPSTF= 699245 / [us] FPA exposure start time fine 
+        # INTTIME = 0.01 / [s] Exposure time of single readout 
+        # TELAPSE = 58.1974400877953 / [s] 
+        # Elapsed time between start and end of obser
+        # NSUMEXP = 480 / Number of detector readouts 
+        # XPOSURE = 4.8 / [s] Total effective exposure time 
+        # ACCLENGT= 4194304 / ACCU number of pixel set 
+        # ACCNROWS= 6 / ACCU number of rows set 
+        # ACCROWIT= 1 / ACCU number of row iterations set 
+        # ACCNCOLS= 4 / ACCU number of columns set 
+        # ACCCOLIT= 1 / ACCU number of column iterations set 
+        # ACCACCUM= 20 / ACCU number of accumulations set 
+        # ACCADDR = 0 / ACCU readout address (start) 
+
     except Exception:
         printc("ERROR, Unable to open fits file: {}",data_filename,color=bcolors.FAIL)
-        return
+        return 0
 
     header['history'] = ' Data processed with phifdt_pipe.py '+ version
     header['history'] = '      and time '+ str(datetime.datetime.now())
@@ -280,13 +306,13 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
     if verbose:
         plib.show_one(data[0,0,:,:],vmin=0,xlabel='pixel',ylabel='pixel',title='Data first image raw (1 of 24)',cbarlabel='DN',save=None,cmap='gray')
     
-#    * CAL_RTE=                990510 / ok
-#    * CAL_SCIP= 'None'               / Onboard scientific data analysis
-#    * RTE_ITER=           4294967295 / Number RTE inversion iterations
-#    * PHIDATID= '142010402'          / PHI dataset Id
+    #    * CAL_RTE=                990510 / ok
+    #    * CAL_SCIP= 'None'               / Onboard scientific data analysis
+    #    * RTE_ITER=           4294967295 / Number RTE inversion iterations
+    #    * PHIDATID= '142010402'          / PHI dataset Id
 
     #-----------------
-    # TAKE DATA DIMENSIONS 
+    # TAKE DATA DIMENSIONS AND SCALING
     #-----------------
     PXBEG1  = int(header['PXBEG1']) - 1           
     PXEND1  = int(header['PXEND1']) - 1          
@@ -296,32 +322,43 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
 
     if xd != (PXEND1 - PXBEG1 + 1) or yd != (PXEND2 - PXBEG2 + 1):
         printc('ERROR, Keyword dimensions and data array dimensions dont match ',color=bcolors.FAIL)
-        raise SystemExit
+        return 0
     if xd < 2047:    
         printc('         data cropped to: [',PXBEG1,',',PXEND1,'],[',PXBEG2,',',PXEND2,']',color=bcolors.WARNING)
     
+    data_scale = fits_get(data_filename,scaling = True)
+
     #-----------------
     # READ FLAT FIELDS
     #-----------------
 
     if flat_c:
-        printc('-->>>>>>> Reading Flats                    ',color=bcolors.OKGREEN)
+        printc('-->>>>>>> Reading flat file'+flat_f,color=bcolors.OKGREEN)
         printc('          Assumes they are already normalized to ONE ',color=bcolors.OKGREEN)
         printc('          input should be [wave X Stokes,y-dim,x-dim].',color=bcolors.OKGREEN)
         try:
             dummy,flat_header = fits_get(flat_f)
+            fz_d,fy_d,fx_d = dummy.shape
+
             flat = np.zeros([24,2048,2048]).astype(np.float32)
             PXBEG1_f  = int(flat_header['PXBEG1']) - 1           
             PXEND1_f  = int(flat_header['PXEND1']) - 1          
             PXBEG2_f  = int(flat_header['PXBEG2']) - 1           
             PXEND2_f  = int(flat_header['PXEND2']) - 1 
+            if fx_d < 2047:    
+                printc('         input flat was cropped to: [',PXBEG1_f,',',PXEND1_f,'],[',PXBEG2_f,',',PXEND2_f,']',color=bcolors.WARNING)
+
             flat[:,PXBEG1_f:PXEND1_f+1,PXBEG2_f:PXEND2_f+1] = dummy
             del dummy
+
+            printc('-->>>>>>> Reshaping Flat to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
             fz,fy,fx = flat.shape
             flat = np.reshape(flat,(fz//4,4,fy,fx))
-            printc('-->>>>>>> Reshaping Flat to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
+
         except Exception:
             printc("ERROR, Unable to open flats file: {}",flat_f,color=bcolors.FAIL)
+            return 0
+
         if verbose:
             plib.show_one(flat[0,0,:,:],xlabel='pixel',ylabel='pixel',title='Flat first image raw (1 of 24)',cbarlabel='Any (as input)',save=None,cmap='gray')
 
@@ -332,7 +369,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
     # READ AND CORRECT DARK FIELD
     #-----------------
     if dark_c:
-        data,header  = phi_correct_dark(dark_f,data_filename,header,data,verbose = verbose)
+        data,header  = phi_correct_dark(dark_f,data,header,data_scale,verbose = verbose)
     else:
         printc('-->>>>>>> No darks mode                    ',color=bcolors.WARNING)
 
@@ -363,7 +400,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
             raise ValueError("ERROR in center determination method - check input 'circlefit','Hough',null/None") 
     except ValueError as err:
         print(err.args)
-        return
+        return 0
 
     #Uptade header with new centers
     if center_method == 'Hough' or center_method  == 'circlefit':
@@ -447,10 +484,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         printc('          New FG voltages: ',voltagesData,color=bcolors.OKBLUE)
         printc('          NEW continuum position at wave: ', cpos,color=bcolors.OKBLUE)
         printc('          NEW data wave axis [mA]: ',wave_axis,color=bcolors.OKBLUE)
-    
-    #READ FLAT ORIGINAL FILE TODO: mantener la cabecera de los flats!!!!!!
-    #info = phi.fits_read('../RSW1/Add-data/solo_L0_phi-fdt-ilam_20200618T035946_V202007101227C_0066180100.fits',head=3) 
-  
+      
     if flat_c:
         printc('-->>>>>>> Obtaining voltages from flats ',color=bcolors.OKGREEN)
         #ff =  '../Nov-2020-STP122/solo_L0_phi-fdt-flat_0645767986_V202012091123I_0066181100.fits'
@@ -467,8 +501,8 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         sampling_f = np.mean(dummy_2[0:-2])
         printc('          FLAT average sampling [mA]: ',sampling_f,color=bcolors.OKBLUE)
 
-        printc('-->>>>>>> Reshaping flat to [wave,Stokes,y-dim,x-dim]',color=bcolors.OKGREEN)
-        flat = np.reshape(flat,(fz//4,4,fy, fx))
+        # printc('-->>>>>>> Reshaping flat to [wave,Stokes,y-dim,x-dim]',color=bcolors.OKGREEN)
+        # flat = np.reshape(flat,(fz//4,4,fy, fx))
 
     #-----------------
     # ROLL FLAT IF CONTINUUM IS IN DIFFERENT POSITION 
@@ -599,7 +633,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
     #-----------------
 
     if correct_ghost:
-        data,header = phi_correct_ghost(data,header,radius,verbose = verbose)
+        data,header = phi_correct_ghost(data,header,radius,verbose = True)
 
     #-----------------
     # REALIGN DATA BEFORE DEMODULATION
@@ -711,6 +745,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
                 plt.show()
         else:
             cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry_m[0]:rry_m[1],rrx_m[0]:rrx_m[1]],verbose=verbose,npoints=10000)
+
         # rrx = [int(c[1]),int(c[1]+r*factor)]
         # rry = [int(c[0]-r*factor),int(c[0])]
         # cQ,cU,cV = crosstalk_ItoQUV(data[:,:,rry[0]:rry[1],rrx[0]:rrx[1]],verbose=verbose,npoints=10000)
@@ -886,12 +921,12 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
     dirs = ['npz','pngs','level2']
         
     for checkit in dirs:
-        check_dir = os.path.isdir(out_dir+checkit)
+        check_dir = os.path.isdir(output_dir+checkit)
         if not check_dir:
-            os.makedirs(out_dir+checkit)
-            print("created folder : ", out_dir+checkit)
+            os.makedirs(output_dir+checkit)
+            print("created folder : ", output_dir+checkit)
         else:
-            print(out_dir+checkit, "folder already exists.")
+            print(output_dir+checkit, "folder already exists.")
 
 
     printc('---------------------------------------------------------',color=bcolors.OKGREEN)
@@ -902,7 +937,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         except:
             outfile_L2 = set_level(data_f,'L0','L2')
 
-    printc(' Saving data to: ',out_dir+'level2/'+outfile_L2)
+    printc(' Saving data to: ',output_dir+'level2/'+outfile_L2)
 
     # hdu = pyfits.PrimaryHDU(data)
     # hdul = pyfits.HDUList([hdu])
@@ -910,14 +945,14 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
 
     with pyfits.open(data_filename) as hdu_list:
         hdu_list[0].data = data
-#        header = hdu_list[0].header
+    #        header = hdu_list[0].header
         hdu_list[0].header = header
 
         # Add a new key to the header
         # header.insert(20, ('NEWKEY', 'OMIT', 'test'))
         #header.set('NEWKEY','50.5')
-        hdu_list.writeto(out_dir+'level2/'+outfile_L2, clobber=True)
-#        hdu_list.writeto(directory+outfile+'_L1.fits', clobber=True)
+        hdu_list.writeto(output_dir+'level2/'+outfile_L2, clobber=True)
+    #        hdu_list.writeto(directory+outfile+'_L1.fits', clobber=True)
 
     # with pyfits.open(data_f) as hdu_list:
     #     hdu_list[0].data = mask
@@ -933,7 +968,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         try:
             CMILOS_LOC = os.path.realpath(__file__) 
             CMILOS_LOC = CMILOS_LOC[:-14] + 'cmilos/'
-            if os.path.isfile(CMILOS_LOC+'milos'):
+            if os.path.isfile(CMILOS_LOC+MILOS_EXECUTABLE):
                 printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
             else:
                 raise ValueError('Cannot find cmilos:', CMILOS_LOC)
@@ -941,6 +976,9 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
             printc(err.args[0],color=bcolors.FAIL)
             printc(err.args[1],color=bcolors.FAIL)
             return        
+
+        cmd = CMILOS_LOC+"./"+MILOS_EXECUTABLE
+        cmd = fix_path(cmd)
 
         wavelength = 6173.3354
         #OJO, REMOVE. NEED TO CHECK THE REF WAVE FROM S/C-PHI H/K
@@ -952,50 +990,15 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         printc('         wave axis: ', wave_axis,color = bcolors.WARNING)
         printc('         wave axis (step):  ',(wave_axis - wavelength)*1000.,color = bcolors.WARNING)
         printc('   saving data into dummy_in.txt for RTE input')
+        
+        result = phi_rte(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],rx,ry,wave_axis,rte,cmilos = cmd)
 
-        sdata = data[:,:,ry[0]:ry[1],rx[0]:rx[1]]
-        l,p,x,y = sdata.shape
-        print(l,p,x,y)
-
-        filename = 'dummy_in.txt'
-        with open(filename,"w") as f:
-            for i in range(x):
-                for j in range(y):
-                    for k in range(l):
-                        f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[k,0,j,i],sdata[k,1,j,i],sdata[k,2,j,i],sdata[k,3,j,i]))
-        del sdata
-
-        printc('  ---- >>>>> Inverting data.... ',color=bcolors.OKGREEN)
-        umbral = 3.
-
-        cmd = CMILOS_LOC+"./milos"
-        cmd = fix_path(cmd)
-        if rte == 'RTE':
-            rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-        if rte == 'CE':
-            rte_on = subprocess.call(cmd+" 6 15 2 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-        if rte == 'CE+RTE':
-            rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-
-        print(rte_on)
-        printc('  ---- >>>>> Finishing.... ',color=bcolors.OKGREEN)
-        printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
-        del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
-        print(del_dummy)
-
-        res = np.loadtxt('dummy_out.txt')
-        npixels = res.shape[0]/12.
-        print(npixels)
-        print(npixels/x)
-        result = np.zeros((12,y*x)).astype(float)
         rte_invs = np.zeros((12,yd,xd)).astype(float)
-        for i in range(y*x):
-            result[:,i] = res[i*12:(i+1)*12]
-        result = result.reshape(12,y,x)
-        result = np.einsum('ijk->ikj', result)
         rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = result
         del result
+
         rte_invs_noth = np.copy(rte_invs)
+        umbral = 3.
 
         noise_in_V =  np.mean(data[0,3,rry[0]:rry[1],rrx[0]:rrx[1]])
         low_values_flags = np.max(np.abs(data[:,3,:,:]),axis=0) < noise_in_V*umbral  # Where values are low
@@ -1011,10 +1014,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
         rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
 
-        np.savez_compressed(out_dir+'npz/'+outfile_L2+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
-
-        del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
-        print(del_dummy)
+        np.savez_compressed(output_dir+'npz/'+outfile_L2+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
 
         b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
         b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
@@ -1034,51 +1034,46 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         header['history'] = ' CMILOS VER: '+ version_cmilos
         
         if 'RTE_ITER' in header:  # Check for existence
-            header['RTE_ITER'] = 'FFT'
+            header['RTE_ITER'] = str(15)
         else:
             header.set('RTE_ITER', str(15), 'Number RTE inversion iterations',after='CAL_SCIP')
 
         with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs_noth[2,:,:] * mask
-#            header = hdu_list[0].header
+    #            header = hdu_list[0].header
             hdu_list[0].header = header
             writeto = set_level(outfile_L2,'ilam','bstr')
-            hdu_list.writeto(out_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
-        with pyfits.open(data_filename) as hdu_list:
+        # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs_noth[3,:,:] * mask
-#            header = hdu_list[0].header
-            hdu_list[0].header = header
+            # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'ilam','incl')
-            hdu_list.writeto(out_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
-        with pyfits.open(data_filename) as hdu_list:
+        # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs[4,:,:] * mask
-#            header = hdu_list[0].header
-            hdu_list[0].header = header
+            # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'ilam','azim')
-            hdu_list.writeto(out_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
-        with pyfits.open(data_filename) as hdu_list:
+        # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = b_los
-#            header = hdu_list[0].header
-            hdu_list[0].header = header
+            # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'ilam','blos')
-            hdu_list.writeto(out_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
-        with pyfits.open(data_filename) as hdu_list:
+        # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = v_los
-#            header = hdu_list[0].header
-            hdu_list[0].header = header
+            # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'ilam','vlos')
-            hdu_list.writeto(out_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
-        with pyfits.open(data_filename) as hdu_list:
+        # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
-#            header = hdu_list[0].header
-            hdu_list[0].header = header
+            # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'ilam','icont')
-            hdu_list.writeto(out_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
         printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
 
@@ -1109,7 +1104,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
         #ax.imshow(Zm, cmap='gray')
         writeto = set_level(outfile_L2,'ilam','vlos')
         writeto = set_level(writeto,'.fits','.png')
-        plt.savefig(out_dir+'pngs/'+writeto,dpi=300)
+        plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
         plt.close()
 
         #-----------------
@@ -1139,7 +1134,7 @@ def phifdt_pipe(json_input = None, data_f=None,dark_f=None,flat_f=None,input_dat
 
         writeto = set_level(outfile_L2,'ilam','blos')
         writeto = set_level(writeto,'.fits','.png')
-        plt.savefig(out_dir+'pngs/'+writeto,dpi=300)
+        plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
         plt.close()
 
         printc('--------------------- END  ----------------------------',color=bcolors.FAIL)

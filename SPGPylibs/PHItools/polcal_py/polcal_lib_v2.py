@@ -1,3 +1,4 @@
+from math import tau
 from tqdm import tqdm
 import numpy as np
 from matplotlib import pyplot as plt
@@ -284,6 +285,11 @@ def cal_unit(pol_angle, retardance, ret_angle, angle_rot=None):
     c2 = np.cos(2*theta_r)
     s2 = np.sin(2*theta_r)
 
+# CL = 0.5*[1d0,$
+#       (c2^2d0+s2^2d0*cos(delta_r))*cos(2d0*alpha_r) + c2*s2*(1d0-cos(delta_r))*sin(2d0*alpha_r),$
+#       (s2^2d0+c2^2d0*cos(delta_r))*sin(2d0*alpha_r) + c2*s2*(1d0-cos(delta_r))*cos(2d0*alpha_r),$
+#       s2*sin(delta_r)*cos(2d0*alpha_r)-c2*sin(delta_r)*sin(2d0*alpha_r)]
+
     cl = 0.5*np.matrix( [1.,
                         (c2**2.+s2**2*np.cos(delta_r))*np.cos(2*alpha_r) +
                         c2*s2*(1-np.cos(delta_r))*np.sin(2*alpha_r),
@@ -291,6 +297,7 @@ def cal_unit(pol_angle, retardance, ret_angle, angle_rot=None):
                         c2*s2*(1-np.cos(delta_r))*np.cos(2*alpha_r),
                         s2*np.sin(delta_r)*np.cos(2*alpha_r)-c2*np.sin(delta_r)*np.sin(2*alpha_r)] ).T
                         #transpose just to have a column matrix
+    return cl
     # if angle_rot is None:
     #     return cl
     # else:
@@ -356,10 +363,10 @@ def polarizer(alpha):
     c2 = cd**2
     s2 = sd**2
 
-    pl = 0.5*np.matrix([[ 1 , cd    , sd    , 0],
-                        [ cd, c2    , cd*sd , 0],
-                        [ sd, cd*sd , s2    , 0],
-                        [ 0 , 0     , 0     , 0]])
+    pl = 0.5*np.matrix([[ 1 , cd    , sd    , 0],  # --> row1 pl[0,:]
+                        [ cd, c2    , cd*sd , 0],  # --> row2 pl[1,:]
+                        [ sd, cd*sd , s2    , 0],  # --> row3 pl[2,:]
+                        [ 0 , 0     , 0     , 0]]) # --> row4 pl[3,:]
 
     return pl
 
@@ -382,10 +389,10 @@ def retarder(alpha,retardance):
     cr = np.cos( np.deg2rad(retardance))
     sr = np.sin( np.deg2rad(retardance))
 
-    rt = np.matrix([[1, 0            , 0             , 0      ],
-                    [0, c2+s2*cr     , cd*sd*(1-cr)  , -sd*sr ],
-                    [0, cd*sd*(1-cr) , s2+c2*cr      , cd*sr  ],
-                    [0, sd*sr        , -cd*sr        , cr     ]])
+    rt = np.matrix([[1, 0            , 0             , 0      ],  # --> row1 rt[0,:]
+                    [0, c2+s2*cr     , cd*sd*(1-cr)  , -sd*sr ],  # --> row2 rt[1,:]
+                    [0, cd*sd*(1-cr) , s2+c2*cr      , cd*sr  ],  # --> row3 rt[2,:]
+                    [0, sd*sr        , -cd*sr        , cr     ]]) # --> row4 rt[3,:]
 
     return rt
 
@@ -510,14 +517,6 @@ def instrument_model(pardata):
         mod_matrix[i, :] = dummy[0,:]
     return mod_matrix
 
-    #   ; ventana = Depo + retarder
-    #   ; lenses =  Nothing
-    #   ;  m123 = mirror(45,0.97)##mirror(22,0.97)##mirror(45,0.97)
-    #   ; mirror = function mirror,theta,T ; tres a 45 grados -> espejo,t,angle
-    #   ; etalon = Fran equation
-    #   ;  MR=rotacion(angrot)
-    #   ;  TELESCOPE = LCVR(10d0,angrot)
-
 def lm_pol_model(theta,input_parameters,plot=False,**kwargs):
 
     '''
@@ -542,10 +541,11 @@ def lm_pol_model(theta,input_parameters,plot=False,**kwargs):
     'theta2' : input_parameters[9],
     'pol_angle' : input_parameters[10],
     'rot_inst' : input_parameters[11]}
+    transmission = input_parameters[12:16]
 
-    alpha = input_parameters[12]
-    delta = input_parameters[13]
-    angle_rot = input_parameters[14]
+    alpha = input_parameters[16]
+    delta = input_parameters[17]
+    angle_rot = input_parameters[18]
 
     out = np.zeros((len(theta),4))
     pm = 2.*instrument_model(pars)
@@ -564,6 +564,9 @@ def lm_pol_model(theta,input_parameters,plot=False,**kwargs):
     else:
         pass
     jac = 0
+
+    for i in range(4):
+        out[:,i] *= transmission[i]
 
     if modulation != None:
         return out[:,modulation].flatten(order='F'), jac

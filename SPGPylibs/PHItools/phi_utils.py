@@ -1,5 +1,14 @@
+#=============================================================================
+# Project: SoPHI
+# File:    phi_utils.py
+# Author:  David Orozco Suárez (orozco@iaa.es)
+# Contributors: 
+#-----------------------------------------------------------------------------
+# Description: programs for accesing data and fits files
+#-----------------------------------------------------------------------------
+
 from datetime import timedelta,datetime
-from math import degrees
+from math import degrees,sin,cos
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
@@ -590,6 +599,9 @@ def running_mean(x, N):
     return np.convolve(x, np.ones((N,))/N, mode='same')
 
 def find_string(where,what):
+    '''
+    find a string in an string
+    '''
     index = 0
     add = len(what)
     found = []
@@ -604,3 +616,34 @@ def find_string(where,what):
             # print('ll found at', index)
             index += add # +2 because len('_') == 1
     return found,nothing
+
+def rotate_grid(xy, radians):
+    """
+    Rotate a grid or a point.
+    
+    example:
+
+    # single point
+    theta = math.radians(33)
+    point = np.array(((5, -11),(5, -11)))
+    rotate_grid(point, theta)
+
+    # grid 
+    x_dim = 100
+    y_dim = 100
+    cx = x_dim/2.
+    cy = y_dim/2.
+    Y, X = np.mgrid[0:y_dim, 0:x_dim]
+    X = X - cx
+    Y = Y - cy
+
+    rotated_grid = rotate_grid((X.reshape(x_dim*y_dim),Y.reshape(x_dim*y_dim)), theta)
+    rotated_grid = rotated_grid[0,:].reshape(x_dim,y_dim).astype(int)
+
+    """
+    x, y = xy
+    c, s = cos(radians), sin(radians)
+    j = np.matrix([[c, s], [-s, c]])
+    m = np.dot(j, [x, y])
+
+    return m

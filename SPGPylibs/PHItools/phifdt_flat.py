@@ -21,7 +21,7 @@ from SPGPylibs.GENtools import *
 
 def centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=None):
     ############################
-    #FIND CENTERS - PART OD DO_HOUGH
+    #FIND CENTERS - PART OF DO_HOUGH
     ############################
     centers = []
     radius = []
@@ -70,7 +70,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
         step is used to generate:
             (1): coarse find jumps: np.linspace(inner_radius, outer_radius, steps)
             (2): width of the ring for crosscorrelating the disk: (outer_radius - inner_radius)//steps * 2
-            (3):if step is a negative number then uses FM find model
+            (3): if step is a negative number then uses FM find model
                 -#-
                 4 iterations
                 1] inner_radius = 152;  outer_radius = 1048; steps = 64; 15 iterations 

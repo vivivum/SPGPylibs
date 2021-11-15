@@ -198,6 +198,7 @@ def show_six_row(image,plrt = 0,title='n/a',vmin=None,vmax=None):
         colorbar(im)
     plt.show()
     return
+
 def squar(n):
     column = np.int(np.sqrt(n))
     # if column <= n:
@@ -248,7 +249,7 @@ def doplots(im1,im2,im3):
     im = maps[1,1].imshow(im3, cmap='gray',vmax=0.05,vmin=-0.05)
     maps[1,1].set_title('Defocused')
     colorbar(im)
-#    plt.savefig('resultados'+str(i)+'.png')
+    #    plt.savefig('resultados'+str(i)+'.png')
     plt.show()
     plt.close()
     return
@@ -263,7 +264,7 @@ def twoimages(im1,im2,vmin=[None,None],vmax=[None,None],block=True,pause=0.1):
     im = maps[1].imshow(im2, cmap='gray',vmin=vmin[1],vmax=vmax[1])
     maps[1].set_title('im2')
     colorbar(im)
-#    plt.savefig('resultados'+str(i)+'.png')
+    #    plt.savefig('resultados'+str(i)+'.png')
     plt.show(block=block)
     plt.pause(pause)
     plt.close()
@@ -285,7 +286,7 @@ def fourimages(im1,im2,im3,im4,vmin=[None,None,None,None],vmax=[None,None,None,N
     im = maps[1,1].imshow(im4, cmap='gray',vmin=vmin[3],vmax=vmax[3])
     maps[1,1].set_title('im4')
     colorbar(im)
-#    plt.savefig('resultados'+str(i)+'.png')
+    #    plt.savefig('resultados'+str(i)+'.png')
     plt.show(block=block)
     plt.pause(pause)
     plt.close()

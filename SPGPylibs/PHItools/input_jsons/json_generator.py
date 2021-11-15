@@ -35,7 +35,7 @@ def json_generator():
         'p_milos' : False, 
         
         "__comment4__":"Output options go here",
-        'out_dir' : './',  
+        'output_dir' : './',  
         'out_demod_file' : False,  
         'out_demod_filename' : None, 
         'out_rte_filename' : None,  
@@ -120,7 +120,7 @@ def json_generator():
         'p_milos' : False, 
 
         "__comment4__":"Output options go here",
-        'out_dir' : './',  
+        'output_dir' : './',  
         'out_demod_file' : False,  
         'out_demod_filename' : None, 
         'out_rte_filename' : None,  

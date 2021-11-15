@@ -5,7 +5,7 @@
 ## `SPGPylibs/GENtools`
 --------------------------
 
-These GENtools functions..... 
+Geneic all purpose functions
 
 Functions present in SPGPylibs.GENtools are listed below.
 
@@ -16,4 +16,7 @@ Functions present in SPGPylibs.GENtools are listed below.
 - `cog()`             <span style="float:right; width:45em;"> Center of gravity method</span> 
 
 #### *plot_lib.py*      
-- `???()`             <span style="float:right; width:45em;"> Plotting wrappers (TBD)</span> 
+- `---()`             <span style="float:right; width:45em;"> Plotting wrappers</span> 
+
+#### *idlsmooth.py*      
+- `idlsmooth()`             <span style="float:right; width:45em;"> IDL smooth function 'smooth(imahge,size,/edge_truncate)'</span> 

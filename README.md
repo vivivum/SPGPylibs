@@ -9,10 +9,9 @@ This repository contains libraries and functions developed by the Solar Physics 
 
 For more information about the members of the group visit <http://spg.iaa.es/>
 
-Inversions tools of the SPG can be found in the main web and in the following repositories:
+Additional inversions tools can be found in the main web and in the following repositories:
 - <https://github.com/IAA-InvCodes/P-MILOS>
-- <Desire>
-- <SIR>
+- <https://github.com/vivivum/MilosIDL>
 
 </div>
 
@@ -27,6 +26,8 @@ pip install SPGPylibs
 
 Getting started
 ===============
+
+Package is loaded in the stardard way provided it is in your path.
 
 ```python
 import SPGPylibs as spg
@@ -45,12 +46,14 @@ Contributors
 ------------
 
 	-D. Orozco Suárez
+	-F.J. Martínez Bailén
 	-P. Santamarina
 	-J. Blanco
     -A. Sui
     -A. Dorantes
     -H. Strecker
     -A. Moreno Vacas
+    -J. Atienzar
 
 ----
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
