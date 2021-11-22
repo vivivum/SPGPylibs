@@ -76,15 +76,7 @@ def json_generator():
         "dark_f" : "../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V202002281636_0022210004_000.fits",
         'input_data_dir' : './',  
         'verbose' : False,
-
-        "__comment2__":"input/output type + scaling goes here (ONLY HRT)",
-        'L1_input' : True, 
-        'L1_8_generate': False, 
-        'scale_data' : True,  
-        'accum_scaling' : True, 
-        'bit_conversion' : True, 
-        
-        "__comment3__":"Data reduction options go here",
+        "__comment2__":"Data reduction options go here",
         'dark_c' : True,
         'flat_c' : True,
         'instrument' : 'FDT40',
@@ -105,26 +97,11 @@ def json_generator():
         'realign' : False,
         'ind_wave' : False,
         'nlevel' : 0.3,
-
         'debug' : False,
         'loopthis' : 0,
-        
-        'clean_f' : True, 
-        'sigma' : 59, 
-        'clean_mode' : "V", 
-        'flat_states' : 24, 
-        'fs_c' : True, 
-        'demod' : True, 
-        'norm_stokes' : True, #TBD
-        'ctalk_params' : None, 
-        'p_milos' : False, 
-
-        "__comment4__":"Output options go here",
+        "__comment3__":"Output options go here",
         'output_dir' : './',  
-        'out_demod_file' : False,  
-        'out_demod_filename' : None, 
-        'out_rte_filename' : None,  
-        'config_file' : True 
+
     }
 
     with open(json_file, 'w', encoding="utf-8", newline='\r\n') as outfile:

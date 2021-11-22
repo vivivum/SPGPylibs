@@ -13,7 +13,12 @@ from photutils import CircularAperture
 from scipy.optimize import curve_fit
 from .phi_gen import *
 from .tools import * 
- 
+
+try:
+    import pyfftw.interfaces.numpy_fft as fft
+except ImportError:
+    import numpy.fft as fft
+
 def sampling(N):
     """
     This function creates a grid of points with NxN dimensions for calling the

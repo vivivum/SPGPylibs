@@ -1,13 +1,16 @@
-import pymilos
 import numpy as np
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import subprocess
 import time
 
+# here import the pymilos cython code
+import pymilos
+#although not necessaty these are the dtype to be passed to C
 DTYPE_INT = np.intc
 DTYPE_DOUBLE = np.float_
 
+#test data in IDL save format
 from scipy.io import readsav
 s = readsav('cmilos_testdata/test_data.save')
 datos = s.data
@@ -15,17 +18,26 @@ wave_axis = s.wave_axis
 
 datos = np.tile(datos, 4) 
 
-print('shape1',datos.shape)                                                                                                                                                                                                                      
+print('shape input',datos.shape) 
+# the pipeline has (for the moment being) the data in
+# (4, 6, 298, 1176) (pol,wave, y,x)
+# This has to be changed to (y,x,pol,wave) for C
+                                                                                                                                                                                                                 
 datos = np.einsum('ijkl->klij',datos)
 y,x,p,l = datos.shape
-print('shape2',datos.shape)                                                                                                                                                                                                                      
-print('shape2',y,x,p,l)                                                                                                                                                                                                                      
+print('New shape',datos.shape)                                                                                                                                                                                                                      
+
+#the next input to pymilos is the options
+#for the moment no PSF is included 
+# and classical estimates are deactivated.
+# these will be added in following versions
 
 options = np.zeros((4))#,dtype=DTYPE_INT)
-options[0] = len(wave_axis) #NLAMBDA
-options[1] = 15 #MAX_ITER
-options[2] = 0 #CLASSICAL_ESTIMATES [0,1]
-options[3] = 0 #RFS [0,1,2]
+options[0] = len(wave_axis) #NLAMBDA wave axis dimension
+options[1] = 15 #MAX_ITER max number of iterations
+options[2] = 0 #CLASSICAL_ESTIMATES [0,1] classical estimates ON or OFF
+options[3] = 0 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
+# Only inversion is now available
 # options[4] = 0 #FWHM(in A)
 # options[5] = 0 #DELTA(in A)
 # options[6] = 0 #NPOINTS
@@ -38,19 +50,19 @@ start = time.process_time()
 out = pymilos.pmilos(options,datos[0:npy,0:npx,:,:],wave_axis)
 print(time.process_time() - start)
 print(out.shape)
+#output has npy*npx 
+#out = np.reshape(out,(npy,npx,12))                                                                                                                                                                                        
 
-out = np.reshape(out,(npy,npx,12))                                                                                                                                                                                        
+#comparison using milos
 
-#use milos 
-
-sdata = datos[0:npy,0:npx,:,:]
+sdata = datos[0:npy,0:npx,:,:] #stupid copy
 y,x,p,l = sdata.shape
 
 print('----------- milos---------')
 start = time.process_time()
 
 filename = 'dummy_in.txt'
-with open(filename,"w") as f:
+with open(filename,"w") as f: 
     for i in range(x):
         for j in range(y):
             for k in range(l):
@@ -103,42 +115,4 @@ plt.show()
 			# outputdata[cnt_model+9] = initModel.S0;
 			# outputdata[cnt_model+10] = initModel.S1;
 			# outputdata[cnt_model+11] = chisqrf;
-
-import sys
-sys.exit()
-#prepare input
-input_data = datos[:,:,0:1,0:1].astype(DTYPE_DOUBLE)  #get data and set dtype
-nlon,npol,ny,nx = input_data.shape
-input_data = input_data.flatten(order='C')#.copy(order='c')
-
-wave_axis = wave_axis.astype(DTYPE_DOUBLE)            #get wave_axis dtype
-
-length = len(input_data)
-output_data = np.zeros((length//len(wave_axis)//4 * 12),dtype=DTYPE_DOUBLE)
-
-
-print(options,input_data,wave_axis)
-print(options.flags,input_data.flags,wave_axis.flags,output_data.flags)
-
-pymilos.py_milos(options,input_data,wave_axis,output_data)
-
-
-    # options = options.astype(DTYPE_INT)
-    # options = options.copy(order='c').astype(DTYPE_INT)
-    # wave_axis = wave_axis.copy(order='C') 
-    # input_data = input_data.flatten().copy(order='C') #input_data.flatten()#(order='C')
-    # length = len(input_data)
-    # output_data = np.zeros((length//options[0]//4,12), dtype=DTYPE_DOUBLE,order='C')
-
-    # print(options.shape,input_data.shape,output_data.shape)
-    # print(options.flags,input_data.flags,output_data.flags)
-
-    # x = np.array(list(range(10)), '>i4') # big endian
-    # newx = x.byteswap().newbyteorder() # force native byteorder
-
-    # py_milos_wrap(input_data, wave_axis, output_data)
-
-    # return output_data
-
-#out = pymilos.py_milos(options,wave_axis,input_data)
 

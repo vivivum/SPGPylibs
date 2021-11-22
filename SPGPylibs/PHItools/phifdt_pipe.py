@@ -13,15 +13,14 @@ from .phi_reg import *
 from .phi_rte import *
 #from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d,find_string
 from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_apply_demodulation,\
-    crosstalk_ItoQUV,cross_talk_QUV,crosstalk_ItoQUV2d,phi_correct_ghost,phi_correct_fringes
+    crosstalk_ItoQUV,cross_talk_QUV,crosstalk_ItoQUV2d,phi_correct_ghost,phi_correct_fringes,\
+    generate_level2
 
 import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
 
 #global variables 
 PLT_RNG = 5
-from platform import node
-MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
 
 def phifdt_pipe(json_input = None, 
     data_f: str = None,  dark_f: str = None,  flat_f: str = None,
@@ -211,8 +210,6 @@ def phifdt_pipe(json_input = None,
         verbose = CONFIG['verbose']
         input_data_dir = CONFIG['input_data_dir']
         data_f = CONFIG['data_f']
-        norm_f = CONFIG['norm_f']
-        flat_scaling = CONFIG['flat_scaling']
         shrink_mask = CONFIG['shrink_mask']
         center_method = CONFIG['center_method'] 
         hough_params = CONFIG['hough_params']
@@ -961,41 +958,12 @@ def phifdt_pipe(json_input = None,
     #-----------------
     # INVERSION OF DATA WITH CMILOS
     #-----------------
-
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
+
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
-
-        try:
-            CMILOS_LOC = os.path.realpath(__file__) 
-            CMILOS_LOC = CMILOS_LOC[:-14] + 'cmilos/'
-            if os.path.isfile(CMILOS_LOC+MILOS_EXECUTABLE):
-                printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
-            else:
-                raise ValueError('Cannot find cmilos:', CMILOS_LOC)
-        except ValueError as err:
-            printc(err.args[0],color=bcolors.FAIL)
-            printc(err.args[1],color=bcolors.FAIL)
-            return        
-
-        cmd = CMILOS_LOC+"./"+MILOS_EXECUTABLE
-        cmd = fix_path(cmd)
-
-        wavelength = 6173.3354
-        #OJO, REMOVE. NEED TO CHECK THE REF WAVE FROM S/C-PHI H/K
-        shift_w =  wave_axis[3] - wavelength
-        wave_axis = wave_axis - shift_w
-        #wave_axis = np.array([-300,-160,-80,0,80,160])/1000.+wavelength
-        #wave_axis = np.array([-300,-140,-70,0,70,140])
-        printc('   It is assumed the wavelength is given by the header info ')
-        printc('         wave axis: ', wave_axis,color = bcolors.WARNING)
-        printc('         wave axis (step):  ',(wave_axis - wavelength)*1000.,color = bcolors.WARNING)
-        printc('   saving data into dummy_in.txt for RTE input')
         
-        result = phi_rte(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],rx,ry,wave_axis,rte,cmilos = cmd)
-
         rte_invs = np.zeros((12,yd,xd)).astype(float)
-        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = result
-        del result
+        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte)
 
         rte_invs_noth = np.copy(rte_invs)
         umbral = 3.
@@ -1014,7 +982,7 @@ def phifdt_pipe(json_input = None,
         rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
         rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
 
-        np.savez_compressed(output_dir+'npz/'+outfile_L2+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
+        #np.savez_compressed(output_dir+'npz/'+outfile_L2+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
 
         b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
         b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
@@ -1030,13 +998,17 @@ def phifdt_pipe(json_input = None,
             plib.show_one(v_los,vmin=-2.5,vmax=2.5,title='LoS velocity')
             plib.show_one(b_los,vmin=-30,vmax=30,title='LoS magnetic field')
 
+        printc('  ---- >>>>> Updating L2 header.... ',color=bcolors.OKGREEN)
+
         header['history'] = ' RTE CMILOS INVERTER: '+ rte
         header['history'] = ' CMILOS VER: '+ version_cmilos
-        
+
         if 'RTE_ITER' in header:  # Check for existence
             header['RTE_ITER'] = str(15)
         else:
             header.set('RTE_ITER', str(15), 'Number RTE inversion iterations',after='CAL_SCIP')
+
+        printc('  ---- >>>>> Saving L2 data.... ',color=bcolors.OKGREEN)
 
         with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs_noth[2,:,:] * mask

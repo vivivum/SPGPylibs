@@ -207,7 +207,7 @@ def centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize
     return centers,radius
 
 @timeit
-def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='prewitt',save=False,
+def do_hough_fixpoint(image,inner_radius, outer_radius, steps, org_centers=None,method='prewitt',save=False,
             dhtr=10,normalize = False,verbose=False,Otsu = None,threshold = 0.15):
     '''
     Calculates the position and radious of the solar disk in a set of input images using the Hough transform.
@@ -286,7 +286,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
             image[i] = image[i]/norma
 
     ############################
-    #CALCULATE THE MASK GRADIENT FOR EACH IMAGE
+    #CALCULATE THE MASK GRADIENT FOR EACH IMAGE (use real images if FM (step < 0))
     ############################
 
     binmask = []
@@ -440,7 +440,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
         r_width = (outer_radius - inner_radius)//steps * 2
         print(np.linspace(inner_radius, outer_radius, steps + 1))
         printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
-        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,image,imsize,verbose=verbose)
         print('Image |   Original  |  Inferred   |   Radius')
         for i in range(n_images):
             print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
@@ -453,7 +453,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
         r_width = (outer_radius - inner_radius)//steps * 2
         print(np.linspace(inner_radius, outer_radius, steps + 1))
         printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
-        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,image,imsize,verbose=verbose)
         print('Image |   Original  |  Inferred   |   Radius')
         for i in range(n_images):
             print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
@@ -466,7 +466,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
         r_width = (outer_radius - inner_radius)//steps * 2
         print(np.linspace(inner_radius, outer_radius, steps + 1))
         printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
-        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,image,imsize,verbose=verbose)
         print('Image |   Original  |  Inferred   |   Radius')
         for i in range(n_images):
             print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %
@@ -479,7 +479,7 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
         r_width = (outer_radius - inner_radius)//steps * 2
         print(np.linspace(inner_radius, outer_radius, steps + 1))
         printc('from: ',inner_radius,' to: ',outer_radius,' steps: ', steps,' width: ',r_width,color = bcolors.OKGREEN)
-        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=verbose)
+        centers, radius = centers_flat(n_images,inner_radius,outer_radius,steps,r_width,image,imsize,verbose=verbose)
         print('Image |   Original  |  Inferred   |   Radius')
         for i in range(n_images):
             print("  %2.0f  | (%4.0f,%4.0f) | (%4.0f,%4.0f) |  %6.2f" %

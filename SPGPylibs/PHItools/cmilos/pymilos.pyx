@@ -30,7 +30,7 @@ def py_milos(np.ndarray[int, ndim=1, mode="c"] options not None,
 def pmilos(options,input_data,waveaxis):
 
     #prepare input
-    #ny,nx,npol,nlon = input_data.shape
+    ny,nx,npol,nlon = input_data.shape
     input_data = input_data.flatten(order='C')
 
     if input_data.dtype != DTYPE_DOUBLE:
@@ -78,4 +78,4 @@ def pmilos(options,input_data,waveaxis):
 
     py_milos(options,input_data,waveaxis,output_data)
 
-    return output_data
+    return np.reshape(output_data,(ny,nx,12))     
