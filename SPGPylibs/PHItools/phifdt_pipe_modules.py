@@ -1168,6 +1168,11 @@ def phi_correct_fringes(data,header,option,verbose=False):
             for j in np.arange(1,3):
                 print(i,j,freq_y[i,j,:6],freq_x[i,j,:6])
 
+        if 'CAL_FRIN' in header:  # Check for existence
+            header['CAL_FRIN'] = version
+        else:
+            header.set('CAL_FRIN', version, 'Fringe correction ( name+version of py module if True )',after='CAL_DARK')
+
     #-----------------
     # FINGING - Need to include Ajusta senos contras!!!!
     #-----------------
@@ -1246,6 +1251,11 @@ def phi_correct_fringes(data,header,option,verbose=False):
                 F *= mask_QUV[j - 1 , :, :]
                 data[i,j,:,:]= np.fft.ifft2(F)
 
+        if 'CAL_FRIN' in header:  # Check for existence
+            header['CAL_FRIN'] = version
+        else:
+            header.set('CAL_FRIN', version, 'Fringe correction ( name+version of py module if True )',after='CAL_DARK')
+
     else:
         print('No fringe correction')
         return data, header
@@ -1271,30 +1281,31 @@ def phi_correct_fringes(data,header,option,verbose=False):
     # np.save('data_f',data)
     # return
 
-    if 'CAL_FRIN' in header:  # Check for existence
-        header['CAL_FRIN'] = version
-    else:
-        header.set('CAL_FRIN', version, 'Fringe correction ( name+version of py module if True )',after='CAL_DARK')
-
     return data, header
 
-def generate_level2(data,wave_axis,rte_mode):
+def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,options = None):
 
-    try:
-        CMILOS_LOC = os.path.realpath(__file__) 
-        CMILOS_LOC = CMILOS_LOC[:-14] + 'cmilos/'
-        if os.path.isfile(CMILOS_LOC+MILOS_EXECUTABLE):
-            printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
-        else:
-            raise ValueError('Cannot find cmilos:', CMILOS_LOC)
-    except ValueError as err:
-        printc(err.args[0],color=bcolors.FAIL)
-        printc(err.args[1],color=bcolors.FAIL)
-        return        
+    if milos_executable != 'python':
+        try:
+            print(milos_executable)
+            CMILOS_LOC = os.path.realpath(__file__) 
+            CMILOS_LOC = CMILOS_LOC[:CMILOS_LOC.rfind('/')-len(CMILOS_LOC)+1] + 'cmilos/'
+            if os.path.isfile(CMILOS_LOC+milos_executable):
+                printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
+            else:
+                raise ValueError('Cannot find cmilos:', CMILOS_LOC)
+        except ValueError as err:
+            printc(err.args[0],color=bcolors.FAIL)
+            printc(err.args[1],color=bcolors.FAIL)
+            return        
 
-    cmd = CMILOS_LOC+"./"+MILOS_EXECUTABLE
-    cmd = fix_path(cmd)
-
+        cmd = CMILOS_LOC+"./"+milos_executable
+        cmd = fix_path(cmd)
+    elif milos_executable == 'python':
+        cmd = None
+    else:
+        printc("Usint python milos wrapper",color=bcolors.WARNING)
+        return 0
     wavelength = 6173.3354
     #OJO, REMOVE. NEED TO CHECK THE REF WAVE FROM S/C-PHI H/K
     shift_w =  wave_axis[3] - wavelength
@@ -1306,6 +1317,6 @@ def generate_level2(data,wave_axis,rte_mode):
     printc('         wave axis (step):  ',(wave_axis - wavelength)*1000.,color = bcolors.WARNING)
     printc('   saving data into dummy_in.txt for RTE input')
         
-    return phi_rte(data,wave_axis,rte_mode,cmilos = cmd)
+    return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options)
     #phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None)
         

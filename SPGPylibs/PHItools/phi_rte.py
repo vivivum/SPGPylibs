@@ -35,7 +35,7 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
     if cmilos == None: #meaning you will use python wrapper
         print('shape input',data.shape) 
         # CHECK DATA DIMENSIONS
-        data = np.einsum('ijkl->klij',data)
+        data = np.einsum('ijkl->klji',data)
         y,x,p,l = data.shape
         print('Data shape',data.shape, "should be (y,x,pol,wave) for C")                                                                                                                                                                                                                      
 

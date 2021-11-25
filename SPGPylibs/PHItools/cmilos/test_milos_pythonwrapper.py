@@ -16,7 +16,7 @@ s = readsav('cmilos_testdata/test_data.save')
 datos = s.data
 wave_axis = s.wave_axis
 
-datos = np.tile(datos, 4) 
+#datos = np.tile(datos, 4) 
 
 print('shape input',datos.shape) 
 # the pipeline has (for the moment being) the data in
@@ -47,7 +47,7 @@ npy = y
 
 print('----------- pmilos---------')
 start = time.process_time()
-out = pymilos.pmilos(options,datos[0:npy,0:npx,:,:],wave_axis)
+out = pymilos.pmilos(options,datos[0:npx,0:npy,:,:],wave_axis)
 print(time.process_time() - start)
 print(out.shape)
 #output has npy*npx 
@@ -55,7 +55,7 @@ print(out.shape)
 
 #comparison using milos
 
-sdata = datos[0:npy,0:npx,:,:] #stupid copy
+sdata = datos[0:npx,0:npy,:,:] #stupid copy
 y,x,p,l = sdata.shape
 
 print('----------- milos---------')

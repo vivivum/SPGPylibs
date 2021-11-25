@@ -870,13 +870,17 @@ def phifdt_pipe(json_input = None,
     # FRINGING - 
     #-----------------
 
-    if correct_fringes:
+    if correct_fringes == 'auto' or correct_fringes == 'manual':
         if verbose:
             plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I - before fringe','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
         data, header = phi_correct_fringes(data,header,option=correct_fringes,verbose=verbose)
         if verbose:
             plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I - after fringe','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
-
+    elif correct_fringes == False:
+        pass
+    else:
+        printc('Error in option finge correction. Options are "manual", "auto" or false. Given: ',color=bcolors.WARNING)
+        print(correct_fringes)
     #-----------------
     # MEDIAN TO CERO
     #-----------------
@@ -931,8 +935,10 @@ def phifdt_pipe(json_input = None,
         #basically replace L1 by L1.5
         try:
             outfile_L2 = set_level(data_f,'L1','L2')
+            outfile_L2 = set_level(outfile_L2,'ilam','stokes')
         except:
             outfile_L2 = set_level(data_f,'L0','L2')
+            outfile_L2 = set_level(outfile_L2,'ilam','stokes')
 
     printc(' Saving data to: ',output_dir+'level2/'+outfile_L2)
 
@@ -1014,37 +1020,37 @@ def phifdt_pipe(json_input = None,
             hdu_list[0].data = rte_invs_noth[2,:,:] * mask
     #            header = hdu_list[0].header
             hdu_list[0].header = header
-            writeto = set_level(outfile_L2,'ilam','bstr')
+            writeto = set_level(outfile_L2,'stokes','bmag')
             hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs_noth[3,:,:] * mask
             # hdu_list[0].header = header
-            writeto = set_level(outfile_L2,'ilam','incl')
+            writeto = set_level(outfile_L2,'stokes','binc')
             hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs[4,:,:] * mask
             # hdu_list[0].header = header
-            writeto = set_level(outfile_L2,'ilam','azim')
+            writeto = set_level(outfile_L2,'stokes','bazi')
             hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = b_los
             # hdu_list[0].header = header
-            writeto = set_level(outfile_L2,'ilam','blos')
+            writeto = set_level(outfile_L2,'stokes','blos')
             hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = v_los
             # hdu_list[0].header = header
-            writeto = set_level(outfile_L2,'ilam','vlos')
+            writeto = set_level(outfile_L2,'stokes','vlos')
             hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
             # hdu_list[0].header = header
-            writeto = set_level(outfile_L2,'ilam','icont')
+            writeto = set_level(outfile_L2,'stokes','icnt')
             hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
 
         printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
@@ -1074,7 +1080,7 @@ def phifdt_pipe(json_input = None,
         cbar.ax.tick_params(labelsize=16)
 
         #ax.imshow(Zm, cmap='gray')
-        writeto = set_level(outfile_L2,'ilam','vlos')
+        writeto = set_level(outfile_L2,'stokes','vlos')
         writeto = set_level(writeto,'.fits','.png')
         plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
         plt.close()
@@ -1104,13 +1110,14 @@ def phifdt_pipe(json_input = None,
         cbar.ax.tick_params(labelsize=16)
         #ax.imshow(Zm, cmap='gray')
 
-        writeto = set_level(outfile_L2,'ilam','blos')
+        writeto = set_level(outfile_L2,'stokes','blos')
         writeto = set_level(writeto,'.fits','.png')
         plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
         plt.close()
 
         printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
 
+    return wave_axis
     # if rte == 'cog':
     #     printc('---------------------RUNNING COG --------------------------',color=bcolors.OKGREEN)
     #     wavelength = 6173.3356
