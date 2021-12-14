@@ -663,7 +663,7 @@ def phifdt_pipe(json_input = None,
                     datan[i,:,m,l] = np.matmul(demodM, ds[i,:,m,l] )
         plib.show_four_row(datan[3,0,:,:],datan[3,1,:,:],datan[3,2,:,:],datan[3,3,:,:],svmin=[0,-0.2,-0.2,-1.],svmax=[100,0.1,0.1,0.1])
 
-    data = phi_apply_demodulation(data,header,instrument)
+    data, header = phi_apply_demodulation(data,instrument,header=header)
 
     if verbose == 1:
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom = 3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])

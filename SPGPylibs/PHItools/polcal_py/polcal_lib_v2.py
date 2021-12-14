@@ -285,10 +285,10 @@ def cal_unit(pol_angle, retardance, ret_angle, angle_rot=None):
     c2 = np.cos(2*theta_r)
     s2 = np.sin(2*theta_r)
 
-# CL = 0.5*[1d0,$
-#       (c2^2d0+s2^2d0*cos(delta_r))*cos(2d0*alpha_r) + c2*s2*(1d0-cos(delta_r))*sin(2d0*alpha_r),$
-#       (s2^2d0+c2^2d0*cos(delta_r))*sin(2d0*alpha_r) + c2*s2*(1d0-cos(delta_r))*cos(2d0*alpha_r),$
-#       s2*sin(delta_r)*cos(2d0*alpha_r)-c2*sin(delta_r)*sin(2d0*alpha_r)]
+    # CL = 0.5*[1d0,$
+    #       (c2^2d0+s2^2d0*cos(delta_r))*cos(2d0*alpha_r) + c2*s2*(1d0-cos(delta_r))*sin(2d0*alpha_r),$
+    #       (s2^2d0+c2^2d0*cos(delta_r))*sin(2d0*alpha_r) + c2*s2*(1d0-cos(delta_r))*cos(2d0*alpha_r),$
+    #       s2*sin(delta_r)*cos(2d0*alpha_r)-c2*sin(delta_r)*sin(2d0*alpha_r)]
 
     cl = 0.5*np.matrix( [1.,
                         (c2**2.+s2**2*np.cos(delta_r))*np.cos(2*alpha_r) +
@@ -657,3 +657,18 @@ def smirror(Phase_shift,R, Angle_incidence):
     [  b*np.cos(2.*beta) , a*np.cos(2.*beta)**2.-np.sqrt(R)*np.cos(alpha)*np.sin(2.*beta)**2 , (a+np.sqrt(R)*np.cos(alpha))*np.sin(4.*beta)/2.                   ,  np.sqrt(R)*np.sin(alpha)*np.sin(2.*beta) ],
     [  b*np.cos(2.*beta) , (a+np.sqrt(R)*np.cos(alpha))*np.sin(4.*beta)/2.                   , a*np.sin(2.*beta)^2.-np.sqrt(R)*np.cos(alpha)*np.cos(2.*beta)**2. , -np.sqrt(R)*np.sin(alpha)*np.cos(2.*beta) ],
     [       0            , -np.sqrt(R)*np.sin(alpha)*np.sin(2.*beta)                         , np.sqrt(R)*np.sin(alpha)*np.cos(2.*beta)                          , -np.sqrt(R)*np.cos(alpha)                 ]]
+
+
+def fit_calib(x,y,plot=None,w_cut=1e-10):
+    '''
+    input:  calib states (angle,4), obs (angle)
+    '''
+    xc = np.matmul(x.T,x)
+    xi = svd_solve(xc, w_cut=w_cut)
+    cf = np.matmul(xi,np.matmul(x.T,y))
+    yfit = np.matmul(x,cf)
+    cov = np.sqrt(np.sum((yfit - y)**2)/(len(y) - len(xc) + 1.0 ) * xc.diagonal() )
+    if plot:
+        plt.plot(y,'.')
+        plt.plot(yfit,'-')
+    return cf,yfit,cov

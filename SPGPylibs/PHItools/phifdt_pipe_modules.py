@@ -281,7 +281,7 @@ def applyPrefilter_dos(data, wvltsData, prefilter, prefScale, wvltsPref, directi
             print("Ivnalid direction! Must be 1 (mult) or -1 (div).")
     return dataPrefApplied
 
-def phi_apply_demodulation(data,header,instrument,demod=False,verbose = False):
+def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = False):
     '''
     Use demodulation matrices to demodulate data size (n_wave*S_POL,N,M)
     ATTENTION: FDT40 is fixed to the one Johann is using!!!!
@@ -326,12 +326,14 @@ def phi_apply_demodulation(data,header,instrument,demod=False,verbose = False):
     ls,ps,ys,xs = data.shape
     for i in range(ls):
         data[i,:,:,:] = np.reshape(np.matmul(demodM,np.reshape(data[i,:,:,:],(ps,xs*ys))),(ps,ys,xs))
-    if 'CAL_IPOL' in header:  # Check for existence
-        header['CAL_IPOL'] = instrument
+    if header != False:
+        if 'CAL_IPOL' in header:  # Check for existence
+            header['CAL_IPOL'] = instrument
+        else:
+            header.set('CAL_IPOL', instrument, 'Onboard calibrated for instrumental polarization',after='CAL_DARK')
+        return data, header
     else:
-        header.set('CAL_IPOL', instrument, 'Onboard calibrated for instrumental polarization',after='CAL_DARK')
-
-    return data
+        return data
 
 def crosstalk_ItoQUV(data_demod,verbose=False,npoints=2000):
     

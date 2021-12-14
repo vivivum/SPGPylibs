@@ -19,6 +19,7 @@ from .phi_utils import *
 from .phi_fits import *
 from .phi_reg import *
 from .phifdt_pipe_modules import phi_correct_dark
+# from .phifdt_flat import do_hough
 from SPGPylibs.GENtools import *
 
 BIT_DEPTH: str = '>i4'   #"images are 32-bit big-endian integer"
@@ -626,7 +627,7 @@ def fdt_flat_gen_fixpoint(image, rel_centers, radious = 0, thrd=0.05, iter=15, \
 
         idx = np.where(n > 0)
         s = G[idx]
-        #  calculate average of gain table for normalization
+        #  calculate average of gain table for normalization 
 
         #sm = np.mean(s)
         #sm2 = np.mean(s**2)
@@ -688,7 +689,7 @@ def fdt_flat_fixpoint(observations, wavelength, npol, read_shits = 0, shifts = N
 
         if disp_method == 'Hough':
 
-            centers, radius = do_hough(image, inner_radius, outer_radius, steps,verbose=False,threshold = 0.05)
+            centers, radius = do_hough_fixpoint(image, inner_radius, outer_radius, steps,verbose=False,threshold = 0.05)
         
             if shifts_file:
                 _ = write_shifts(shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt', centers)
@@ -716,6 +717,7 @@ def fdt_flat_fixpoint(observations, wavelength, npol, read_shits = 0, shifts = N
                 centers[i,1],centers[i,0],radius[i] = find_center(image[i],sjump = 4,njumps = 100,threshold = 0.8)
                 print, 'Image',i,'c: ',centers[i,0],',',centers[i,1],' rad: ', radius[i]
         else:
+            print('NO CENTER METHOD')
             pass
     #make sure we have integer numpy numbers in the centers 
     centers = np.array(centers).astype(int)

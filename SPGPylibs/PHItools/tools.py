@@ -77,3 +77,11 @@ def fix_path(path,dir='forward',verbose=False):
         return path
     else:
         pass
+
+
+# def find_div(x,lim):
+#     def divisible(m, n):
+#         return m % n == 0
+#     for i in range(lim): 
+#         if divisible(x,i+1): 
+#             print(i) 
