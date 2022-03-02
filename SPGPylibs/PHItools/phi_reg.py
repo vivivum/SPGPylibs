@@ -32,7 +32,7 @@ def sampling(N):
     x=np.linspace(-N/2,N/2,N)
     y=np.copy(x)
     X,Y=np.meshgrid(x,y)
-    return X,Y
+    return X,Y 
 
 def aperture(X,Y,N,R):
     """

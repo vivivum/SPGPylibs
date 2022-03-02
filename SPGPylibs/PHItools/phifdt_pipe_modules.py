@@ -134,7 +134,9 @@ def phi_correct_prefilter(prefilter_fits,header,data,voltagesData,verbose = Fals
         plt.legend()
         plt.show()
         del datap
-    slash,_ = find_string(prefilter_fits,'/')
+    slash,nothing = find_string(prefilter_fits,'/')
+    if nothing == -1:
+        slash = [0]
     if 'CAL_PRE' in header:  # Check for existence
         header['CAL_PRE'] = prefilter_fits[slash[-1]+1:-4]
     else:
@@ -283,7 +285,7 @@ def applyPrefilter_dos(data, wvltsData, prefilter, prefScale, wvltsPref, directi
 
 def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = False):
     '''
-    Use demodulation matrices to demodulate data size (n_wave*S_POL,N,M)
+    Use demodulation matrices to demodulate data size ls,ps,ys,xs  (n_wave*S_POL,N,M)
     ATTENTION: FDT40 is fixed to the one Johann is using!!!!
     '''
 
@@ -465,7 +467,7 @@ def cross_talk_QUV(data,nran = 2000,nlevel=0.3,verbose=False,block=True):
 
     m, c = np.linalg.lstsq(A, yU, rcond=None)[0]
     cVU = [m,c]
-    p = np.poly1d(cVU)
+    pU = np.poly1d(cVU)
 
     if verbose:
         plt.figure(figsize=(8, 8))
@@ -1044,8 +1046,10 @@ def phi_correct_ghost_dm(data,header,rad,verbose=False):
 def phi_correct_fringes(data,header,option,verbose=False):
     '''
     Startup version on Jun 2021
+    24 Feb 2022: change int in freq by round since we we were floor rounding the pixel positions 
     '''
     version = 'phi_correct_fringes V1.0 Jun 2021'
+    
     xd  = int(header['NAXIS1'])    
     yd  = int(header['NAXIS2'])    
     zd  = int(header['NAXIS3'])    
@@ -1206,14 +1210,21 @@ def phi_correct_fringes(data,header,option,verbose=False):
         px_y_V = freq_y_V*yd
         #reflection
         printc(px_x_Q,xd - px_x_Q,color=bcolors.OKBLUE)
-        printc(px_x_Q,(xd - px_x_Q).astype(int),color=bcolors.OKBLUE)
+        printc( round(px_x_Q,(xd - px_x_Q) ),color=bcolors.OKBLUE)
 
-        px_x_Q = np.append(px_x_Q,xd - px_x_Q - 1).astype(int)
-        px_y_Q = np.append(px_y_Q,yd - px_y_Q - 1).astype(int)
-        px_x_U = np.append(px_x_U,xd - px_x_U - 1).astype(int)
-        px_y_U = np.append(px_y_U,yd - px_y_U - 1).astype(int)
-        px_x_V = np.append(px_x_V,xd - px_x_V - 1).astype(int)
-        px_y_V = np.append(px_y_V,yd - px_y_V - 1).astype(int)
+        px_x_Q = np.append(px_x_Q,xd - px_x_Q - 1)
+        px_y_Q = np.append(px_y_Q,yd - px_y_Q - 1)
+        px_x_U = np.append(px_x_U,xd - px_x_U - 1)
+        px_y_U = np.append(px_y_U,yd - px_y_U - 1)
+        px_x_V = np.append(px_x_V,xd - px_x_V - 1)
+        px_y_V = np.append(px_y_V,yd - px_y_V - 1)
+
+        px_x_Q = round(px_x_Q)
+        px_y_Q = round(px_y_Q)
+        px_x_U = round(px_x_U)
+        px_y_U = round(px_y_U)
+        px_x_V = round(px_x_V)
+        px_y_V = round(px_y_V)
 
         wsize = 50
         win_halfw = 2 
@@ -1285,7 +1296,7 @@ def phi_correct_fringes(data,header,option,verbose=False):
 
     return data, header
 
-def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,options = None):
+def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,options = None,loopthis = 0):
 
     if milos_executable != 'python':
         try:
@@ -1306,7 +1317,7 @@ def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,
     elif milos_executable == 'python':
         cmd = None
     else:
-        printc("Usint python milos wrapper",color=bcolors.WARNING)
+        printc("Using python milos wrapper",color=bcolors.WARNING)
         return 0
     wavelength = 6173.3354
     #OJO, REMOVE. NEED TO CHECK THE REF WAVE FROM S/C-PHI H/K
@@ -1319,6 +1330,6 @@ def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,
     printc('         wave axis (step):  ',(wave_axis - wavelength)*1000.,color = bcolors.WARNING)
     printc('   saving data into dummy_in.txt for RTE input')
         
-    return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options)
+    return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options,loopthis=loopthis)
     #phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None)
         

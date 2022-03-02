@@ -1,12 +1,19 @@
 #by juanp 2015 (IAA-CSIC)
 CC = gcc
-CFLAGS = -O3
 LIBS = -lm
+
+UNAME := $(shell uname)
+ifeq ($(UNAME), Linux)
+	CFLAGS = -O3 -fPIC
+else
+	CFLAGS = -O3
+endif
 
 CXXFLAGS="-mmacosx-version-min=10.10"
 HOSTCOMPUTER := $(shell hostname | cut -d . -f 1)
 
 default: print create_cuantic.o fvoigt.o fgauss.o me_der.o mil_sinrf.o calculosCompartidos.o lib.o milos.o libmilos.a milos fin
+
 
 print:
 	@echo Compilando CMILOS in $(info HOSTCOMPUTER is $(HOSTCOMPUTER))

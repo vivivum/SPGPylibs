@@ -969,7 +969,7 @@ def phifdt_pipe(json_input = None,
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
         
         rte_invs = np.zeros((12,yd,xd)).astype(float)
-        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte)
+        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte,loopthis=loopthis)
 
         rte_invs_noth = np.copy(rte_invs)
         umbral = 3.
