@@ -1,4 +1,5 @@
 import os, time, functools
+from numpy import isclose
 
 class bcolors:
     HEADER = '\033[95m'
@@ -78,6 +79,11 @@ def fix_path(path,dir='forward',verbose=False):
     else:
         pass
 
+def check(a,b,atol=1e-15):
+    if isclose(a, b, atol=atol).all():
+        print("ok")  
+    else:
+        print("differ")  
 
 # def find_div(x,lim):
 #     def divisible(m, n):

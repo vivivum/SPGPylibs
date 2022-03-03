@@ -7,7 +7,7 @@
 # Description: programs for accesing data and fits files
 #-----------------------------------------------------------------------------
 from .tools import *
-from .cmilos import pymilos
+#from .cmilos import pymilos
 import subprocess
 import numpy as np
 #although not necessary these are the dtype to be passed to C
@@ -15,7 +15,7 @@ DTYPE_INT = np.intc
 DTYPE_DOUBLE = np.float_
 
 @timeit
-def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
+def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None,loopthis=0):
     ''' For the moment this is just isolated from the main pipeline'''
 
     # Inv Iterations                                   = 15
@@ -75,6 +75,17 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
 
         l,p,x,y = data.shape
         print(l,p,x,y)
+        if loopthis == 5:
+            print(data[:,0,0,0])
+            datad = np.copy(data)
+            datad[0:5,:,:,:] = data[1:,:,:,:]
+            datad[5,:,:,:] = data[0,:,:,:]
+            data = np.copy(datad)
+            del datad
+            print(data[:,0,0,0])
+            printc('RUNING TEST LOOP 5 - BAD INPUT TO RTE',color=bcolors.FAIL)
+        else:
+            printc('pass',color=bcolors.FAIL)
 
         filename = 'dummy_in.txt'
         with open(filename,"w") as f:

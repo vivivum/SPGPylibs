@@ -17,6 +17,103 @@ from platform import node
 MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
 import os
 
+def phi_load_flat(flat_f):
+    '''
+    Read Flat file
+    '''  
+    #TODO keep dimensions of the flat as is
+
+    printc('-->>>>>>> Reading flat file'+flat_f,color=bcolors.OKGREEN)
+    printc('          Assumes they are already normalized to ONE ',color=bcolors.OKGREEN)
+    printc('          input should be [wave X Stokes,y-dim,x-dim].',color=bcolors.OKGREEN)
+    try:
+        dummy,flat_header = fits_get(flat_f)
+        fz_d,fy_d,fx_d = dummy.shape
+
+        flat = np.zeros([24,2048,2048]).astype(np.float32)
+        PXBEG1_f  = int(flat_header['PXBEG1']) - 1           
+        PXEND1_f  = int(flat_header['PXEND1']) - 1          
+        PXBEG2_f  = int(flat_header['PXBEG2']) - 1           
+        PXEND2_f  = int(flat_header['PXEND2']) - 1 
+        if fx_d < 2047:    
+            printc('         input flat was cropped to: [',PXBEG1_f,',',PXEND1_f,'],[',PXBEG2_f,',',PXEND2_f,']',color=bcolors.WARNING)
+
+        flat[:,PXBEG1_f:PXEND1_f+1,PXBEG2_f:PXEND2_f+1] = dummy
+        del dummy
+
+        flat_DID = flat_header['PHIDATID']
+        flat_scale = 0
+
+    except Exception:
+        printc("ERROR, Unable to open flats file: {}",flat_f,color=bcolors.FAIL)
+        return 0
+
+    return flat, flat_header,flat_scale, flat_DID
+
+def phi_load_dark(dark_f):
+    '''
+    Read Dark file
+    '''
+
+    printc('-->>>>>>> Reading Darks  (Input should be [y-dim,x-dim] ) ',color=bcolors.OKGREEN)
+    printc('          DARK IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
+
+    try:
+        dark,dark_header = fits_get(dark_f)
+        dark = dark / 256.
+    except Exception:
+        printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
+        raise 
+
+    dark_DID = dark_header['PHIDATID']
+    printc('Dark DID: ',dark_DID,color=bcolors.OKBLUE)
+    dark_scale = fits_get(dark_f,scaling = True)
+
+    return dark, dark_header, dark_scale, dark_DID
+
+def phi_apply_dark(dark,dark_scale,dark_header,dark_DID,data,data_scale,data_header,verbose = False):
+
+    #check scaling
+    if dark_scale["Present"][0] == data_scale["Present"][0]:
+        scaling = dark_scale["scaling"][0] / data_scale["scaling"][0]
+    else:
+        scaling = dark_scale["scaling"][1] / data_scale["scaling"][1] * dark_scale["scaling"][0]
+
+    if scaling != 1:
+        printc('          checking scalling and correcting for it in the dark.',dark_scale,data_scale,scaling,color=bcolors.WARNING)
+        dark = dark * scaling
+
+    printc('-->>>>>>> Correcting dark current.',color=bcolors.OKGREEN)
+    PXBEG1  = int(data_header['PXBEG1']) - 1           
+    PXEND1  = int(data_header['PXEND1']) - 1          
+    PXBEG2  = int(data_header['PXBEG2']) - 1           
+    PXEND2  = int(data_header['PXEND2']) - 1   
+    #CHECK NACC
+    acc = int(data_header['ACCACCUM']) * int(data_header['ACCCOLIT'])
+    acc_dark = int(dark_header['ACCACCUM']) * int(dark_header['ACCCOLIT'])
+    if acc != acc_dark:
+        printc('WARNING - NACC NOT IDENTICAL DURING DARK CORRECTION',color=bcolors.FAIL)
+        printc('DARK NACC ',acc_dark,' DATA NACC ',acc,color=bcolors.FAIL)
+        
+    if verbose:
+        dummy = data[0,0,:,:]
+    data = data - dark[np.newaxis,np.newaxis,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
+    data = np.abs(data)
+
+    if 'CAL_DARK' in data_header:  # Check for existence
+        data_header['CAL_DARK'] = dark_DID
+
+    if verbose:
+        md = np.mean(dark)
+        if verbose != True:
+            plib.show_three(dark,dummy,data[0,0,:,:],vmin=[-md,-md,-md],vmax=[md*2,md*2,md*2],block=True,pause=0.1,title=['Dark','Data','Data after dark correction'],
+                xlabel='Pixel',ylabel='Pixel',cmap='gray',save=verbose)
+        else:
+            plib.show_three(dark,dummy,data[0,0,:,:],vmin=[-md,-md,-md],vmax=[md*2,md*2,md*2],block=True,pause=0.1,title=['Dark','Data','Data after dark correction'],
+                xlabel='Pixel',ylabel='Pixel',cmap='gray')
+
+    return data,data_header
+
 def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = False):
 
     #-----------------
@@ -1210,7 +1307,7 @@ def phi_correct_fringes(data,header,option,verbose=False):
         px_y_V = freq_y_V*yd
         #reflection
         printc(px_x_Q,xd - px_x_Q,color=bcolors.OKBLUE)
-        printc( round(px_x_Q,(xd - px_x_Q) ),color=bcolors.OKBLUE)
+        printc( np.round(px_x_Q),np.round(xd - px_x_Q) ,color=bcolors.OKBLUE)
 
         px_x_Q = np.append(px_x_Q,xd - px_x_Q - 1)
         px_y_Q = np.append(px_y_Q,yd - px_y_Q - 1)
@@ -1219,12 +1316,12 @@ def phi_correct_fringes(data,header,option,verbose=False):
         px_x_V = np.append(px_x_V,xd - px_x_V - 1)
         px_y_V = np.append(px_y_V,yd - px_y_V - 1)
 
-        px_x_Q = round(px_x_Q)
-        px_y_Q = round(px_y_Q)
-        px_x_U = round(px_x_U)
-        px_y_U = round(px_y_U)
-        px_x_V = round(px_x_V)
-        px_y_V = round(px_y_V)
+        px_x_Q = np.round(px_x_Q).astype(int)
+        px_y_Q = np.round(px_y_Q).astype(int)
+        px_x_U = np.round(px_x_U).astype(int)
+        px_y_U = np.round(px_y_U).astype(int)
+        px_x_V = np.round(px_x_V).astype(int)
+        px_y_V = np.round(px_y_V).astype(int)
 
         wsize = 50
         win_halfw = 2 

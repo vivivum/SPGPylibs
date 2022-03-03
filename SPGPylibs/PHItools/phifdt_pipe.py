@@ -14,13 +14,14 @@ from .phi_rte import *
 #from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d,find_string
 from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_apply_demodulation,\
     crosstalk_ItoQUV,cross_talk_QUV,crosstalk_ItoQUV2d,phi_correct_ghost,phi_correct_fringes,\
-    generate_level2
+    generate_level2,phi_load_dark,phi_load_flat,phi_apply_dark
 
 import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
 
-#global variables 
+#--------  GLOBALS  --------  
 PLT_RNG = 5
+#---------------------------
 
 def phifdt_pipe(json_input = None, 
     data_f: str = None,  dark_f: str = None,  flat_f: str = None,
@@ -28,7 +29,7 @@ def phifdt_pipe(json_input = None,
     instrument: str = 'FDT40',
     flat_c:bool = True, dark_c:bool = True, ItoQUV:bool = False, VtoQU:bool = False, ind_wave:bool = False,                         #correction options
     hough_params:list = [250, 800, 100], 
-    norm_f:bool = False, flat_scaling:float = 1., flat_index:list = None,                                          #flatfield options
+    norm_f:bool = False, flat_scaling:float = 1.,                                          #flatfield options
     prefilter:bool = True, prefilter_fits:str = '0000990710_noMeta.fits',
     realign:bool = False, verbose:bool = True, shrink_mask:int = 2, correct_fringes:str = False,
     correct_ghost:bool = False, putmediantozero:bool = True,
@@ -73,6 +74,7 @@ def phifdt_pipe(json_input = None,
     flat_index = None : in case you want a particular flat to be applied at another wave, e.g.,
         flat_index = [5,1,2,3,4,0] exchange the first and last wave flats
         This is for testing stuff, mainly. 
+        #DEPRECATED in MArch 2022 (Not useful)
     prefilter = 1 : To correct for the prefilter 
     prefilter_fits = '../RSW1/0000990710_noMeta.fits' : User should provide prefilter data fits file location
     realign = False : bool
@@ -189,14 +191,16 @@ def phifdt_pipe(json_input = None,
     version = 'V1.0 13th September 2021'
     version = 'V1.0 3th November 2021'
     #added json configuration and modify all keyword names to be consistent with HRT pipe
+    version = 'V1.0 10th March 2022'
+    #major revision ongoing (reordesing, creatils call onjetc, parallel stuff, auto C compilation, etc)
 
     version_cmilos = 'CMILOS v0.91 (July - 2021)'
 
-    printc('--------------------------------------------------------------',bcolors.OKGREEN)
-    printc('PHI FDT data reduction software (for develping purposes only) ',bcolors.OKGREEN)
-    printc('  version: '+ version,bcolors.OKGREEN)
-    printc('  version_cmilos: '+ version_cmilos,bcolors.OKGREEN)
-    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    printc('---------------------------------------------------------------',bcolors.OKGREEN)
+    printc(' PHI FDT data reduction software (beta version)                ',bcolors.OKGREEN)
+    printc('  Pipeline version: '+ version,bcolors.OKGREEN)
+    printc('  CMILOS version: '+ version_cmilos,bcolors.OKGREEN)
+    printc('---------------------------------------------------------------',bcolors.OKGREEN)
 
     if json_input:
 
@@ -239,7 +243,82 @@ def phifdt_pipe(json_input = None,
         import pprint
         # Prints the nicely formatted dictionary
         pprint.pprint(CONFIG)#, sort_dicts=False)
+    else:
+        printc(' Using sequencial mode ',bcolors.OKGREEN)
+        printc('    (hopefully with the rigth inputs since ERROR handling is not yet fully in place) ',bcolors.OKGREEN)
 
+    # STEP 1
+    #-----------------
+    # READ DARK DATA
+    #-----------------
+    if dark_c:
+        dark, dark_header, dark_scale, dark_DID = phi_load_dark(dark_f)
+        #data, header  = phi_correct_dark(dark_f,data,header,data_scale,verbose = verbose)
+    else:
+        printc('-->>>>>>> No darks mode                    ',color=bcolors.WARNING)
+
+    # STEP 2
+    #-----------------
+    # READ FLAT FIELDS
+    #-----------------
+
+    if flat_c:
+        flat, flat_header, flat_scale, flat_DID = phi_load_flat(flat_f)
+        flat = np.ascontiguousarray(flat)
+
+        if verbose:
+            plib.show_one(flat[0,:,:],xlabel='pixel',ylabel='pixel',title='Flat first image raw (1 of 24)',cbarlabel='Any (as input)',save=None,cmap='gray')
+
+        printc('-->>>>>>> Obtaining voltages from flats ',color=bcolors.OKGREEN)
+        wave_axis_f,voltagesFlat,tunning_constant_f,cpos_f,ref_wavelength_f = fits_get_sampling(flat_f) 
+
+        printc('          FLAT FG voltages: ',voltagesFlat,color=bcolors.OKBLUE)
+        printc('          FLAT Continuum position at wave: ', cpos_f,color=bcolors.OKBLUE)
+        printc('          FLAT ref_wavelength [mA]: ',ref_wavelength_f,color=bcolors.OKBLUE)
+        printc('          FLAT wave axis [mA]: ',wave_axis_f,color=bcolors.OKBLUE)
+        printc('          FLAT wave axis - ref_wavelength [mA]: ',wave_axis_f - ref_wavelength_f,color=bcolors.OKBLUE)
+        dummy_1 = (voltagesFlat-np.roll(voltagesFlat,-1))*(tunning_constant_f*1000)
+        dummy_2 = np.sort(np.abs(dummy_1))
+        sampling_f = np.mean(dummy_2[0:-2])
+        printc('          FLAT average sampling [mA]: ',sampling_f,color=bcolors.OKBLUE)
+
+    #-----------------
+    # ROLL FLAT IF CONTINUUM IS IN DIFFERENT POSITION #TODO Take into account in the reduction (-4,-3,-2,-1, etc...)
+    # default will be to have the continuum in the blue (first wavelength) ALWAYS!!!
+    # Probably before demodulation and flat is better!!!!
+    #-----------------
+
+        if cpos_f != 0:
+            printc('          Rolling flat to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
+            if voltagesFlat[cpos_f] < voltagesFlat[0]:
+                printc('            The continuum was TAKEN in the BLUE, stored in the RED, but we want it in the BLUE *',color=bcolors.WARNING)
+                flat = np.roll(flat,4,axis=0)
+                voltagesFlat = np.roll(voltagesFlat,1,axis=0)
+                wave_axis_f = np.roll(wave_axis_f,1,axis=0)
+
+            elif voltagesFlat[cpos_f] > voltagesFlat[0]:
+                printc('            The continuum was TAKEN in the RED but we want it in the BLUE',color=bcolors.WARNING)
+                # printc('            * Notice that this is necessary for the FLAT correction',color=bcolors.FAIL)
+                # printc('            *  but the wavelength axis has changed the continuum point *',color=bcolors.FAIL)
+                flat = np.roll(flat,4,axis=0)
+                voltagesFlat = np.roll(voltagesFlat,1,axis=0)
+                wave_axis_f = np.roll(wave_axis_f,1,axis=0)
+            else:
+                printc('            * NO ROLLING *',color=bcolors.FAIL)
+
+            cpos_f = 0
+            printc('          New Flat FG voltages: ',voltagesFlat,color=bcolors.OKBLUE)
+            printc('          NEW Flat continuum position at wave: ', cpos_f,color=bcolors.OKBLUE)
+            printc('          NEW Flat data wave axis [mA]: ',wave_axis_f,color=bcolors.OKBLUE)
+
+        #CHANGE TO 4D      
+        zf,yf,xf = flat.shape
+        flat = np.reshape(flat,(zf//4,4,yf,xf))
+
+    else:
+        printc('-->>>>>>> No flats mode                    ',color=bcolors.WARNING)
+
+    # STEP 3
     #-----------------
     # READ DATA
     #-----------------
@@ -265,8 +344,10 @@ def phifdt_pipe(json_input = None,
         printc('-->>>>>>> data DID '+DID,color=bcolors.OKGREEN)
         printc('          DATA IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
         printc('-->>>>>>> Reshaping data to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
-        zd,yd,xd = data.shape
-        data = np.reshape(data,(zd//4,4,yd, xd))
+
+        xd  = int(header['NAXIS1']) 
+        yd  = int(header['NAXIS2'])    
+        zd  = int(header['NAXIS3'])    
         data = data / 256. #from fix to 32
         data = np.ascontiguousarray(data)
 
@@ -301,7 +382,7 @@ def phifdt_pipe(json_input = None,
     header['history'] = ' Parameters Hough: '+ str(hough_params)
 
     if verbose:
-        plib.show_one(data[0,0,:,:],vmin=0,xlabel='pixel',ylabel='pixel',title='Data first image raw (1 of 24)',cbarlabel='DN',save=None,cmap='gray')
+        plib.show_one(data[0,:,:],vmin=0,xlabel='pixel',ylabel='pixel',title='Data first image raw (1 of 24)',cbarlabel='DN',save=None,cmap='gray')
     
     #    * CAL_RTE=                990510 / ok
     #    * CAL_SCIP= 'None'               / Onboard scientific data analysis
@@ -325,51 +406,153 @@ def phifdt_pipe(json_input = None,
     
     data_scale = fits_get(data_filename,scaling = True)
 
+
+    # STEP 5
     #-----------------
-    # READ FLAT FIELDS
+    # ROLL DATA TODO: This has to be removed in the future.
+    #-----------------
+
+    #-----------------
+    # GET INFO ABOUT VOLTAGES/WAVELENGTHS, determine continuum and new flat
+    #-----------------
+    printc('-->>>>>>> Obtaining voltages from data ',color=bcolors.OKGREEN)
+    wave_axis,voltagesData,tunning_constant,cpos,ref_wavelength = fits_get_sampling(data_filename)  
+    printc('          Data FG voltages: ',voltagesData,color=bcolors.OKBLUE)
+    printc('          Continuum position at wave: ', cpos,color=bcolors.OKBLUE)
+    printc('          Data ref_wavelength [mA]: ',ref_wavelength,color=bcolors.OKBLUE)
+    printc('          Data wave axis [mA]: ',wave_axis,color=bcolors.OKBLUE)
+    printc('          Data wave axis - axis[0] [mA]: ',wave_axis - wave_axis[0],color=bcolors.OKBLUE)
+    dummy_1 = (voltagesData-np.roll(voltagesData,-1))*(tunning_constant*1000)
+    dummy_2 = np.sort(np.abs(dummy_1))
+    sampling = np.mean(dummy_2[0:-2])
+    printc('          Data average sampling [mA]: ',sampling,' using tunning constant: ',(tunning_constant*1000),color=bcolors.OKBLUE)
+    #-----------------
+    # ROLL DATA IF CONTINUUM IS IN DIFFERENT POSITION 
+    # Probably before demodulation and flat is better!!!!
+    #-----------------
+    if cpos != 0:
+        printc('          Rolling data to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
+        if voltagesData[cpos] < voltagesData[0]:
+            printc('            The continuum was TAKEN in the BLUE, stored in the RED, but we want it in the BLUE *',color=bcolors.WARNING)
+            data = np.roll(data,4,axis=0)
+            voltagesData = np.roll(voltagesData,1,axis=0)
+            wave_axis = np.roll(wave_axis,1,axis=0)
+
+        elif voltagesData[cpos] > voltagesData[0]:
+            printc('            The continuum was TAKEN in the RED but we want it in the BLUE',color=bcolors.WARNING)
+            data = np.roll(data,4,axis=0)
+            voltagesData = np.roll(voltagesData,1,axis=0)
+            wave_axis = np.roll(wave_axis,1,axis=0)
+        else:
+            printc('            * NO ROLLING *',color=bcolors.FAIL)
+
+        cpos = 0
+        printc('          New FG voltages: ',voltagesData,color=bcolors.OKBLUE)
+        printc('          NEW continuum position at wave: ', cpos,color=bcolors.OKBLUE)
+        printc('          NEW data wave axis [mA]: ',wave_axis,color=bcolors.OKBLUE)
+
+    #CHANGE TO 4D      
+    data = np.reshape(data,(zd//4,4,yd,xd))
+
+
+    # STEP 6
+    #-----------------
+    # CORRECT DARK 
+    #-----------------
+    
+    if dark_c:
+        data,header = phi_apply_dark(dark,dark_scale,dark_header,dark_DID,data,data_scale,header,verbose = verbose)
+    else:
+        printc('-->>>>>>> Skiping dark correction                   ',color=bcolors.WARNING)
+
+
+    # STEP 7
+    #-----------------
+    # TODO: INTERPOLATE THE FLAT TO MATCH THE WAVELENG (CAVITY)
+    #-----------------
+    
+    # from scipy.interpolate import RegularGridInterpolator
+    # x = np.linspace(0,2047,2048).astype(int)
+    # y = np.linspace(0,2047,2048).astype(int)
+    # z = np.array([-300.,-140.,-70.,0.,70.,140.,300.]) #ojo con el -300
+    # zn = np.array([-175.,-140.,-105.,-70.,-35.,0.,35.,70.,105.,140.,175.,300.])
+
+    # flat_rsw1 = np.concatenate(((flat_rsw1[5,:,:,:])[np.newaxis,:,:,:],flat_rsw1))
+    # fn = RegularGridInterpolator((z,y,x), flat_rsw1[:,0,:,:])
+    # pts = np.array([-40,10,10])
+    # print(fn(pts))
+
+    #     pts = np.meshgrid(-40.,y,x)
+    # pts = np.array([m.flatten() for m in pts])
+    # flat_n = fn(pts.T)
+    # result = flat_n.reshape((2048,2048))
+    # plt.imshow(result,vmin=0.9,vmax=1.1)
+
+    # flat_n = np.zeros((12,4,2048,2048))
+
+    # for i in range(4):
+    #   fn = RegularGridInterpolator((z,y,x), flat_rsw1[:,i,:,:],bounds_error=False)
+    #   for j in range(12):
+    #     print(i,zn[j])
+    #     pts_list = np.meshgrid(zn[j],y,x)
+    #     pts = np.array([m.flatten() for m in pts_list])
+    #     flat_n[j,i,:,:] = fn(pts.T).reshape((2048,2048))
+
+
+    # STEP 8
+    #-----------------
+    # APPLY FLAT CORRECTION 
+    # TODO: TAKE THE REAL FLAT 
     #-----------------
 
     if flat_c:
-        printc('-->>>>>>> Reading flat file'+flat_f,color=bcolors.OKGREEN)
-        printc('          Assumes they are already normalized to ONE ',color=bcolors.OKGREEN)
-        printc('          input should be [wave X Stokes,y-dim,x-dim].',color=bcolors.OKGREEN)
-        try:
-            dummy,flat_header = fits_get(flat_f)
-            fz_d,fy_d,fx_d = dummy.shape
+        printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
 
-            flat = np.zeros([24,2048,2048]).astype(np.float32)
-            PXBEG1_f  = int(flat_header['PXBEG1']) - 1           
-            PXEND1_f  = int(flat_header['PXEND1']) - 1          
-            PXBEG2_f  = int(flat_header['PXBEG2']) - 1           
-            PXEND2_f  = int(flat_header['PXEND2']) - 1 
-            if fx_d < 2047:    
-                printc('         input flat was cropped to: [',PXBEG1_f,',',PXEND1_f,'],[',PXBEG2_f,',',PXEND2_f,']',color=bcolors.WARNING)
+        if norm_f:
+            rfx=[1024-200,1024+200]
+            rfy=[1024-200,1024+200]
+            print('          normalizing flats using region x = [',rfx[0],':',rfx[1],'] y = ]',rfy[0],':',rfy[1],']')
+        else:
+            flat_mean = 1.0
 
-            flat[:,PXBEG1_f:PXEND1_f+1,PXBEG2_f:PXEND2_f+1] = dummy
-            del dummy
+        for l in range(int(zd//4)):
+            for p in range(4):
+                if verbose:
+                    print('          ... pol: ',p,' wave: ',l)
 
-            printc('-->>>>>>> Reshaping Flat to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
-            fz,fy,fx = flat.shape
-            flat = np.reshape(flat,(fz//4,4,fy,fx))
+                if norm_f:
+                    flat_mean = np.mean(flat[l,p,rfy[0]:rfy[1],rfx[0]:rfx[1]])
 
-        except Exception:
-            printc("ERROR, Unable to open flats file: {}",flat_f,color=bcolors.FAIL)
-            return 0
+                data[l,p,:,:] = data[l,p,:,:] / (flat[l,p,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] / float(flat_scaling) / flat_mean )
+
+        # locations = find_string(flat_f,'_')
+        # try:
+        #     DID_flat = flat_f[locations[-1]+1:locations[-1]+10]
+        #     print('DID: ',np.float(DID_flat))
+        # except:
+        #     DID_flat = flat_f[:-4]
+        #     printc("Unable to get DID from: {}",flat_f,color=bcolors.WARNING)         
+        #     locations = find_string(dark_f,'/')
+        #     DID_flat = flat_f[locations[-1]+1:]
+        #     printc('DID: ',DID_flat,' -->> WILL NOT BE A NUMBER',color=bcolors.WARNING)
+
+        if 'CAL_FLAT' in header:  # Check for existence
+            header['CAL_FLAT'] = flat_DID
+        else:
+            header.set('CAL_FLAT', flat_DID, 'Onboard calibrated for gain table',after='CAL_DARK')
 
         if verbose:
-            plib.show_one(flat[0,0,:,:],xlabel='pixel',ylabel='pixel',title='Flat first image raw (1 of 24)',cbarlabel='Any (as input)',save=None,cmap='gray')
+            plib.show_one(data[cpos,0,:,:],vmax=None,vmin=0,xlabel='pixel',ylabel='pixel',title='Data / flat at continuum',cbarlabel='DN',save=None,cmap='gray')
 
-    else:
-        printc('-->>>>>>> No flats mode                    ',color=bcolors.WARNING)
-
+    # STEP 9
     #-----------------
-    # READ AND CORRECT DARK FIELD
+    # CORRECT PREFILTER 
     #-----------------
-    if dark_c:
-        data,header  = phi_correct_dark(dark_f,data,header,data_scale,verbose = verbose)
-    else:
-        printc('-->>>>>>> No darks mode                    ',color=bcolors.WARNING)
 
+    if prefilter:
+        data,header  = phi_correct_prefilter(prefilter_fits,header,data,voltagesData,verbose = verbose)
+
+    # STEP 11
     #-----------------
     # FIND DATA CENTER 
     #-----------------
@@ -418,6 +601,14 @@ def phifdt_pipe(json_input = None,
     # find_circle_hough devuelve c = c[0] = x and c[1] = y !!!!!!!!!!!!!!
     # Esto viene porque en el KLL esta definido así (al reves) en la rutina votes()
  
+     # STEP 11
+    #-----------------
+    # GHOST CORRECTION  (NEEDS INFO FROM DISK CENTER!!!)
+    #-----------------
+
+    if correct_ghost:
+        data,header = phi_correct_ghost(data,header,radius,verbose = True)
+
     #-----------------
     # TAKE ONLY DISK WITH MARGIN
     #-----------------
@@ -429,208 +620,9 @@ def phifdt_pipe(json_input = None,
     mask = shift(mask, shift=(c[0]-xd//2,c[1]-yd//2), fill_value=0)
     printc('   RX = ', rx, 'RY = ', ry, color=bcolors.WARNING)
 
-    #-----------------
-    # GET INFO ABOUT VOLTAGES/WAVELENGTHS, determine continuum and new flat
-    #-----------------
-    printc('-->>>>>>> Obtaining voltages from data ',color=bcolors.OKGREEN)
-    wave_axis,voltagesData,tunning_constant,cpos,ref_wavelength = fits_get_sampling(data_filename)  
-    printc('          Data FG voltages: ',voltagesData,color=bcolors.OKBLUE)
-    printc('          Continuum position at wave: ', cpos,color=bcolors.OKBLUE)
-    printc('          Data ref_wavelength [mA]: ',ref_wavelength,color=bcolors.OKBLUE)
-    printc('          Data wave axis [mA]: ',wave_axis,color=bcolors.OKBLUE)
-    printc('          Data wave axis - axis[0] [mA]: ',wave_axis - wave_axis[0],color=bcolors.OKBLUE)
-    dummy_1 = (voltagesData-np.roll(voltagesData,-1))*(tunning_constant*1000)
-    dummy_2 = np.sort(np.abs(dummy_1))
-    sampling = np.mean(dummy_2[0:-2])
-    printc('          Data average sampling [mA]: ',sampling,' using tunning constant: ',(tunning_constant*1000),color=bcolors.OKBLUE)
-    #-----------------
-    # ROLL DATA IF CONTINUUM IS IN DIFFERENT POSITION 
-    # Probably before demodulation and flat is better!!!!
-    #-----------------
-    if cpos != 0:
-        datar = np.copy(data)
-        voltagesDatar = np.copy(voltagesData)
-        wave_axisr = np.copy(wave_axis)
-        if voltagesData[cpos] < voltagesData[0]:
-        #continuum is on the right but it is in the blue!!!!
-            printc('          Rolling data to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
-            printc('            * the continuum was TAKEN in the BLUE, stored in the RED, but we want it in the BLUE *',color=bcolors.WARNING)
-            for i in range(zd//4):
-                #print((i+1)%(zd//4),i%(zd//4),i,(zd//4))
-                datar[(i+1)%(zd//4),:,:,:] = data[i%(zd//4),:,:,:] # np.roll(data, 4, axis=0)
-                voltagesDatar[(i+1)%(zd//4)] = voltagesData[i%(zd//4)] # np.roll(data, 4, axis=0)
-                wave_axisr[(i+1)%(zd//4)] = wave_axis[i%(zd//4)] # np.roll(data, 4, axis=0)
-        if voltagesData[cpos] > voltagesData[0]:
-        #continuum is on the right but it is in the blue!!!!
-            printc('          Rolling data to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
-            printc('            * the continuum was TAKEN in the RED but we want it in the BLUE',color=bcolors.WARNING)
-            printc('            * Notice that this is necessary for the FLAT correction',color=bcolors.FAIL)
-            printc('            *  but the wavelength axis has changed the continuum point *',color=bcolors.FAIL)
-            for i in range(zd//4):
-                #print((i+1)%(zd//4),i%(zd//4),i,(zd//4))
-                datar[(i+1)%(zd//4),:,:,:] = data[i%(zd//4),:,:,:] # np.roll(data, 4, axis=0)
-                voltagesDatar[(i+1)%(zd//4)] = voltagesData[i%(zd//4)] # np.roll(data, 4, axis=0)
-                wave_axisr[(i+1)%(zd//4)] = wave_axis[i%(zd//4)] # np.roll(data, 4, axis=0)
-        data = np.copy(datar)
-        voltagesData = np.copy(voltagesDatar)
-        wave_axis = np.copy(wave_axisr)
-        del datar
-        del voltagesDatar
-        del wave_axisr
-        cpos = 0
-        printc('          New FG voltages: ',voltagesData,color=bcolors.OKBLUE)
-        printc('          NEW continuum position at wave: ', cpos,color=bcolors.OKBLUE)
-        printc('          NEW data wave axis [mA]: ',wave_axis,color=bcolors.OKBLUE)
-      
-    if flat_c:
-        printc('-->>>>>>> Obtaining voltages from flats ',color=bcolors.OKGREEN)
-        #ff =  '../Nov-2020-STP122/solo_L0_phi-fdt-flat_0645767986_V202012091123I_0066181100.fits'
-
-        wave_axis_f,voltagesFlat,tunning_constant_f,cpos_f,ref_wavelength_f = fits_get_sampling(flat_f) 
-        printc('          FLAT FG voltages: ',voltagesFlat,color=bcolors.OKBLUE)
-        printc('          FLAT Continuum position at wave: ', cpos_f,color=bcolors.OKBLUE)
-        printc('          FLAT wave axis [mA]: ',wave_axis_f,color=bcolors.OKBLUE)
-        printc('          FLAT ref_wavelength [mA]: ',ref_wavelength_f,color=bcolors.OKBLUE)
-        printc('          FLAT wave axis [mA]: ',wave_axis_f,color=bcolors.OKBLUE)
-        printc('          FLAT wave axis - ref_wavelength [mA]: ',wave_axis_f - ref_wavelength_f,color=bcolors.OKBLUE)
-        dummy_1 = (voltagesFlat-np.roll(voltagesFlat,-1))*(tunning_constant*1000)
-        dummy_2 = np.sort(np.abs(dummy_1))
-        sampling_f = np.mean(dummy_2[0:-2])
-        printc('          FLAT average sampling [mA]: ',sampling_f,color=bcolors.OKBLUE)
-
-        # printc('-->>>>>>> Reshaping flat to [wave,Stokes,y-dim,x-dim]',color=bcolors.OKGREEN)
-        # flat = np.reshape(flat,(fz//4,4,fy, fx))
-
-    #-----------------
-    # ROLL FLAT IF CONTINUUM IS IN DIFFERENT POSITION 
-    # Probably before demodulation and flat is better!!!!
-    #-----------------
-    if flat_c:
-        if cpos_f != 0:
-            flatr = np.copy(flat)
-            voltagesFlatr = np.copy(voltagesFlat)
-            wave_axis_fr = np.copy(wave_axis_f)
-            if voltagesFlat[cpos_f] < voltagesFlat[0]:
-            #continuum is on the right but it is in the blue!!!!
-                printc('          Rolling flat to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
-                printc('            * the continuum was TAKEN in the BLUE, stored in the RED, but we want it in the BLUE *',color=bcolors.WARNING)
-                for i in range(fz//4):
-                    #print((i+1)%(fz//4),i%(fz//4),i)
-                    flatr[(i+1)%(fz//4),:,:,:] = flat[i%(fz//4),:,:,:] # np.roll(data, 4, axis=0)
-                    voltagesFlatr[(i+1)%6] = voltagesFlat[i%(fz//4)] # np.roll(data, 4, axis=0)
-                    wave_axis_fr[(i+1)%(zd//4)] = wave_axis_f[i%(zd//4)] # np.roll(data, 4, axis=0)
-            if voltagesFlat[cpos_f] > voltagesFlat[0]:
-            #continuum is on the right but it is in the blue!!!!
-                printc('          Rolling flat to move continuum from right (red) to left (blue)',color=bcolors.WARNING)
-                printc('            * the continuum was TAKEN in the RED but we want it in the BLUE',color=bcolors.WARNING)
-                printc('            * Notice that this is necessary for the FLAT correction',color=bcolors.FAIL)
-                printc('            *  but the wavelength axis has changed the continuum point *',color=bcolors.FAIL)
-                for i in range(fz//4):
-                    #print((i+1)%(fz//4),i%(fz//4),i)
-                    flatr[(i+1)%(fz//4),:,:,:] = flat[i%(fz//4),:,:,:] # np.roll(data, 4, axis=0)
-                    voltagesFlatr[(i+1)%6] = voltagesFlat[i%(fz//4)] # np.roll(data, 4, axis=0)
-                    wave_axis_fr[(i+1)%(zd//4)] = wave_axis_f[i%(zd//4)] # np.roll(data, 4, axis=0)
-            flat = np.copy(flatr)
-            voltagesFlat = np.copy(voltagesFlatr)
-            wave_axis_f = np.copy(wave_axis_fr)
-            del flatr
-            del voltagesFlatr
-            del wave_axis_fr
-            cpos_f = 0
-            printc('          New Flat FG voltages: ',voltagesFlat,color=bcolors.OKBLUE)
-            printc('          NEW Flat continuum position at wave: ', cpos_f,color=bcolors.OKBLUE)
-            printc('          NEW Flat data wave axis [mA]: ',wave_axis_f,color=bcolors.OKBLUE)
-
-    # TODO: INTERPOLATE THE FLAT TO MATCH THE WAVELENG (CAVITY)
-
-    # from scipy.interpolate import RegularGridInterpolator
-    # x = np.linspace(0,2047,2048).astype(int)
-    # y = np.linspace(0,2047,2048).astype(int)
-    # z = np.array([-300.,-140.,-70.,0.,70.,140.,300.]) #ojo con el -300
-    # zn = np.array([-175.,-140.,-105.,-70.,-35.,0.,35.,70.,105.,140.,175.,300.])
-
-    # flat_rsw1 = np.concatenate(((flat_rsw1[5,:,:,:])[np.newaxis,:,:,:],flat_rsw1))
-    # fn = RegularGridInterpolator((z,y,x), flat_rsw1[:,0,:,:])
-    # pts = np.array([-40,10,10])
-    # print(fn(pts))
-
-    #     pts = np.meshgrid(-40.,y,x)
-    # pts = np.array([m.flatten() for m in pts])
-    # flat_n = fn(pts.T)
-    # result = flat_n.reshape((2048,2048))
-    # plt.imshow(result,vmin=0.9,vmax=1.1)
-
-    # flat_n = np.zeros((12,4,2048,2048))
-
-    # for i in range(4):
-    #   fn = RegularGridInterpolator((z,y,x), flat_rsw1[:,i,:,:],bounds_error=False)
-    #   for j in range(12):
-    #     print(i,zn[j])
-    #     pts_list = np.meshgrid(zn[j],y,x)
-    #     pts = np.array([m.flatten() for m in pts_list])
-    #     flat_n[j,i,:,:] = fn(pts.T).reshape((2048,2048))
-
-    #-----------------
-    # APPLY FLAT CORRECTION 
-    # TODO: TAKE THE REAL FLAT 
-    #-----------------
     factor = 0.05
     rrx = [int(c[0]-radius*factor),int(c[0]+radius*factor)]
     rry = [int(c[1]-radius*factor),int(c[1]+radius*factor)]
-
-    if flat_c:
-        printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
-        try:
-            if (len(flat_index)) == 6:
-                print('          Changing flat index to ',flat_index)
-        except:
-            flat_index = [0,1,2,3,4,5]
-        for p in range(4):
-            for l in range(int(zd//4)):
-                print('          ... pol: ',p,' wave: ',l,' index: ',flat_index[l])
-                dummy_flat = (flat[flat_index[l],p,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]/float(flat_scaling))
-                if norm_f:
-                    print('          normalizing flats using region x = [',rrx[0],':',rrx[1],'] y = ]',rry[0],':',rry[1],']')
-                    mm = np.mean(dummy_flat[rry[0]:rry[1],rrx[0]:rrx[1]])
-                    dummy_flat = dummy_flat / mm
-                data[l,p,:,:] = data[l,p,:,:]/dummy_flat
-        del dummy_flat
-
-        # locations = find_string(flat_f,'_')
-        # try:
-        #     DID_flat = flat_f[locations[-1]+1:locations[-1]+10]
-        #     print('DID: ',np.float(DID_flat))
-        # except:
-        #     DID_flat = flat_f[:-4]
-        #     printc("Unable to get DID from: {}",flat_f,color=bcolors.WARNING)         
-        #     locations = find_string(dark_f,'/')
-        #     DID_flat = flat_f[locations[-1]+1:]
-        #     printc('DID: ',DID_flat,' -->> WILL NOT BE A NUMBER',color=bcolors.WARNING)
-
-        DID_flat = flat_header['PHIDATID']
-
-        if 'CAL_FLAT' in header:  # Check for existence
-            header['CAL_FLAT'] = DID_flat
-        else:
-            header.set('CAL_FLAT', DID_flat, 'Onboard calibrated for gain table',after='CAL_DARK')
-
-        if verbose:
-            plib.show_one(data[cpos,0,:,:],vmax=None,vmin=0,xlabel='pixel',ylabel='pixel',title='Data / flat at continuum',cbarlabel='DN',save=None,cmap='gray')
-
-    #-----------------
-    # CORRECT PREFILTER 
-    #-----------------
-
-    if prefilter:
-        data,header  = phi_correct_prefilter(prefilter_fits,header,data,voltagesData,verbose = verbose)
-
-
-    #-----------------
-    # GHOST CORRECTION  
-    #-----------------
-
-    if correct_ghost:
-        data,header = phi_correct_ghost(data,header,radius,verbose = True)
 
     #-----------------
     # REALIGN DATA BEFORE DEMODULATION
@@ -666,7 +658,7 @@ def phifdt_pipe(json_input = None,
     data, header = phi_apply_demodulation(data,instrument,header=header)
 
     if verbose == 1:
-        plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom = 3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
 
     # with pyfits.open(data_filename) as hdu_list:
     #     hdu_list[0].data = data
@@ -694,7 +686,7 @@ def phifdt_pipe(json_input = None,
         plib.show_four_row(datan[3,0,:,:],datan[3,1,:,:],datan[3,2,:,:],datan[3,3,:,:])
 
     if verbose == 1:
-        plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom = 3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
 
     #-----------------
     # GHOST CORRECTION  AFTER DEMODULATION

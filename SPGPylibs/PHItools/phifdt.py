@@ -2,15 +2,17 @@
 # Project: SoPHI
 # File:    phifdt.py
 # Author:  David Orozco Suárez (orozco@iaa.es)
-# Contributors: Nestor Albelo (albelo@mps.mpg.de) Hanna Streker ()
+# Contributors: Nestor Albelo (albelo@mps.mpg.de) and Hanna Streker (streckerh@iaa.es)
 #-----------------------------------------------------------------------------
 # Description: Class pipeline implementation of data reduction pipeline
 #              Uses same modules as in the regular pipeline (check versions)
 #-----------------------------------------------------------------------------
 
 from math import nan
+import json
+import pprint
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
 from .tools import printc,bcolors,timeit
 from .phi_gen import * 
 from .phi_utils import *
@@ -20,45 +22,132 @@ from .phifdt_pipe_modules import phi_correct_dark
 # from .phifdt_flat import do_hough
 from SPGPylibs.GENtools import *
 
+#--------  GLOBALS  --------  
 BIT_DEPTH: str = '>i4'   #"images are 32-bit big-endian integer"
+#---------------------------
+
 def fixpoint(imagen):
     if imagen.dtype != BIT_DEPTH:
         imagen = imagen.astype(BIT_DEPTH)       
     print('image bit depth ',imagen.dtype)
     return imagen
 
+# def __Json__(self,json_file):
+class Json():
+
+    def __init__(self):
+
+        self.json.file =            None 
+        self.json.verbose =         None 
+        self.json.input_data_dir =  None
+        self.json.data_f =          None 
+        self.json.shrink_mask =     None 
+        self.json.center_method =   None 
+        self.json.hough_params =    None 
+        self.json.instrument =      None 
+        self.json.flat_f =          None 
+        self.json.dark_f =          None 
+        self.json.dark_c =          None 
+        self.json.flat_c =          None 
+        self.json.flat_index =      None
+        self.json.norm_f =          None 
+        self.json.flat_scaling =    None 
+        self.json.prefilter_fits =  None 
+        self.json.prefilter =       None
+        self.json.output_dir =      None 
+        self.json.rte =             None 
+        self.json.correct_fringes = None
+        self.json.correct_ghost =   None
+        self.json.putmediantozero = None 
+        self.json.debug =           None 
+        self.json.loopthis =        None 
+        self.json.ItoQUV =          None 
+        self.json.VtoQU =           None 
+        self.json.realign =         None 
+        self.json.ind_wave =        None 
+        self.json.nlevel =          None
+
+    def read_json(self,json_file):
+
+        # =========================================================================== #
+        # READING CONFIG FILE AND PRINTING
+        # =========================================================================== #
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(' Reading config json file '+json_file,bcolors.OKGREEN)
+        with open(json_file) as j:
+            CONFIG = json.load(j)
+
+        self.json.file =            json_file
+        self.json.verbose =         CONFIG['verbose']
+        self.json.input_data_dir =  CONFIG['input_data_dir']
+        self.json.data_f =          CONFIG['data_f']
+        self.json.shrink_mask =     CONFIG['shrink_mask']
+        self.json.center_method =   CONFIG['center_method'] 
+        self.json.hough_params =    CONFIG['hough_params']
+        self.json.instrument =      CONFIG['instrument']
+        self.json.flat_f =          CONFIG['flat_f']
+        self.json.dark_f =          CONFIG['dark_f']
+        self.json.dark_c =          CONFIG['dark_c']
+        self.json.flat_c =          CONFIG['flat_c']
+        self.json.flat_index =      CONFIG['flat_index']
+        self.json.norm_f =          CONFIG['norm_f']
+        self.json.flat_scaling =    CONFIG['flat_scaling']
+        self.json.prefilter_fits =  CONFIG['prefilter_fits']
+        self.json.prefilter =       CONFIG['prefilter']
+        self.json.output_dir =      CONFIG['output_dir']
+        self.json.rte =             CONFIG['rte']
+        self.json.correct_fringes = CONFIG['correct_fringes']
+        self.json.correct_ghost =   CONFIG['correct_ghost']
+        self.json.putmediantozero = CONFIG['putmediantozero']
+        self.json.debug =           CONFIG['debug']
+        self.json.loopthis =        CONFIG['loopthis']
+        self.json.ItoQUV =          CONFIG['ItoQUV']
+        self.json.VtoQU =           CONFIG['VtoQU']
+        self.json.realign =         CONFIG['realign']
+        self.json.ind_wave =        CONFIG['ind_wave']
+        self.json.nlevel =          CONFIG['nlevel']
+
+        # Prints the nicely formatted dictionary
+        pprint.pprint(CONFIG)#, sort_dicts=False)
+
 class phidata():
 
-    bit_depth: str = '>i4'   #"images are 32-bit big-endian integer"
-    dark_offset: float = 1   #"images are 32-bit big-endian integer"
+    dark_offset: float = 1   #
 
     import reprlib
     r = reprlib.Repr()
     r.maxlist = 4        # max elements displayed for lists
     r.maxstring = 100    # max characters displayed for strings
 
-    def __init__(self, file=''):
-        self.file = file
-        self.darkc: bool = False
-        self.flatc: bool = False
-        self.image = None
-        self.header = None
-        self.imageSummary = None
+    def __init__(self, file: str = None):
+
+        self.json         = Json()
+        self.file         = file
+        self.darkc: bool  = False
+        self.flatc: bool  = False
+        self.image        = None      #generic (same for flat, dark, etc)
+        self.header       = None      #also generic (header info)
+        self.imageSummary = None      
         self.imageSummary_head = None
         self.scaling = {"Present": [False,True], "scaling": [0,0], 'bit-depth': None}
-        self.DID = None
+        self.DID          = None
+
+        #INIT variables should be the same as those that can be set with the JSON + internal stuff
 
     @staticmethod    
     def mprint(what,*args, **kw):
         print(phidata.r.repr(what),*args, **kw)
     
     def dscale(self):
-        if self.image.dtype != phidata.bit_depth:
-            self.image = self.image.astype(phidata.bit_depth)       
+        if self.image.dtype != phidata.BIT_DEPTH:
+            self.image = self.image.astype(phidata.BIT_DEPTH)       
         printc('image bit depth ',self.image.dtype,color=bcolors.OKGREEN)
 
     def set_file(self,file):
         self.file = file
+
+    def load_json(self,file):
+        self.json.read_json(file)
 
     def info(self):
         options = vars(self)

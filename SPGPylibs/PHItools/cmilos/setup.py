@@ -5,7 +5,7 @@ from Cython.Build import cythonize
 import numpy
 
 compile_extra_args = []
-link_extra_args = []
+link_extra_args = [] 
 
 if platform.system() == "Windows":
     compile_extra_args = ["/std:c++latest", "/EHsc"]
