@@ -1,7 +1,0 @@
-{
-   "version": "1.0",
-   "name": "Cosmographia JUICE Example",
-   "spiceKernels": [
-      "../../../kernels/mk/solo_ANC_soc-pred-mk_local.tm"
-   ]
-}
