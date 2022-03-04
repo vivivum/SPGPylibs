@@ -1,4 +1,3 @@
-#by juanp 2015 (IAA-CSIC)
 CC = gcc
 LIBS = -lm
 
@@ -13,7 +12,6 @@ CXXFLAGS="-mmacosx-version-min=10.10"
 HOSTCOMPUTER := $(shell hostname | cut -d . -f 1)
 
 default: print create_cuantic.o fvoigt.o fgauss.o me_der.o mil_sinrf.o calculosCompartidos.o lib.o milos.o libmilos.a milos fin
-
 
 print:
 	@echo Compilando CMILOS in $(info HOSTCOMPUTER is $(HOSTCOMPUTER))
@@ -52,10 +50,11 @@ libmilos.a: milos.o create_cuantic.o fvoigt.o fgauss.o me_der.o mil_sinrf.o calc
 	ar rcs $@ $^
 
 fin:
-	cp milos ../milos.$(HOSTCOMPUTER)
+	cp milos ../milos.$(HOSTCOMPUTER).x
 	@echo --
 	@echo All done.
 
 clean:
 	rm *.o *.a *.so
 	rm milos
+	rm ../milos.$(HOSTCOMPUTER).x

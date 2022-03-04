@@ -1,13 +1,33 @@
 LIB_DIR = lib
+HOSTCOMPUTER := $(shell hostname | cut -d . -f 1)
 
-default: pymilos
+default: milos
 
-pymilos: setup.py #pymilos.pyx $(LIB_DIR)/libmilos.a
-	make -C $(LIB_DIR) libmilos.a
-	python3 setup.py build_ext --inplace && rm -f pymilos.c && rm -Rf build
+clean-lib:
+	rm -f $(LIB_DIR)/*.o 
+	rm -f $(LIB_DIR)/*.a *.so 
+	rm -f $(LIB_DIR)/*.so 
+	rm -f $(LIB_DIR)/milos 
+	rm -f milos.$(HOSTCOMPUTER).x 
 
-#$(LIB_DIR)/libmilos.a:
-#	make -C $(LIB_DIR) libmilos.a
+clean-cython:
+	rm -f *.so
+	rm -Rf build
+	rm -f pymilos.c
 
-clean:
-	rm *.so
+clean: clean-lib clean-cython
+
+.PHONY: milos
+milos: clean-lib
+	make -C $(LIB_DIR) default
+
+.PHONY: build
+build: clean-lib
+	make -C $(LIB_DIR) default
+	python3 setup.py build_ext --inplace 
+
+.PHONY: cython-build
+cython-build: clean
+	make -C $(LIB_DIR) default
+	python3 setup.py build_ext --inplace  --use-cython 
+

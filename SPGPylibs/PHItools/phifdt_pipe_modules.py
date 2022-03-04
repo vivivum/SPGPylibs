@@ -14,7 +14,7 @@ from .phi_reg import shift_subp,moments
 import SPGPylibs.GENtools.plot_lib as plib
 
 from platform import node
-MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
+MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]+'.x'
 import os
 
 def phi_load_flat(flat_f):

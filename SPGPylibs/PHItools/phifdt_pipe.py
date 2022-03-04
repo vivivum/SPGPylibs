@@ -808,8 +808,8 @@ def phifdt_pipe(json_input = None,
         if option == 'y':
             datao = np.copy(data)
             print('Applying V to QU cross-talk correction...')
-            datao[:,2,:,:] = data[:,2,:,:] - cVQ[0]*data[:,3,:,:] - cVQ[1]
-            datao[:,3,:,:] = data[:,3,:,:] - cVU[0]*data[:,3,:,:] - cVU[1]
+            datao[:,1,:,:] = data[:,1,:,:] - cVQ[0]*data[:,3,:,:] - cVQ[1]
+            datao[:,2,:,:] = data[:,2,:,:] - cVU[0]*data[:,3,:,:] - cVU[1]
             plib.show_two(data[3,1,ry[0]:ry[1],rx[0]:rx[1]],datao[3,1,ry[0]:ry[1],rx[0]:rx[1]],block=False,title=['Stokes Q','Stokes Q corrected'],zoom=3)
             plib.show_two(data[3,2,ry[0]:ry[1],rx[0]:rx[1]],datao[3,2,ry[0]:ry[1],rx[0]:rx[1]],block=False,title=['Stokes U','Stokes U corrected'],zoom=3)
             option2 = input('Do you wnat to continue (y/n) [n]: ')
