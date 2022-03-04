@@ -143,5 +143,10 @@ cython_debug/
 .vscode/
 
 # orbits-data
-# orbits-data/
-# data-reduction-example/
+SPGPylibs/PHItools/orbits-data/
+SPGPylibs/PHItools/data-reduction-example/
+SPGPylibs/PHItools/cmilos/cmilos_testdata/
+*.txt
+*.sav
+*.save
+*.x
