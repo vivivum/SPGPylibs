@@ -1,0 +1,5 @@
+include SPGPylibs/PHItools/cmilos/*.c
+include SPGPylibs/PHItools/cmilos/lib/*.a
+include SPGPylibs/PHItools/cmilos/*.x
+include SPGPylibs/PHItools/cmilos/*.so
+include SPGPylibs/PHItools/cmilos/*.pyx

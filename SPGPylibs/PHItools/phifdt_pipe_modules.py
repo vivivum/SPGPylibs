@@ -13,10 +13,6 @@ from .phi_reg import shift_subp,moments
 
 import SPGPylibs.GENtools.plot_lib as plib
 
-from platform import node
-MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]+'.x'
-import os
-
 def phi_load_flat(flat_f):
     '''
     Read Flat file
@@ -1393,29 +1389,8 @@ def phi_correct_fringes(data,header,option,verbose=False):
 
     return data, header
 
-def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,options = None,loopthis = 0):
+def generate_level2(data,wave_axis,rte_mode,cmilos = 'pymilos',options = None,loopthis = 0):
 
-    if milos_executable != 'python':
-        try:
-            print(milos_executable)
-            CMILOS_LOC = os.path.realpath(__file__) 
-            CMILOS_LOC = CMILOS_LOC[:CMILOS_LOC.rfind('/')-len(CMILOS_LOC)+1] + 'cmilos/'
-            if os.path.isfile(CMILOS_LOC+milos_executable):
-                printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
-            else:
-                raise ValueError('Cannot find cmilos:', CMILOS_LOC)
-        except ValueError as err:
-            printc(err.args[0],color=bcolors.FAIL)
-            printc(err.args[1],color=bcolors.FAIL)
-            return        
-
-        cmd = CMILOS_LOC+"./"+milos_executable
-        cmd = fix_path(cmd)
-    elif milos_executable == 'python':
-        cmd = None
-    else:
-        printc("Using python milos wrapper",color=bcolors.WARNING)
-        return 0
     wavelength = 6173.3354
     #OJO, REMOVE. NEED TO CHECK THE REF WAVE FROM S/C-PHI H/K
     shift_w =  wave_axis[3] - wavelength
@@ -1427,6 +1402,6 @@ def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,
     printc('         wave axis (step):  ',(wave_axis - wavelength)*1000.,color = bcolors.WARNING)
     printc('   saving data into dummy_in.txt for RTE input')
         
-    return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options,loopthis=loopthis)
+    return phi_rte(data,wave_axis,rte_mode,cmilos = cmilos,options = options,loopthis=loopthis)
     #phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None)
         

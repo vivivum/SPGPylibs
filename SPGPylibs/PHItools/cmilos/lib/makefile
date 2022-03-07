@@ -55,6 +55,6 @@ fin:
 	@echo All done.
 
 clean:
-	rm *.o *.a *.so
-	rm milos
-	rm ../milos.$(HOSTCOMPUTER).x
+	rm -f *.o *.a *.so
+	rm -f milos
+	rm  -f ../milos.$(HOSTCOMPUTER).x

@@ -7,15 +7,15 @@
 # Description: programs for accesing data and fits files
 #-----------------------------------------------------------------------------
 from .tools import *
-#from .cmilos import pymilos
 import subprocess
 import numpy as np
+
 #although not necessary these are the dtype to be passed to C
 DTYPE_INT = np.intc
 DTYPE_DOUBLE = np.float_
 
 @timeit
-def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None,loopthis=0):
+def phi_rte(data,wave_axis,rte_mode,cmilos = 'pymilos',options = None,loopthis=0):
     ''' For the moment this is just isolated from the main pipeline'''
 
     # Inv Iterations                                   = 15
@@ -32,7 +32,25 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None,loopthis=0):
     # Wavelength Setting Spectral Line Step            = 0.07000
     # Wavelength Setting Wavelength Of Line Continuum  = 6173.04117 (blue) 6173.64117 (red)
 
-    if cmilos == None: #meaning you will use python wrapper
+    if cmilos == 'pymilos': #meaning you will use python wrapper
+
+        try:
+            from .cmilos import pymilos
+            pymilosloadok = True
+            printc("Using pymilos for RTE",color=bcolors.WARNING)
+        except:
+            printc("unable to import pymilos version within phi_rte.",color=bcolors.FAIL)
+            printc("   User did not specify cmilos option [''pymilos'' or ''cmilos''] so default is pymilos.",color=bcolors.WARNING)
+            printc("   To compile pymilos go to cmilos folder and run make cython-build or make build.",color=bcolors.WARNING)
+            pymilosloadok = False
+            try:
+                import pymilos
+                pymilosloadok = True
+            except:
+                printc("Trying to load pymilos from enviroment also failed. ",color=bcolors.WARNING)
+                pymilosloadok = False
+                raise Exception
+
         print('shape input',data.shape) 
         # CHECK DATA DIMENSIONS
         data = np.einsum('ijkl->klji',data)
@@ -47,7 +65,7 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None,loopthis=0):
         #for the moment no PSF is included 
         # and classical estimates are deactivated.
         # these will be added in following versions
-        if options == None:
+        if options == None: 
             options = np.zeros((4))#,dtype=DTYPE_INT)
             options[0] = len(wave_axis) #NLAMBDA wave axis dimension
             options[1] = 15 #MAX_ITER max number of iterations

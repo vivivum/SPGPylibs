@@ -89,6 +89,7 @@ def json_generator():
         'prefilter': False,
         'prefilter_fits' : '0000990710_noMeta.fits',
         'rte' : False, 
+        'cmilos' : 'pymilos', 
         'correct_fringes' : 'manual',
         'correct_ghost' : False,
         'putmediantozero' : True,
@@ -98,7 +99,6 @@ def json_generator():
         'ind_wave' : False,
         'nlevel' : 0.3,
         'debug' : False,
-        'loopthis' : 0,
         "__comment3__":"Output options go here",
         'output_dir' : './',  
 

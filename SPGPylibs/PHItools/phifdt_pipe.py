@@ -1,6 +1,6 @@
 import json
 import numpy as np 
-import os.path, datetime, subprocess
+import os, os.path, datetime, subprocess
 #from astropy.io import fits as pyfits
 #from time import sleep
 #from scipy.ndimage import gaussian_filter#, rotate
@@ -19,6 +19,9 @@ from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_appl
 import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
 
+from platform import node
+MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]+'.x'
+
 #--------  GLOBALS  --------  
 PLT_RNG = 5
 #---------------------------
@@ -34,8 +37,8 @@ def phifdt_pipe(json_input = None,
     realign:bool = False, verbose:bool = True, shrink_mask:int = 2, correct_fringes:str = False,
     correct_ghost:bool = False, putmediantozero:bool = True,
     rte = False, debug:bool = False, nlevel:float = 0.3, center_method:str = 'circlefit',
-    loopthis = 0,            #developing purpose
-    do2d = 0, outfile = None #not in use
+    do2d = 0, outfile = None, #not in use
+    cmilos = 'pymilos'
     ) -> int: 
     
     '''
@@ -233,19 +236,64 @@ def phifdt_pipe(json_input = None,
         correct_ghost = CONFIG['correct_ghost']
         putmediantozero = CONFIG['putmediantozero']
         debug = CONFIG['debug']
-        loopthis = CONFIG['loopthis']
         ItoQUV = CONFIG['ItoQUV']
         VtoQU = CONFIG['VtoQU']
         realign = CONFIG['realign']
         ind_wave = CONFIG['ind_wave']
         nlevel = CONFIG['nlevel']
+        cmilos = CONFIG['cmilos']
 
         import pprint
         # Prints the nicely formatted dictionary
         pprint.pprint(CONFIG)#, sort_dicts=False)
     else:
         printc(' Using sequencial mode ',bcolors.OKGREEN)
-        printc('    (hopefully with the rigth inputs since ERROR handling is not yet fully in place) ',bcolors.OKGREEN)
+        printc('    (hopefully with the right inputs since ERROR handling is not yet fully in place) ',bcolors.OKGREEN)
+
+    #CHECK MILOS STATUS IF RTE
+    if rte != False:
+        #check cmilos option
+        #defauls is pymilos so check if pymilos can be loaded
+        rteok = False
+        if cmilos == 'pymilos':
+            try:
+                from .cmilos import pymilos
+                pymilosloadok = True
+                printc("Using pymilos for RTE",color=bcolors.WARNING)
+                rteok = True
+            except:
+                printc("unable to import pymilos version within phi_rte.",color=bcolors.FAIL)
+                printc("   User did not specify cmilos option [''pymilos'' or ''cmilos''] so default is pymilos.",color=bcolors.WARNING)
+                printc("   To compile pymilos go to cmilos folder and run make cython-build or make build.",color=bcolors.WARNING)
+                pymilosloadok = False
+                try:
+                    import pymilos
+                except:
+                    printc("Trying to load pymilos from enviroment also failed. ",color=bcolors.WARNING)
+                    printc("   phifdt_pipe.py will look for classical cmilos executable",color=bcolors.WARNING)
+                    pymilosloadok = False
+
+        #check if there is an executable:
+        if cmilos != 'pymilos' or not(pymilosloadok):
+            try:
+                CMILOS_LOC = os.path.realpath(__file__) 
+                CMILOS_LOC = CMILOS_LOC[:CMILOS_LOC.rfind('/')-len(CMILOS_LOC)+1] + 'cmilos/'
+                if os.path.isfile(CMILOS_LOC+MILOS_EXECUTABLE):
+                    printc("cmilos executable ",MILOS_EXECUTABLE," located at:", CMILOS_LOC,color=bcolors.WARNING)
+                else:
+                    raise ValueError(MILOS_EXECUTABLE, CMILOS_LOC)
+                rteok = True
+            except ValueError as err:
+                printc('Cannot find cmilos executable: ',color=bcolors.FAIL)
+                printc('Executable: ',err.args[0],color=bcolors.WARNING)
+                printc('Location  : ',err.args[1],color=bcolors.WARNING)
+                printc(" -----------  STOPING ",color=bcolors.FAIL)
+
+            cmilos = CMILOS_LOC+"./"+MILOS_EXECUTABLE
+            cmilos = fix_path(cmilos)
+        if rteok == False:
+            return
+
 
     # STEP 1
     #-----------------
@@ -961,7 +1009,7 @@ def phifdt_pipe(json_input = None,
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
         
         rte_invs = np.zeros((12,yd,xd)).astype(float)
-        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte,loopthis=loopthis)
+        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte,cmilos=cmilos)
 
         rte_invs_noth = np.copy(rte_invs)
         umbral = 3.
