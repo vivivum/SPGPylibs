@@ -1209,8 +1209,8 @@ def phi_correct_fringes(data,header,option,verbose=False):
         px_x_V = freq_x_V*xd 
         px_y_V = freq_y_V*yd
         #reflection
-        printc(px_x_Q,xd - px_x_Q,color=bcolors.OKBLUE)
-        printc( round(px_x_Q,(xd - px_x_Q) ),color=bcolors.OKBLUE)
+        # printc(px_x_Q,xd - px_x_Q,color=bcolors.OKBLUE)
+        # printc( round(px_x_Q,(xd - px_x_Q) ),color=bcolors.OKBLUE)
 
         px_x_Q = np.append(px_x_Q,xd - px_x_Q - 1)
         px_y_Q = np.append(px_y_Q,yd - px_y_Q - 1)
@@ -1219,12 +1219,12 @@ def phi_correct_fringes(data,header,option,verbose=False):
         px_x_V = np.append(px_x_V,xd - px_x_V - 1)
         px_y_V = np.append(px_y_V,yd - px_y_V - 1)
 
-        px_x_Q = round(px_x_Q)
-        px_y_Q = round(px_y_Q)
-        px_x_U = round(px_x_U)
-        px_y_U = round(px_y_U)
-        px_x_V = round(px_x_V)
-        px_y_V = round(px_y_V)
+        px_x_Q = np.round(px_x_Q).astype(int)
+        px_y_Q = np.round(px_y_Q).astype(int)
+        px_x_U = np.round(px_x_U).astype(int)
+        px_y_U = np.round(px_y_U).astype(int)
+        px_x_V = np.round(px_x_V).astype(int)
+        px_y_V = np.round(px_y_V).astype(int)
 
         wsize = 50
         win_halfw = 2 
