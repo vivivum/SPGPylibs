@@ -1330,6 +1330,6 @@ def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,
     printc('         wave axis (step):  ',(wave_axis - wavelength)*1000.,color = bcolors.WARNING)
     printc('   saving data into dummy_in.txt for RTE input')
         
-    return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options,loopthis=loopthis)
+    return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options)
     #phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None)
         
