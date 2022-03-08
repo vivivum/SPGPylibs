@@ -7,7 +7,7 @@
 # Description: programs for accesing data and fits files
 #-----------------------------------------------------------------------------
 from .tools import *
-from .cmilos import pymilos
+# from .cmilos import pymilos
 import subprocess
 import numpy as np
 #although not necessary these are the dtype to be passed to C
