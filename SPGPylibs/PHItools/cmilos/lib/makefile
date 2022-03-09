@@ -57,5 +57,7 @@ fin:
 	@echo All done.
 
 clean:
-	rm *.o *.a *.so
-	rm milos
+	rm -f *.o
+	rm -f *.a 
+	rm -f *.so
+	rm -f milos
