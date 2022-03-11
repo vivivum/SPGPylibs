@@ -253,7 +253,7 @@ def phifdt_pipe(json_input = None,
     elif data_f.endswith('.fits.gz'):
         filetype = '.fits.gz'
     else:
-        raise ValueError("imput data type nor .fits neither .fits.gz")
+        raise ValueError("input data type nor .fits neither .fits.gz")
 
     #-----------------
     # READ DATA
