@@ -19,6 +19,10 @@ from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_appl
 import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
 
+from platform import node
+MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]+'.x'
+FIGUREOUT = '.png'
+
 #global variables 
 PLT_RNG = 5
 
@@ -239,6 +243,24 @@ def phifdt_pipe(json_input = None,
         import pprint
         # Prints the nicely formatted dictionary
         pprint.pprint(CONFIG)#, sort_dicts=False)
+    else:
+        printc(' Using sequencial mode ',bcolors.OKGREEN)
+        printc('    (hopefully with the right inputs since ERROR handling is not yet fully in place) ',bcolors.OKGREEN)
+
+    #CHECK IF input is FITS OR FITS.GZ
+    _,found = find_string(data_f,'.fits.gz')
+    if found == -1:
+        ande,check = find_string(data_f,'.fits')
+        if check == -1:
+            raise ValueError("imput data type nor .fits neither .fits.gz")
+        if data_f[ande[0]:] != '.fits':
+            raise ValueError("imput data type nor .fits neither .fits.gz")
+        filetype = '.fits'
+    else:
+        ande,_ = find_string(data_f,'.fits.gz')
+        if data_f[ande[0]:] != '.fits.gz':
+            raise ValueError("imput data type nor .fits neither .fits.gz")
+        filetype = '.fits.gz'
 
     #-----------------
     # READ DATA
@@ -919,7 +941,7 @@ def phifdt_pipe(json_input = None,
     #-----------------
 
     #check if npz,pngs and level2 exist
-    dirs = ['npz','pngs','level2']
+    dirs = ['pngs','level2']
         
     for checkit in dirs:
         check_dir = os.path.isdir(output_dir+checkit)
@@ -1081,7 +1103,7 @@ def phifdt_pipe(json_input = None,
 
         #ax.imshow(Zm, cmap='gray')
         writeto = set_level(outfile_L2,'stokes','vlos')
-        writeto = set_level(writeto,'.fits','.png')
+        writeto = set_level(writeto,filetype,FIGUREOUT) 
         plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
         plt.close()
 
@@ -1111,7 +1133,7 @@ def phifdt_pipe(json_input = None,
         #ax.imshow(Zm, cmap='gray')
 
         writeto = set_level(outfile_L2,'stokes','blos')
-        writeto = set_level(writeto,'.fits','.png')
+        writeto = set_level(writeto,filetype,FIGUREOUT) 
         plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
         plt.close()
 
