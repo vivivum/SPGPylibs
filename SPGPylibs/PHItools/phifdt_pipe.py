@@ -248,19 +248,12 @@ def phifdt_pipe(json_input = None,
         printc('    (hopefully with the right inputs since ERROR handling is not yet fully in place) ',bcolors.OKGREEN)
 
     #CHECK IF input is FITS OR FITS.GZ
-    _,found = find_string(data_f,'.fits.gz')
-    if found == -1:
-        ande,check = find_string(data_f,'.fits')
-        if check == -1:
-            raise ValueError("imput data type nor .fits neither .fits.gz")
-        if data_f[ande[0]:] != '.fits':
-            raise ValueError("imput data type nor .fits neither .fits.gz")
+    if  data_f.endswith('.fits'):
         filetype = '.fits'
-    else:
-        ande,_ = find_string(data_f,'.fits.gz')
-        if data_f[ande[0]:] != '.fits.gz':
-            raise ValueError("imput data type nor .fits neither .fits.gz")
+    elif data_f.endswith('.fits.gz'):
         filetype = '.fits.gz'
+    else:
+        raise ValueError("imput data type nor .fits neither .fits.gz")
 
     #-----------------
     # READ DATA
