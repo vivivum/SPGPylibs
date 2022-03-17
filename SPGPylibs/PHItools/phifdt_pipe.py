@@ -37,7 +37,8 @@ def phifdt_pipe(json_input = None,
     realign:bool = False, verbose:bool = True, shrink_mask:int = 2, correct_fringes:str = False,
     correct_ghost:bool = False, putmediantozero:bool = True,
     rte = False, debug:bool = False, nlevel:float = 0.3, center_method:str = 'circlefit',
-    loopthis = 0,            #developing purpose
+    vers = '01',
+    RTE_code = 'cmilos',
     do2d = 0, outfile = None #not in use
     ) -> int: 
     
@@ -233,7 +234,8 @@ def phifdt_pipe(json_input = None,
         correct_ghost = CONFIG['correct_ghost']
         putmediantozero = CONFIG['putmediantozero']
         debug = CONFIG['debug']
-        loopthis = CONFIG['loopthis']
+        vers = CONFIG['vers']
+        RTE_code = CONFIG['RTE_code']  #specify which code will be used in the inversion. Default is cmilos (uses .txt ASCII input files)
         ItoQUV = CONFIG['ItoQUV']
         VtoQU = CONFIG['VtoQU']
         realign = CONFIG['realign']
@@ -944,16 +946,20 @@ def phifdt_pipe(json_input = None,
         else:
             print(output_dir+checkit, "folder already exists.")
 
-
     printc('---------------------------------------------------------',color=bcolors.OKGREEN)
     if outfile == None:
         #basically replace L1 by L1.5
         try:
             outfile_L2 = set_level(data_f,'L1','L2')
             outfile_L2 = set_level(outfile_L2,'ilam','stokes')
+            outfile_L2 = append_id(outfile_L2,filetype,vers)
         except:
             outfile_L2 = set_level(data_f,'L0','L2')
             outfile_L2 = set_level(outfile_L2,'ilam','stokes')
+            outfile_L2 = append_id(outfile_L2,filetype,vers)
+
+    else:
+        outfile_L2 = outfile
 
     printc(' Saving data to: ',output_dir+'level2/'+outfile_L2)
 
@@ -984,7 +990,7 @@ def phifdt_pipe(json_input = None,
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
         
         rte_invs = np.zeros((12,yd,xd)).astype(float)
-        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte,loopthis=loopthis)
+        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte)
 
         rte_invs_noth = np.copy(rte_invs)
         umbral = 3.
@@ -1030,6 +1036,8 @@ def phifdt_pipe(json_input = None,
             header.set('RTE_ITER', str(15), 'Number RTE inversion iterations',after='CAL_SCIP')
 
         printc('  ---- >>>>> Saving L2 data.... ',color=bcolors.OKGREEN)
+
+        #HRT version
 
         with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs_noth[2,:,:] * mask
@@ -1097,6 +1105,7 @@ def phifdt_pipe(json_input = None,
         #ax.imshow(Zm, cmap='gray')
         writeto = set_level(outfile_L2,'stokes','vlos')
         writeto = set_level(writeto,filetype,FIGUREOUT) 
+
         plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
         plt.close()
 

@@ -1296,7 +1296,7 @@ def phi_correct_fringes(data,header,option,verbose=False):
 
     return data, header
 
-def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,options = None,loopthis = 0):
+def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,options = None):
 
     if milos_executable != 'python':
         try:
@@ -1332,4 +1332,30 @@ def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,
         
     return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options)
     #phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None)
-        
+    
+
+def create_output_filenames(filename, DID, version = '01'):
+    """
+    creating the L2 output filenames from the input, assuming L1
+    - comes from HRT pipeline! - 
+    - it does not use write_output_inversion for writing the opuput 
+        since it heavely modified the header and FDT does it in every step
+    """
+    try:
+        file_start = filename.split('solo_')[1] 
+        file_start = 'solo_' + file_start
+        L2_str = file_start.replace('L1', 'L2')
+        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
+        stokes_file = versioned.replace('ilam', 'stokes')
+        icnt_file = versioned.replace('ilam', 'icnt')
+        bmag_file = versioned.replace('ilam', 'bmag')
+        bazi_file = versioned.replace('ilam', 'bazi')
+        binc_file = versioned.replace('ilam', 'binc')
+        blos_file = versioned.replace('ilam', 'blos')
+        vlos_file = versioned.replace('ilam', 'vlos')
+
+        return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
+
+    except Exception:
+        print("The input file: {file_path} does not contain 'L1'")
+        raise KeyError

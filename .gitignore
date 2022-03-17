@@ -144,7 +144,7 @@ cython_debug/
 
 # orbits-data
 SPGPylibs/PHItools/orbits-data/
-SPGPylibs/PHItools/data-reduction-example/
+# SPGPylibs/PHItools/data-reduction-example/
 SPGPylibs/PHItools/cmilos/cmilos_testdata/
 SPGPylibs/PHItools/cmilos/dummy_out.txt
 SPGPylibs/PHItools/cmilos/dummy_in.txt
@@ -153,3 +153,4 @@ SPGPylibs/PHItools/cmilos_testdata/
 *.sav
 *.save
 *.x
+dummy*

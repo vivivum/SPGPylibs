@@ -11,6 +11,7 @@ from astropy.io import fits as pyfits
 from astropy.io.fits import getheader
 import numpy as np
 from .phi_utils import find_string
+from os import path,walk
 
 def fits_get(file,info = False,head = 0,scaling = False):
     '''helper function to load FITS data set
@@ -130,13 +131,13 @@ def fits_get_fpatimes(file,offset = None):
     return adq_times,init
 
 
-def list_fits(path = './', contain = None,remove_dir = False):
+def list_fits(inpath = './', contain = None,remove_dir = False):
     '''Find all fits in directory.''' 
     # from os import path.isdir,walk
-    import os
-    assert os.path.isdir(path)
+    assert path.isdir(inpath)
+
     list_of_files = []
-    for (dirpath, dirnames, filenames) in os.walk(path):
+    for (dirpath, dirnames, filenames) in walk(inpath):
         for filename in filenames:
             if filename.endswith('.fits'):
                 if contain != None:
@@ -145,9 +146,9 @@ def list_fits(path = './', contain = None,remove_dir = False):
                         if remove_dir:
                             list_of_files.append(filename)
                         else:
-                            list_of_files.append(os.path.join(dirpath, filename)) 
+                            list_of_files.append(inpath.join(dirpath, filename)) 
                 else:
-                    list_of_files.append(os.path.join(dirpath, filename)) 
+                    list_of_files.append(inpath.join(dirpath, filename)) 
     return list_of_files
 
 def fits_get_sampling(file,verbose = False):
@@ -238,3 +239,7 @@ def set_level(file,what,towhat):
     _,exist = find_string(file,what)
     if exist != -1:
         return file.replace(what,towhat)        
+
+def append_id(file,filetype,ID):
+    ande = file.index(filetype)
+    return file[0:ande]+'_'+ID+file[ande:]

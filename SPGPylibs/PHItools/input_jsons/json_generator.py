@@ -68,6 +68,7 @@ def json_generator():
     #   If find_center is set to None then uses header information, in any case.
 
     json_file = './FDT.json'
+    fits_version = '01'
     dict_FDT = { 
 
         "__comment1__":"data and calibration data goes here",
@@ -98,7 +99,8 @@ def json_generator():
         'ind_wave' : False,
         'nlevel' : 0.3,
         'debug' : False,
-        'loopthis' : 0,
+        'vers': fits_version,        #desired version number, only 2 characters 01 -> 99, if not specified, '01' default
+        'RTE_code': 'cmilos',        #specify which code will be used in the inversion. Default is cmilos (uses .txt ASCII input files)
         "__comment3__":"Output options go here",
         'output_dir' : './',  
 

@@ -1,17 +1,17 @@
 {
-    "flat_f": "cal_files/flats_kll_23April2021_June24_spg5.fits",
-    "dark_f": "cal_files/solo_L0_phi-hrt-ilam_20210428T130238_V202106300924C_0164281001_dark.fits",
-    "prefilter_fits": "cal_files/0000990710_noMeta.fits",
+    "flat_f": "/Users/orozco/Dropbox_folder/Python/VS-GitHub/SPGPylibs_run/Pipeline-run-tests/data-reduction-example/cal_files/flats_kll_23April2021_June24_spg5.fits",
+    "dark_f": "/Users/orozco/Dropbox_folder/Python/VS-GitHub/SPGPylibs_run/Pipeline-run-tests/data-reduction-example/cal_files/solo_L0_phi-hrt-ilam_20210428T130238_V202106300924C_0164281001_dark.fits",
+    "prefilter_fits": "/Users/orozco/Dropbox_folder/Python/VS-GitHub/SPGPylibs_run/Pipeline-run-tests/data-reduction-example/cal_files/0000990710_noMeta.fits",
     "data_f": "solo_L1_phi-fdt-ilam_20210914T010802_V202110211712C_0149140601.fits",
-    "input_data_dir": "./data/",
+    "input_data_dir": "/Users/orozco/Dropbox_folder/Python/VS-GitHub/SPGPylibs_run/Pipeline-run-tests/data-reduction-example/data/",
     "instrument": "FDT40",
     "dark_c": true,
     "flat_c": true,
     "prefilter": true,
-    "rte": false,
+    "rte": "RTE",
     "correct_fringes": "manual", 
     "correct_ghost": false,
-    "output_dir": "./red/",
+    "output_dir": "/Users/orozco/Dropbox_folder/Python/VS-GitHub/SPGPylibs_run/Pipeline-run-tests/data-reduction-example/red/",
     "verbose": false,   
     "ItoQUV": true,
     "hough_params": null,
@@ -26,5 +26,6 @@
     "ind_wave": false,
     "nlevel": 0.3,
     "debug": false,
-    "loopthis": 0
+    "vers": "02",        
+    "RTE_code": "cmilos"        
 }
