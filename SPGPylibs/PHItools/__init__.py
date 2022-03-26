@@ -11,6 +11,9 @@ from .phi_rte import *
 from .tools import *
 from .phifdt_pipe_modules import *
 from .input_jsons.json_generator import json_generator
-# from .cmilos.pymilos import pmilos
+try:
+    from .cmilos.pymilos import *
+except:
+    print("unable to import pymilos version in __init__.py in .PHItools (this is o.k.)")
 
 #from SPGPylibs.PHItools import * WoRK

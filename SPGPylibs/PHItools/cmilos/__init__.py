@@ -1,5 +1,4 @@
 try:
-    import pymilos
+    from .pymilos import *
 except:
-    # from .pymilos import *
-    print("unable to import pymilos version in __init__.py (this is o.k.)")
+    print("unable to import pymilos version in __init__.py in .cmilos (this is o.k.)")

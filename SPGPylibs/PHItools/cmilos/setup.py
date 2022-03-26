@@ -2,7 +2,7 @@ import platform
 from distutils.core import setup
 from distutils.extension import Extension
 from Cython.Build import cythonize
-import numpy
+import numpy 
 
 compile_extra_args = []
 link_extra_args = []

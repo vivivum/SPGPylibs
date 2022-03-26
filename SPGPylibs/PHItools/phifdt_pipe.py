@@ -350,28 +350,29 @@ def phifdt_pipe(json_input = None,
         printc('-->>>>>>> Reading flat file'+flat_f,color=bcolors.OKGREEN)
         printc('          Assumes they are already normalized to ONE ',color=bcolors.OKGREEN)
         printc('          input should be [wave X Stokes,y-dim,x-dim].',color=bcolors.OKGREEN)
+
         try:
             dummy,flat_header = fits_get(flat_f)
             fz_d,fy_d,fx_d = dummy.shape
-
-            flat = np.zeros([24,2048,2048]).astype(np.float32)
-            PXBEG1_f  = int(flat_header['PXBEG1']) - 1           
-            PXEND1_f  = int(flat_header['PXEND1']) - 1          
-            PXBEG2_f  = int(flat_header['PXBEG2']) - 1           
-            PXEND2_f  = int(flat_header['PXEND2']) - 1 
-            if fx_d < 2047:    
-                printc('         input flat was cropped to: [',PXBEG1_f,',',PXEND1_f,'],[',PXBEG2_f,',',PXEND2_f,']',color=bcolors.WARNING)
-
-            flat[:,PXBEG1_f:PXEND1_f+1,PXBEG2_f:PXEND2_f+1] = dummy
-            del dummy
-
-            printc('-->>>>>>> Reshaping Flat to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
-            fz,fy,fx = flat.shape
-            flat = np.reshape(flat,(fz//4,4,fy,fx))
-
         except Exception:
-            printc("ERROR, Unable to open flats file: {}",flat_f,color=bcolors.FAIL)
+            printc("ERROR, something happened while reading the file: {}",flat_f,color=bcolors.FAIL)
             return 0
+
+        flat = np.zeros([24,2048,2048]).astype(np.float32)
+        PXBEG1_f  = int(flat_header['PXBEG1']) - 1           
+        PXEND1_f  = int(flat_header['PXEND1']) - 1          
+        PXBEG2_f  = int(flat_header['PXBEG2']) - 1           
+        PXEND2_f  = int(flat_header['PXEND2']) - 1 
+        if fx_d < 2047:    
+            printc('         input flat was cropped to: [',PXBEG1_f,',',PXEND1_f,'],[',PXBEG2_f,',',PXEND2_f,']',color=bcolors.WARNING)
+
+        flat[:,PXBEG1_f:PXEND1_f+1,PXBEG2_f:PXEND2_f+1] = dummy
+        del dummy
+
+        printc('-->>>>>>> Reshaping Flat to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
+        fz,fy,fx = flat.shape
+        flat = np.reshape(flat,(fz//4,4,fy,fx))
+
 
         if verbose:
             plib.show_one(flat[0,0,:,:],xlabel='pixel',ylabel='pixel',title='Flat first image raw (1 of 24)',cbarlabel='Any (as input)',save=None,cmap='gray')
@@ -916,6 +917,13 @@ def phifdt_pipe(json_input = None,
             data[i,2,:,:] = data[i,2,:,:] - PU#[:,np.newaxis,np.newaxis]
             data[i,3,:,:] = data[i,3,:,:] - PV#[:,np.newaxis,np.newaxis]
             printc(PQ,PU,PV)
+            
+    # plib.show_four_row(data[0,0,:,:],data[0,1,:,:],data[0,2,:,:],data[0,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+    # ctnd = data[0,1:3,:,:]
+    # for i in range(zd//4):
+    #     data[i,1:3,:,:] = data[i,1:3,:,:] - ctnd
+    # plib.show_four_row(data[0,0,:,:],data[0,1,:,:],data[0,2,:,:],data[0,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+
     if verbose == 1:
         plib.show_hist(data[0,1, maski > 0].flatten(), bins='auto',title=' ',leave='open',color='green')
         plib.show_hist(data[0,2, maski > 0].flatten(), bins='auto',title=' ',leave='open',color='red')
@@ -1012,9 +1020,9 @@ def phifdt_pipe(json_input = None,
         #np.savez_compressed(output_dir+'npz/'+outfile_L2+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
 
         b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
-        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
-        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
-        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
+        # b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
+        # b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
+        # b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
         # b_los = np.zeros((2048,2048))
         # b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = b_los_cropped
 
@@ -1136,6 +1144,35 @@ def phifdt_pipe(json_input = None,
 
         writeto = set_level(outfile_L2,'stokes','blos')
         writeto = set_level(writeto,filetype,FIGUREOUT) 
+        plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+        plt.close()
+
+        #-----------------
+        # PLOTS AZIMUTH
+        #-----------------
+        Zm = np.ma.masked_where(mask == 1, mask)
+
+        plt.figure(figsize=(10, 10))
+        ax = plt.gca()
+        plt.title('PHI-FDT field azimuth',size=20)
+
+        # Hide grid lines
+        ax.grid(False)
+        # Hide axes ticks
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        im = ax.imshow(rte_invs[4,:,:] * mask, cmap='bwr',vmin=0,vmax=180)
+
+        divider = plib.make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        cbar = plib.plt.colorbar(im, cax=cax)
+        cbar.set_label('[km/s]')
+        cbar.ax.tick_params(labelsize=16)
+
+        writeto = set_level(outfile_L2,'stokes','bazi')
+        writeto = set_level(writeto,filetype,FIGUREOUT) 
+
         plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
         plt.close()
 
