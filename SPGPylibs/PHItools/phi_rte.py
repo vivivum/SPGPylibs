@@ -7,7 +7,11 @@
 # Description: programs for accesing data and fits files
 #-----------------------------------------------------------------------------
 from .tools import *
-# from .cmilos import pymilos
+try:
+    from .cmilos import pymilos
+except:
+    print("unable to import pymilos version in phi_rte.py (this is o.k.)")
+
 import subprocess
 import numpy as np
 #although not necessary these are the dtype to be passed to C
@@ -16,7 +20,10 @@ DTYPE_DOUBLE = np.float_
 
 @timeit
 def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
-    ''' For the moment this is just isolated from the main pipeline'''
+    ''' For the moment this is just isolated from the main pipeline
+    input should be: 
+            l,p,x,y = data.shape  -cmilos  (DEFAULT)
+    '''
 
     # Inv Iterations                                   = 15
     # Initial Model Continuum Absoprtion               = 12.0000
@@ -32,6 +39,23 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
     # Wavelength Setting Spectral Line Step            = 0.07000
     # Wavelength Setting Wavelength Of Line Continuum  = 6173.04117 (blue) 6173.64117 (red)
 
+    #the next input to pymilos is the options
+    #for the moment no PSF is included 
+    # and classical estimates are deactivated.
+    # these will be added in following versions
+    try:
+        if options is None:
+            options = np.zeros((4))#,dtype=DTYPE_INT)
+            options[0] = len(wave_axis) #NLAMBDA wave axis dimension
+            options[1] = 15 #MAX_ITER max number of iterations
+            options[2] = 0 #CLASSICAL_ESTIMATES [0,1] classical estimates ON or OFF
+            options[3] = 0 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
+            print('No options')
+        else:
+            print(len(options) == 4)
+    except:
+        print('ups')
+
     if cmilos == None: #meaning you will use python wrapper
         print('shape input',data.shape) 
         # CHECK DATA DIMENSIONS
@@ -42,17 +66,6 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
         # the pipeline has (for the moment being) the data in
         # (4, 6, 298, 1176) (pol,wave, y,x)
         # This has to be changed to (y,x,pol,wave) for C
-
-        #the next input to pymilos is the options
-        #for the moment no PSF is included 
-        # and classical estimates are deactivated.
-        # these will be added in following versions
-        if options == None:
-            options = np.zeros((4))#,dtype=DTYPE_INT)
-            options[0] = len(wave_axis) #NLAMBDA wave axis dimension
-            options[1] = 15 #MAX_ITER max number of iterations
-            options[2] = 0 #CLASSICAL_ESTIMATES [0,1] classical estimates ON or OFF
-            options[3] = 0 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
 
         result =  pymilos.pmilos(options,data,wave_axis)
 
@@ -74,8 +87,7 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
     else:
 
         l,p,x,y = data.shape
-        print(l,p,x,y)
-
+        printc('   saving data into dummy_in.txt for RTE input. dimensions:',l,p,x,y)
         filename = 'dummy_in.txt'
         with open(filename,"w") as f:
             for i in range(x):
@@ -86,11 +98,19 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
         printc('  ---- >>>>> Inverting data.... ',color=bcolors.OKGREEN)
 
         if rte_mode == 'RTE':
-            rte_on = subprocess.call(cmilos+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-        if rte_mode == 'CE':
-            rte_on = subprocess.call(cmilos+" 6 15 2 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-        if rte_mode == 'CE+RTE':
-            rte_on = subprocess.call(cmilos+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+            options[2] = 0
+        elif rte_mode == 'CE':
+            options[2] = 2
+        elif rte_mode == 'CE+RTE':
+            options[2] = 1
+        else:
+            printc('RET option not recognized: ',rte_mode,color=bcolors.FAIL)
+            return
+
+        trozo = " "+str(options[0].astype(int))+" "+str(options[1].astype(int))+" "+str(options[2].astype(int))+" "+str(options[3].astype(int))
+        printc(cmilos+trozo+" dummy_in.txt  >  dummy_out.txt",color=bcolors.OKGREEN)
+        rte_on = subprocess.call(cmilos+trozo+" dummy_in.txt  >  dummy_out.txt",shell=True)
+        printc(rte_on,color=bcolors.OKGREEN)
 
         print(rte_on)
         printc('  ---- >>>>> Finishing.... ',color=bcolors.OKGREEN)
@@ -104,9 +124,8 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
         print(del_dummy)
 
         npixels = res.shape[0]/12.
-        print(npixels)
-        print(npixels/x)
         result = np.zeros((12,y*x)).astype(float)
+
         for i in range(y*x):
             result[:,i] = res[i*12:(i+1)*12]
         result = result.reshape(12,y,x)

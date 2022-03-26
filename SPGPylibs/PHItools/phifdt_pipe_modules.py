@@ -295,23 +295,73 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
                                   [0.9963, 0.4269,-0.3652,-0.8229],
                                   [0.9983,-0.4022, 0.9001, 0.1495]])
         demodM = np.linalg.inv(mod_matrix_40)
-    # Johanns (it is the average in the central area of the one onboard)
+    # Johanns (it is the average in the central area of the one onboard) [**]
         demodM  = np.array([[0.168258,      0.357277,     0.202212,     0.273266],\
                             [-0.660351,     0.314981,     0.650029,    -0.299685],\
                             [ 0.421242,     0.336994,    -0.183068,    -0.576202],\
                             [-0.351933,     0.459820,    -0.582167,     0.455458]])
+    elif instrument == 'FDT40b': #NUMERICAL FIT  (0,360,10)-90   *** BIEN
+        mod_matrix_40 = np.array( [[ 0.99493621 ,-0.69068949 ,-0.36619221 ,-0.60735698 ],\
+                                   [ 1.00582274 , 0.41415974 ,-0.73663873 , 0.54241813 ],\
+                                   [ 0.99684194 , 0.4458513  , 0.36831856 , -0.8134466 ],\
+                                   [ 1.00239911 ,-0.38416442 , 0.9165126  , 0.13481876]] )
+        demodM = np.linalg.inv(mod_matrix_40)
+    elif instrument == 'FDT40c': #ANALITICA FIT   (0,360,10)-90   *** BIEN
+        mod_matrix_40 = np.array([[ 1.    ,     -0.69634929 ,-0.37330967 ,-0.61297435],\
+                                    [ 1.  ,        0.41324362 ,-0.73330607,  0.53989992],\
+                                    [ 1.  ,        0.44598252 , 0.36860311, -0.81561715],\
+                                    [ 1.   ,      -0.3846079  , 0.91317683,  0.13485121]])
+        demodM = np.linalg.inv(mod_matrix_40)
+    elif instrument == 'FDT40d': #NUMERICAL (0,-360,-10) Es como [**]
+        mod_matrix_40 = np.array( [[ 0.99493621 ,-0.69068949 , 0.36619221 ,-0.60735698 ],\
+                                   [ 1.00582274 , 0.41415974 , 0.73663873 , 0.54241813 ],\
+                                   [ 0.99684194 , 0.4458513  ,-0.36831856 , -0.8134466 ],\
+                                   [ 1.00239911 ,-0.38416442 ,-0.9165126  , 0.13481876]] )
+    # array([[ 0.16663017,  0.36801316,  0.16973499,  0.29415294],
+    #    [-0.67689968,  0.30485617,  0.66048133, -0.29085695],
+    #    [ 0.41386986,  0.34280293, -0.1764403 , -0.5793002 ],
+    #    [-0.35420716,  0.46285865, -0.57943367,  0.46335193]])
+        demodM = np.linalg.inv(mod_matrix_40)
+    elif instrument == 'FDT40e': #NUMERICAL (0,360,10) - 90 and pol -90  NOOOOOOO
+        mod_matrix_40 = np.array( [[ 0.99493621 , 0.69068949 , 0.36619221 , 0.60735698 ],\
+                                   [ 1.00582274 ,-0.41415974 , 0.73663873 ,-0.54241813 ],\
+                                   [ 0.99684194 ,-0.4458513  ,-0.36831856 , 0.8134466 ],\
+                                   [ 1.00239911 , 0.38416442 ,-0.9165126  ,-0.13481876]] )
+        demodM = np.linalg.inv(mod_matrix_40)
     elif instrument == 'FDT45':
         mod_matrix_45 = np.array([[1.0035,-0.6598, 0.5817,-0.4773],
                                   [1.0032, 0.5647, 0.5275, 0.6403],
                                   [0.9966, 0.4390,-0.5384,-0.7150],
                                   [0.9968,-0.6169,-0.6443, 0.4425]])
         demodM = np.linalg.inv(mod_matrix_45)
+    elif instrument == 'HRT50':
+        demodM = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
+                     [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
+                     [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
+                     [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
     elif instrument == 'HRT40':
-        mod_matrix_40 = np.array([[1.0040,-0.6647, 0.5928,-0.4527],
-                                  [1.0018, 0.5647, 0.5093, 0.6483],
-                                  [0.9964, 0.4348,-0.5135,-0.7325],
-                                  [0.9978,-0.6128,-0.6567, 0.4283]]) #HREW
+        demodM = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
+                     [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
+                     [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
+                     [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
+                     
+        mod_matrix_40 = np.array([[ 0.98889418  ,0.63311402 , 0.01490015 ,-0.7816713 ],  #MIA
+                            [ 0.99603854 , 0.07763719 , 0.89156538 , 0.46243721],
+                            [ 1.00427941 ,-0.84080523 , 0.12554703 ,-0.55159669],
+                            [ 1.01078787 ,-0.29564517 ,-0.88365522 , 0.41235959]])
         demodM = np.linalg.inv(mod_matrix_40)
+
+# array([[ 1.0048873 ,  0.62573121, -0.02356526, -0.77180854],
+#        [ 1.00716591,  0.0910381 , -0.894827  ,  0.4773679 ],
+#        [ 0.99510061, -0.83126202, -0.11811347, -0.52709882],
+#        [ 1.00224124, -0.26816396,  0.85571308,  0.42039256]])
+
+    # elif instrument == 'HRT40':
+    #     mod_matrix_40 = np.array([[1.0040,-0.6647, 0.5928,-0.4527],
+    #                               [1.0018, 0.5647, 0.5093, 0.6483],
+    #                               [0.9964, 0.4348,-0.5135,-0.7325],
+    #                               [0.9978,-0.6128,-0.6567, 0.4283]]) #HREW
+    #     demodM = np.linalg.inv(mod_matrix_40)
     elif instrument == 'HRT45':
         mod_matrix_45_dos = np.array([[1.00159,-0.50032, 0.7093,-0.4931],
                                       [1.0040, 0.6615, 0.3925, 0.6494],
@@ -1296,8 +1346,13 @@ def phi_correct_fringes(data,header,option,verbose=False):
 
     return data, header
 
-def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,options = None):
+def generate_level2(data,wave_axis,rte_mode,ref_wavelenth = 6173.3354, milos_executable = MILOS_EXECUTABLE,options = None,center_line = True):
 
+    '''
+    generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,options = None)
+    return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options)
+
+    '''
     if milos_executable != 'python':
         try:
             print(milos_executable)
@@ -1319,16 +1374,21 @@ def generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,
     else:
         printc("Using python milos wrapper",color=bcolors.WARNING)
         return 0
-    wavelength = 6173.3354
+    ref_wavelenth = 6173.3354
     #OJO, REMOVE. NEED TO CHECK THE REF WAVE FROM S/C-PHI H/K
-    shift_w =  wave_axis[3] - wavelength
-    wave_axis = wave_axis - shift_w
+    if center_line !=False:
+        if center_line == True:
+            shift_w =  wave_axis[3] - ref_wavelenth
+            wave_axis = wave_axis - shift_w
+        elif type(center_line) is int:
+            shift_w =  wave_axis[center_line] - ref_wavelenth
+            wave_axis = wave_axis - shift_w
+
     #wave_axis = np.array([-300,-160,-80,0,80,160])/1000.+wavelength
     #wave_axis = np.array([-300,-140,-70,0,70,140])
     printc('   It is assumed the wavelength is given by the header info ')
     printc('         wave axis: ', wave_axis,color = bcolors.WARNING)
-    printc('         wave axis (step):  ',(wave_axis - wavelength)*1000.,color = bcolors.WARNING)
-    printc('   saving data into dummy_in.txt for RTE input')
+    printc('         wave axis (step):  ',(wave_axis - ref_wavelenth)*1000.,color = bcolors.WARNING)
         
     return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options)
     #phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None)
