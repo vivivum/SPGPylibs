@@ -977,43 +977,65 @@ int CalculaNfree(PRECISION *spectro,int nspectro){
 */
 void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISION *spectro,Init_Model *initModel){
 
+	// Modified by Daniele Calchetti (DC) calchetti@mps.mpg.de in March 2022 
+
 	PRECISION x,y,aux,LM_lambda_plus,LM_lambda_minus,Blos,beta_B,Ic,Vlos;
 	PRECISION *spectroI,*spectroQ,*spectroU,*spectroV;
 	PRECISION L,m,gamma, gamma_rad,tan_gamma,maxV,minV,C,maxWh,minWh;
 	int i,j;
+    // added by DC for continuum position
+    PRECISION d1, d2;
+    int cont_pos, i0, ii;
+    // end DC
 
 
 	//Es necesario crear un lambda en FLOAT para probar como se hace en la FPGA
 	PRECISION *lambda_aux;
 	lambda_aux= (PRECISION*) calloc(nlambda,sizeof(PRECISION));
-	PRECISION lambda0,lambda1,lambda2,lambda3,lambda4;
 
-	lambda0 = 6.1732012e+3 + 0; // RTE_WL_0
-	lambda1 = lambda0 + 0.070000000; //RTE_WL_STEP
-	lambda2 = lambda1 + 0.070000000;
-	lambda3 = lambda2 + 0.070000000;
-	lambda4 = lambda3 + 0.070000000;
+	// commented on March 2022 DOS (FPGA HERITAGE)
+	// PRECISION lambda0,lambda1,lambda2,lambda3,lambda4;
+	// lambda0 = 6.1732012e+3 + 0; // RTE_WL_0
+	// lambda1 = lambda0 + 0.070000000; //RTE_WL_STEP
+	// lambda2 = lambda1 + 0.070000000;
+	// lambda3 = lambda2 + 0.070000000;
+	// lambda4 = lambda3 + 0.070000000;
 
-	lambda_aux[0]=lambda0;
-	lambda_aux[1]=lambda1;
-	lambda_aux[2]=lambda2;
-	lambda_aux[3]=lambda3;
-	lambda_aux[4]=lambda4;
+	// commented on March 2022 DOS (FPGA HERITAGE)
+	// lambda_aux[0]=lambda0;
+	// lambda_aux[1]=lambda1;
+	// lambda_aux[2]=lambda2;
+	// lambda_aux[3]=lambda3;
+	// lambda_aux[4]=lambda4;
 
-	//Sino queremos usar el lambda de la FPGA
-	for(i=0;i<nlambda-1;i++){
-		lambda_aux[i] = (PRECISION)lambda[i];
-	}
+	// Ic= spectro[nlambda-1]; // Continuo ultimo valor de I
+	// Ic= spectro[0]; // Continuo primer valor de I
 
+    // added by DC for continuum position
+    d1 = (PRECISION)lambda[0] - (PRECISION)lambda[1];
+    d2 = (PRECISION)lambda[nlambda-2] - (PRECISION)lambda[nlambda-1];
+    if (fabs(d1)>fabs(d2)){
+        cont_pos = 0;
+        i0 = 0;
+        ii = 1;
+    }
+    else{
+        cont_pos = nlambda -1;
+        i0 = 1;
+        ii = 0;
+    }
+    Ic= spectro[cont_pos]; // Continuo ultimo valor de I
+    // end DC
 
 	spectroI=spectro;
 	spectroQ=spectro+nlambda;
 	spectroU=spectro+nlambda*2;
 	spectroV=spectro+nlambda*3;
 
-	Ic= spectro[nlambda-1]; // Continuo ultimo valor de I
-	Ic= spectro[0]; // Continuo ultimo valor de I
-
+	//Sino queremos usar el lambda de la FPGA
+	for(i=0;i<nlambda-1;i++){
+		lambda_aux[i] = (PRECISION)lambda[i];
+	}
 
 	x=0;
 	y=0;
@@ -1034,7 +1056,7 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	y=0;
 	for(i=0;i<nlambda-1;i++){
 		aux = ( Ic - (spectroI[i] - spectroV[i]));
-		x= x +  aux * (lambda_aux[i]-lambda_0);
+		x = x +  aux * (lambda_aux[i]-lambda_0);
 		y = y + aux;
 	}
 
