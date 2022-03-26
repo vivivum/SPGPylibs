@@ -139,7 +139,7 @@ def list_fits(inpath = './', contain = None,remove_dir = False):
     list_of_files = []
     for (dirpath, dirnames, filenames) in walk(inpath):
         for filename in filenames:
-            if filename.endswith('.fits'):
+            if filename.endswith('.fits') or filename.endswith('.fits.gz'):
                 if contain != None:
                     _,exist = find_string(filename,contain)
                     if exist != -1:
