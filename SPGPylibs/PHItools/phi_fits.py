@@ -240,6 +240,6 @@ def set_level(file,what,towhat):
     if exist != -1:
         return file.replace(what,towhat)        
 
-def append_id(file,filetype,ID):
+def append_id(file,filetype,vers,DID):
     ande = file.index(filetype)
-    return file[0:ande]+'_'+ID+file[ande:]
+    return file.split('V')[0] + 'V' + vers+ '_' + DID  +file[ande:]

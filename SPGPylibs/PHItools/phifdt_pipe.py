@@ -960,11 +960,13 @@ def phifdt_pipe(json_input = None,
         try:
             outfile_L2 = set_level(data_f,'L1','L2')
             outfile_L2 = set_level(outfile_L2,'ilam','stokes')
-            outfile_L2 = append_id(outfile_L2,filetype,vers)
+            outfile_L2 = append_id(outfile_L2,filetype,vers,DID) 
+            # outfile_L2 = outfile_L2.split('V')[0] + 'V' + vers+ '_' + DID  + filetype
         except:
             outfile_L2 = set_level(data_f,'L0','L2')
             outfile_L2 = set_level(outfile_L2,'ilam','stokes')
-            outfile_L2 = append_id(outfile_L2,filetype,vers)
+            outfile_L2 = append_id(outfile_L2,filetype,vers,DID) 
+            # outfile_L2 = outfile_L2.split('V')[0] + 'V' + vers+ '_' + DID  + filetype
 
     else:
         outfile_L2 = outfile

@@ -10,4 +10,4 @@ pymilos: setup.py #pymilos.pyx $(LIB_DIR)/libmilos.a
 #	make -C $(LIB_DIR) libmilos.a
 
 clean:
-	rm *.so
+	rm -f *.so

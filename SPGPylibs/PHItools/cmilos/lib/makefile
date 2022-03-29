@@ -17,7 +17,7 @@ default: print create_cuantic.o fvoigt.o fgauss.o me_der.o mil_sinrf.o calculosC
 
 print:
 	@echo Compilando CMILOS in $(HOSTCOMPUTER)
-	@echo and coping milos.$(HOSTCOMPUTER) to parent folder (cmilos)
+	@echo and coping milos.$(HOSTCOMPUTER) to parent folder cmilos
 	
 create_cuantic.o: create_cuantic.c 
 	$(CC) $(CFLAGS) -c $< 
