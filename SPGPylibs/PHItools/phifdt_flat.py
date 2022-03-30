@@ -9,6 +9,7 @@
 #              the circular Hough Transform in the frequency domain.
 #-----------------------------------------------------------------------------
 
+from asyncore import file_dispatcher
 import numpy as np
 import matplotlib.pyplot as plt
 from .tools import printc,bcolors,timeit
@@ -635,7 +636,7 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
 
 def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 0, shifts = None, verbose = 1,
     correct_ghost = 0,expand = 1,thrd = 0,iter = 4, normalize = 1 , disp_method = 'Hough', c_term = 0,
-    inner_radius = 400, outer_radius = 800, steps = 20,shifts_file = False,imasize = [2048,2048]):
+    inner_radius = 400, outer_radius = 800, steps = 20,shifts_file = False,imasize = [2048,2048],single = False):
     '''
     The Dark, if provided, should have the same scaling as the data and same size!!!!!!!
     This program does not take care of sizes. For that go to fdt_pipeline
@@ -648,7 +649,13 @@ def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 
     # This can be done all at once but I have this like that because I am lazy.
     ############################
     
-    image = [fits_get_part(i,wavelength,npol) for i in files]
+    if single:
+        image = []
+        for i in files:
+            img,header = fits_get(i)
+            image.append(img)
+    else:
+        image = [fits_get_part(i,wavelength,npol) for i in files]
     n_images = len(image)
     ys,xs = image[0].shape
     ############################

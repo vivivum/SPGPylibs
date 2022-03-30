@@ -647,3 +647,15 @@ def rotate_grid(xy, radians):
     m = np.dot(j, [x, y])
 
     return m
+
+def check_dir(dirs, leading_dir = './'):
+    if isinstance(dirs, list):
+        for checkit in dirs:
+            check_dir = os.path.isdir(leading_dir+checkit)
+            if not check_dir:
+                os.makedirs(leading_dir+checkit)
+                print("created folder : ", leading_dir+checkit)
+            else:
+                print(leading_dir+checkit, "folder already exists.")
+    else:
+        print('input a list....')

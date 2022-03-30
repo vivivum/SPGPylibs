@@ -13,8 +13,7 @@ from .phi_reg import shift_subp,moments
 
 import SPGPylibs.GENtools.plot_lib as plib
 
-from platform import node
-MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
+# from platform import node
 import os
 
 def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = False):
@@ -1346,14 +1345,15 @@ def phi_correct_fringes(data,header,option,verbose=False):
 
     return data, header
 
-def generate_level2(data,wave_axis,rte_mode,ref_wavelenth = 6173.3354, milos_executable = MILOS_EXECUTABLE,options = None,center_line = True):
+#GV need to pass outiput_dir too
+def generate_level2(data,wave_axis,rte_mode,output_dir,ref_wavelenth = 6173.3354, milos_executable = None,options = None,center_line = True):
 
     '''
     generate_level2(data,wave_axis,rte_mode,milos_executable = MILOS_EXECUTABLE,options = None)
     return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options)
 
     '''
-    if milos_executable != 'python':
+    if milos_executable != 'pmilos':
         try:
             print(milos_executable)
             CMILOS_LOC = os.path.realpath(__file__) 
@@ -1369,7 +1369,7 @@ def generate_level2(data,wave_axis,rte_mode,ref_wavelenth = 6173.3354, milos_exe
 
         cmd = CMILOS_LOC+"./"+milos_executable
         cmd = fix_path(cmd)
-    elif milos_executable == 'python':
+    elif milos_executable == 'pmilos':
         cmd = None
     else:
         printc("Using python milos wrapper",color=bcolors.WARNING)
@@ -1390,8 +1390,8 @@ def generate_level2(data,wave_axis,rte_mode,ref_wavelenth = 6173.3354, milos_exe
     printc('         wave axis: ', wave_axis,color = bcolors.WARNING)
     printc('         wave axis (step):  ',(wave_axis - ref_wavelenth)*1000.,color = bcolors.WARNING)
         
-    return phi_rte(data,wave_axis,rte_mode,cmilos = cmd,options = options)
-    #phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None)
+    #GV need to pass outiput_dir too
+    return phi_rte(data,wave_axis,rte_mode,output_dir,cmilos = cmd,options = options)
     
 
 def create_output_filenames(filename, DID, version = '01'):

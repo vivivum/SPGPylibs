@@ -19,7 +19,7 @@ DTYPE_INT = np.intc
 DTYPE_DOUBLE = np.float_
 
 @timeit
-def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
+def phi_rte(data,wave_axis,rte_mode,output_dir,cmilos = None,options = None):
     ''' For the moment this is just isolated from the main pipeline
     input should be: 
             l,p,x,y = data.shape  -cmilos  (DEFAULT)
@@ -88,7 +88,11 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
 
         l,p,x,y = data.shape
         printc('   saving data into dummy_in.txt for RTE input. dimensions:',l,p,x,y)
-        filename = 'dummy_in.txt'
+        # GV output_dir was include in the chain (generate_level_2, pft_pipe_modules_ phi_rte) to have it availabel here
+        file_dummy_in=output_dir+'dummy_in.txt'
+        file_dummy_out=output_dir+'dummy_out.txt'
+        filename=file_dummy_in
+        #filename = 'dummy_in.txt'
         with open(filename,"w") as f:
             for i in range(x):
                 for j in range(y):
@@ -108,19 +112,25 @@ def phi_rte(data,wave_axis,rte_mode,cmilos = None,options = None):
             return
 
         trozo = " "+str(options[0].astype(int))+" "+str(options[1].astype(int))+" "+str(options[2].astype(int))+" "+str(options[3].astype(int))
-        printc(cmilos+trozo+" dummy_in.txt  >  dummy_out.txt",color=bcolors.OKGREEN)
-        rte_on = subprocess.call(cmilos+trozo+" dummy_in.txt  >  dummy_out.txt",shell=True)
+        #GV adding dir to filein/out
+        #printc(cmilos+trozo+" dummy_in.txt  >  dummy_out.txt",color=bcolors.OKGREEN)
+        #rte_on = subprocess.call(cmilos+trozo+" dummy_in.txt  >  dummy_out.txt",shell=True)
+        printc(cmilos+trozo+ " " +file_dummy_in+" > "+file_dummy_out ,color=bcolors.OKGREEN)
+        rte_on = subprocess.call(cmilos+trozo+" "+ file_dummy_in+" > "+file_dummy_out ,shell=True)
         printc(rte_on,color=bcolors.OKGREEN)
 
         print(rte_on)
         printc('  ---- >>>>> Finishing.... ',color=bcolors.OKGREEN)
 
         printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
-        res = np.loadtxt('dummy_out.txt')
+        #GV res = np.loadtxt('dummy_out.txt')
+        res = np.loadtxt(file_dummy_out)
 
-        del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
+        #GV del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
+        del_dummy = subprocess.call("rm "+file_dummy_in,shell=True)
         print(del_dummy)
-        del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
+        #GV del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
+        del_dummy = subprocess.call("rm "+file_dummy_out,shell=True)
         print(del_dummy)
 
         npixels = res.shape[0]/12.

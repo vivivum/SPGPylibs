@@ -20,7 +20,6 @@ import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
 
 from platform import node
-MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]+'.x'
 FIGUREOUT = '.png'
 
 #global variables 
@@ -256,6 +255,17 @@ def phifdt_pipe(json_input = None,
         filetype = '.fits.gz'
     else:
         raise ValueError("input data type nor .fits neither .fits.gz")
+
+    if RTE_code == 'cmilos':
+        #MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]+'.x'
+        MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
+    elif RTE_code == 'pmilos':
+        MILOS_EXECUTABLE = 'pmilos'
+    else:
+        #check if RTE is on
+        if (rte != 'RTE') and (rte != 'RTE') and (rte != 'RTE'):
+            print('Error setting RTE. RTE_code: ',RTE_code,' RTE option: ',rte)
+            return
 
     #-----------------
     # READ DATA
@@ -1000,7 +1010,7 @@ def phifdt_pipe(json_input = None,
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
         
         rte_invs = np.zeros((12,yd,xd)).astype(float)
-        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte)
+        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte,output_dir,milos_executable = MILOS_EXECUTABLE)
 
         rte_invs_noth = np.copy(rte_invs)
         umbral = 3.

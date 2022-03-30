@@ -146,9 +146,9 @@ def list_fits(inpath = './', contain = None,remove_dir = False):
                         if remove_dir:
                             list_of_files.append(filename)
                         else:
-                            list_of_files.append(inpath.join(dirpath, filename)) 
+                            list_of_files.append(dirpath + filename) 
                 else:
-                    list_of_files.append(inpath.join(dirpath, filename)) 
+                    list_of_files.append(dirpath + filename) 
     return list_of_files
 
 def fits_get_sampling(file,verbose = False):
