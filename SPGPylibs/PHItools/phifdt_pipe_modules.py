@@ -282,101 +282,91 @@ def applyPrefilter_dos(data, wvltsData, prefilter, prefScale, wvltsPref, directi
             print("Ivnalid direction! Must be 1 (mult) or -1 (div).")
     return dataPrefApplied
 
-def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = False):
+def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = False,modulate = False):
     '''
     Use demodulation matrices to demodulate data size ls,ps,ys,xs  (n_wave*S_POL,N,M)
     ATTENTION: FDT40 is fixed to the one Johann is using!!!!
     '''
 
-    if instrument == 'FDT40':
-        mod_matrix_40 = np.array([[1.0006,-0.7132, 0.4002,-0.5693],
+    if instrument == 'FDT40': #MODEL FIT  INTA April 2022
+        mod_matrix = np.array( [[ 0.99913 , -0.69504 , -0.38074 , -0.60761 ],\
+                                [ 1.0051  ,  0.41991 , -0.73905 ,  0.54086 ],\
+                                [ 0.99495 ,  0.44499 ,  0.36828 , -0.8086  ],\
+                                [ 1.0008  , -0.38781 ,  0.91443 ,  0.13808 ]] )
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'FDT40_old': # Johanns (it is the average in the central area of the one onboard) 
+        mod_matrix = np.array([[1.0006,-0.7132, 0.4002,-0.5693],
                                   [1.0048, 0.4287,-0.7143, 0.5625],
                                   [0.9963, 0.4269,-0.3652,-0.8229],
                                   [0.9983,-0.4022, 0.9001, 0.1495]])
-        demodM = np.linalg.inv(mod_matrix_40)
-    # Johanns (it is the average in the central area of the one onboard) [**]
-        demodM  = np.array([[0.168258,      0.357277,     0.202212,     0.273266],\
-                            [-0.660351,     0.314981,     0.650029,    -0.299685],\
-                            [ 0.421242,     0.336994,    -0.183068,    -0.576202],\
-                            [-0.351933,     0.459820,    -0.582167,     0.455458]])
-    elif instrument == 'FDT40b': #NUMERICAL FIT  (0,360,10)-90   *** BIEN
-        mod_matrix_40 = np.array( [[ 0.99493621 ,-0.69068949 ,-0.36619221 ,-0.60735698 ],\
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'FDT40_dos': #NUMERICAL FIT  (0,360,10)-90   *** David Orozco March 2022
+        mod_matrix = np.array( [[ 0.99493621 ,-0.69068949 ,-0.36619221 ,-0.60735698 ],\
                                    [ 1.00582274 , 0.41415974 ,-0.73663873 , 0.54241813 ],\
                                    [ 0.99684194 , 0.4458513  , 0.36831856 , -0.8134466 ],\
                                    [ 1.00239911 ,-0.38416442 , 0.9165126  , 0.13481876]] )
-        demodM = np.linalg.inv(mod_matrix_40)
-    elif instrument == 'FDT40c': #ANALITICA FIT   (0,360,10)-90   *** BIEN
-        mod_matrix_40 = np.array([[ 1.    ,     -0.69634929 ,-0.37330967 ,-0.61297435],\
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'FDT40_mod': #ANALITICA FIT   (0,360,10)-90    *** David Orozco March 2022 - based on PHI / FDT model
+        mod_matrix = np.array([[ 1.    ,     -0.69634929 ,-0.37330967 ,-0.61297435],\
                                     [ 1.  ,        0.41324362 ,-0.73330607,  0.53989992],\
                                     [ 1.  ,        0.44598252 , 0.36860311, -0.81561715],\
                                     [ 1.   ,      -0.3846079  , 0.91317683,  0.13485121]])
-        demodM = np.linalg.inv(mod_matrix_40)
-    elif instrument == 'FDT40d': #NUMERICAL (0,-360,-10) Es como [**]
-        mod_matrix_40 = np.array( [[ 0.99493621 ,-0.69068949 , 0.36619221 ,-0.60735698 ],\
-                                   [ 1.00582274 , 0.41415974 , 0.73663873 , 0.54241813 ],\
-                                   [ 0.99684194 , 0.4458513  ,-0.36831856 , -0.8134466 ],\
-                                   [ 1.00239911 ,-0.38416442 ,-0.9165126  , 0.13481876]] )
-    # array([[ 0.16663017,  0.36801316,  0.16973499,  0.29415294],
-    #    [-0.67689968,  0.30485617,  0.66048133, -0.29085695],
-    #    [ 0.41386986,  0.34280293, -0.1764403 , -0.5793002 ],
-    #    [-0.35420716,  0.46285865, -0.57943367,  0.46335193]])
-        demodM = np.linalg.inv(mod_matrix_40)
-    elif instrument == 'FDT40e': #NUMERICAL (0,360,10) - 90 and pol -90  NOOOOOOO
-        mod_matrix_40 = np.array( [[ 0.99493621 , 0.69068949 , 0.36619221 , 0.60735698 ],\
-                                   [ 1.00582274 ,-0.41415974 , 0.73663873 ,-0.54241813 ],\
-                                   [ 0.99684194 ,-0.4458513  ,-0.36831856 , 0.8134466 ],\
-                                   [ 1.00239911 , 0.38416442 ,-0.9165126  ,-0.13481876]] )
-        demodM = np.linalg.inv(mod_matrix_40)
-    elif instrument == 'FDT45':
-        mod_matrix_45 = np.array([[1.0035,-0.6598, 0.5817,-0.4773],
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'FDT45': #E2E doc
+        mod_matrix = np.array([[1.0035,-0.6598, 0.5817,-0.4773],
                                   [1.0032, 0.5647, 0.5275, 0.6403],
                                   [0.9966, 0.4390,-0.5384,-0.7150],
                                   [0.9968,-0.6169,-0.6443, 0.4425]])
-        demodM = np.linalg.inv(mod_matrix_45)
-    elif instrument == 'HRT50':
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'HRT40_old': #E2E doc
+        demodM = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
+                            [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
+                            [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
+                            [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
+    elif instrument == 'HRT40': #MODEL FIT  INTA April 2022
+        mod_matrix = np.array([[ 0.99816  ,0.61485 , 0.010613 ,-0.77563 ], 
+                               [ 0.99192 , 0.08382 , 0.86254 , 0.46818],
+                               [ 1.0042 , -0.84437 , 0.12872 ,-0.53972],
+                               [ 1.0057 , -0.30576 ,-0.87969 , 0.40134]])
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'HRT40_dos': #NUMERICAL FIT  (0,360,10)-90   *** David Orozco March 2022
+        mod_matrix = np.array([[ 0.98889418  ,0.63311402 , 0.01490015 ,-0.7816713 ],  
+                            [ 0.99603854 , 0.07763719 , 0.89156538 , 0.46243721],
+                            [ 1.00427941 ,-0.84080523 , 0.12554703 ,-0.55159669],
+                            [ 1.01078787 ,-0.29564517 ,-0.88365522 , 0.41235959]])
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'HRT45': #E2E doc
+        mod_matrix = np.array([[1.00159,-0.50032, 0.7093,-0.4931],
+                                      [1.0040, 0.6615, 0.3925, 0.6494],
+                                      [0.9954, 0.3356,-0.6126,-0.7143],
+                                      [0.9989,-0.7474,-0.5179, 0.4126]]) #MIA
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'HRT50': #E2E doc
         demodM = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
                      [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
                      [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
                      [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
-    elif instrument == 'HRT40':
-        demodM = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
-                     [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
-                     [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
-                     [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
-                     
-        mod_matrix_40 = np.array([[ 0.98889418  ,0.63311402 , 0.01490015 ,-0.7816713 ],  #MIA
-                            [ 0.99603854 , 0.07763719 , 0.89156538 , 0.46243721],
-                            [ 1.00427941 ,-0.84080523 , 0.12554703 ,-0.55159669],
-                            [ 1.01078787 ,-0.29564517 ,-0.88365522 , 0.41235959]])
-        demodM = np.linalg.inv(mod_matrix_40)
-
-# array([[ 1.0048873 ,  0.62573121, -0.02356526, -0.77180854],
-#        [ 1.00716591,  0.0910381 , -0.894827  ,  0.4773679 ],
-#        [ 0.99510061, -0.83126202, -0.11811347, -0.52709882],
-#        [ 1.00224124, -0.26816396,  0.85571308,  0.42039256]])
-
-    # elif instrument == 'HRT40':
-    #     mod_matrix_40 = np.array([[1.0040,-0.6647, 0.5928,-0.4527],
-    #                               [1.0018, 0.5647, 0.5093, 0.6483],
-    #                               [0.9964, 0.4348,-0.5135,-0.7325],
-    #                               [0.9978,-0.6128,-0.6567, 0.4283]]) #HREW
-    #     demodM = np.linalg.inv(mod_matrix_40)
-    elif instrument == 'HRT45':
-        mod_matrix_45_dos = np.array([[1.00159,-0.50032, 0.7093,-0.4931],
-                                      [1.0040, 0.6615, 0.3925, 0.6494],
-                                      [0.9954, 0.3356,-0.6126,-0.7143],
-                                      [0.9989,-0.7474,-0.5179, 0.4126]]) #MIA
-        demodM = np.linalg.inv(mod_matrix_45_dos)
     else:
         printc('No demod available in demod_phi.py',color = bcolors.FAIL)
         raise SystemError()
+
     printc('Demodulation matrix for ', instrument,color = bcolors.WARNING)
     printc(demodM,color = bcolors.WARNING)
+
     if demod:
         return demodM
+
     ls,ps,ys,xs = data.shape
+
+    if modulate:
+        for i in range(ls):
+            data[i,:,:,:] = np.reshape(np.matmul(mod_matrix,np.reshape(data[i,:,:,:],(ps,xs*ys))),(ps,ys,xs))
+        return data
+
+
     for i in range(ls):
         data[i,:,:,:] = np.reshape(np.matmul(demodM,np.reshape(data[i,:,:,:],(ps,xs*ys))),(ps,ys,xs))
+
     if header != False:
         if 'CAL_IPOL' in header:  # Check for existence
             header['CAL_IPOL'] = instrument
@@ -593,7 +583,166 @@ def crosstalk_ItoQUV2d(data_demod,size=4):
     #cV1 = image.reconstruct_from_patches_2d(cV1, (yy,xx))
     return cV0,cV1
 
-def phi_correct_ghost(data,header,rad,verbose=False):
+def phi_correct_ghost_single(data,header,rad,verbose=False): 
+    '''
+    Startup version on April 2022. Based on phi_correct_ghost but for just one image
+    '''
+    version = 'phi_correct_ghost_single V1.0 April 2022'
+
+    center = np.array([header['CRPIX1'],header['CRPIX2']]).astype(int)
+    printc('        Read center from header (updated): x=',center[0],' y=',center[1],color=bcolors.OKBLUE)
+    xd  = int(header['NAXIS1'])    
+    yd  = int(header['NAXIS2'])    
+    zd  = int(header['NAXIS3'])    
+    PXBEG1  = int(header['PXBEG1']) - 1           
+    PXEND1  = int(header['PXEND1']) - 1          
+    PXBEG2  = int(header['PXBEG2']) - 1           
+    PXEND2  = int(header['PXEND2']) - 1   
+
+    printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
+
+    #common part
+    coef = [-1.98787669,1945.28944245] #empirically (first version)
+    coef = [-1.9999,1942.7] #empirically (updated by trial and error)
+
+    #correct center:
+    center_c = np.copy(center)
+    center_c[0] += PXBEG1 
+    center_c[1] += PXBEG2 
+    poly1d_fn = np.poly1d(coef)
+    sh = poly1d_fn(center_c).astype(int) 
+    sh_float = poly1d_fn(center_c)
+    printc('          image center: x: ',center[0],' y: ',center[1],color=bcolors.OKGREEN)
+    printc('          image center [for 2048]: x: ',center_c[0],' y: ',center_c[1],color=bcolors.OKGREEN)
+    printc('          ghost displacements: x: ',sh_float[0],' y: ',sh_float[1],color=bcolors.OKGREEN)
+
+    #generate a ring mask out of the solar disk to see how much is the ghost image
+    #we will be using complex histrograms....
+    mask_anulus = bin_annulus([yd,xd],rad + 20, 10, full = False)
+    mask_anulus = shift(mask_anulus, shift=(center[0]-xd//2,center[1]-yd//2), fill_value=0)
+
+    idx = np.where(mask_anulus == 1)
+    mask_anulus_big = bin_annulus([yd,xd],rad - 150, 100, full = False)
+    mask_anulus_big = shift(mask_anulus_big, shift=(center[0]-xd//2,center[1]-yd//2), fill_value=0)
+    idx_big = np.where(data*mask_anulus_big == 1)
+
+    printc('          computing azimuthal averages  ',color=bcolors.OKGREEN)
+
+    centers = np.zeros((2))
+    radius = 0
+    ints = np.zeros((int(np.sqrt(xd**2+yd**2))))
+    ints_rad = np.zeros((int(np.sqrt(xd**2+yd**2))))
+    ints_fit = np.zeros((int(np.sqrt(xd**2+yd**2))))
+    ints_syn = np.zeros((int(np.sqrt(xd**2+yd**2))))
+    ints_fit_pars = np.zeros((5))
+    factor = 0
+    mean_intensity = 0
+
+    # STEP --->>> Find center 
+    centers[1],centers[0],radius = find_center(data)  #cy,cx....
+
+    # STEP --->>> Generate CLV from averaged data
+    intensity, rad = azimutal_average(data,[centers[0],centers[1]])
+    ints[0:len(intensity)] = intensity
+    ints_rad[0:len(intensity)] = rad
+
+    # STEP --->>> FIT LIMB DATA
+    rrange = int(radius + 2) #2
+    clv = ints[0:rrange]
+    clv_r = ints_rad[0:rrange]
+    mu = np.sqrt( (1 - clv_r**2/clv_r[-1]**2) )
+
+    if verbose:
+        plt.plot(clv_r,clv)
+        plt.xlabel('Solar radious [pixel]')
+        plt.ylabel('Intensity [DN]')
+        plt.show()
+
+    u = 0.5
+    I0 = 100
+    ande = np.where(mu > 0.1)
+    pars = newton(clv[ande],mu[ande],[I0,u,0.2,0.2,0.2],limb_darkening)
+    fit, _ = limb_darkening(mu,pars)
+    ints_fit[0:len(fit)] = fit
+    ints_fit_pars[:] = pars
+
+    ints_syn = np.copy(ints)
+    ints_syn[0:len(fit)] = fit
+
+    # STEP --->>> NORMALIZE
+    ints_syn = ints_syn / ints_fit_pars[0]
+    ints_fit = ints_fit / ints_fit_pars[0]
+    ints = ints / ints_fit_pars[0]
+
+    if verbose:
+        plt.plot(ints_fit,label='fitted clv')
+        plt.plot(ints,'.',label='real clv')
+        plt.plot(ints_syn,'--',label='synt clv')
+        plt.xlabel('Heliocentric angle ['+r'$\theta$]')
+        plt.ylabel('Intensity [DN]')
+        plt.legend()
+        plt.show()
+
+    # STEP --->>> GENERATE GHOST
+
+    
+    nc = (PXEND2-PXBEG2+1)//2 #  center of frame
+    limb_2d = np.zeros((PXEND2-PXBEG2+1,PXEND1-PXBEG1+1)) #generate image for ghost
+    #fill the image with the revoluted fit
+    s_of_gh = int(radius*1.1)
+    limb_2d[ nc - s_of_gh:nc + s_of_gh + 1, nc - s_of_gh:nc + s_of_gh + 1] = genera_2d(ints_syn[0:s_of_gh])
+    xl,yl = limb_2d.shape
+    if verbose:
+        plt.imshow(limb_2d)
+        plt.show()
+
+    # STEP --->>> Smooth and SHIFT GHOST
+
+    limb_2d = gaussian_filter(limb_2d, sigma=(8, 8)) 
+
+    # #shift ghost to center of image
+    # limb_2d = shift(limb_2d, shift=(int(centers[1,i])-yd//2,int(centers[0,i])-xd//2), fill_value=0)
+    limb_2d = shift_subp(limb_2d, shift=[centers[1]-yd//2,centers[0]-xd//2])
+    #OJO, shift_subp coge como parametros los de shift pero al reves!!!!!!
+    if verbose:
+        plib.show_one(limb_2d,vmax=1,vmin=0,xlabel='pixel',ylabel='pixel',title='limb 2D',cbarlabel=' ',cmap='gray')
+    # #shift to the position of the ghost
+    reflection = shift(limb_2d, shift=(sh[0],sh[1]), fill_value=0) 
+
+    # STEP --->>> Correct
+
+    mean_intensity = np.mean(data[idx_big])
+
+    # FORMA 1 - con anillo
+    values = data[idx].flatten() #Take the ring
+    #show the histogram
+    meanv = np.mean(values)
+    idx_l = np.where(values <= meanv)
+    m_l = np.mean(values[idx_l])
+    idx_r = np.where(values >= meanv)
+    m_r = np.mean(values[idx_r])
+    factor = (m_r - m_l) * 100. / ints_fit_pars[0] 
+    print("factor",factor)
+
+    if verbose:
+        plt.hist(values, bins=40)
+        plt.title('signal')
+        plt.axvline(meanv, lw=2, color='yellow', alpha=0.4)
+        plt.axvline(m_l, lw=2, color='red', alpha=0.4)
+        plt.axvline(m_r, lw=2, color='blue', alpha=0.4)
+        plt.axvline(factor*ints_fit_pars[0] / 100., lw=2, color='green', alpha=0.4)
+        plt.show()
+
+    data = data - reflection * factor / 100. * ints_fit_pars[0]  
+
+    if 'CAL_GHST' in header:  # Check for existence
+        header['CAL_GHST'] = version
+    else:
+        header.set('CAL_GHST', version, 'ghost correction version py module (phifdt_pipe_modules.py)',after='CAL_DARK')
+    
+    return data, header
+
+def phi_correct_ghost(data,header,rad,verbose=False): 
     '''
     Startup version on Jun 2021
     '''
