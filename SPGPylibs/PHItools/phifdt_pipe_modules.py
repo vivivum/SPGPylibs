@@ -312,12 +312,25 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
                                     [ 1.  ,        0.44598252 , 0.36860311, -0.81561715],\
                                     [ 1.   ,      -0.3846079  , 0.91317683,  0.13485121]])
         demodM = np.linalg.inv(mod_matrix)
-    elif instrument == 'FDT45': #E2E doc
+    elif instrument == 'FDT45':  #MODEL FIT  INTA April 2022
+        mod_matrix = np.array([[1.0023,-0.64814, -0.56202,-0.51859],
+                                  [1.0041, 0.54693, -0.55299, 0.633],
+                                  [0.99523, 0.46132,0.54165,-0.69603],
+                                  [0.99838,-0.61944,0.66189, 0.42519]])
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'FDT45_HREW':  #MODEL FIT  INTA April 2022
+        mod_matrix = np.array([[1.0022,-0.6543, -0.57471,-0.49363],
+                                  [1.0038, 0.54924, -0.53817, 0.64209],
+                                  [0.99438, 0.45867,0.515,-0.71314],
+                                  [0.99964,-0.61277,0.67894, 0.40843]])
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'FDT45_E2E': #E2E doc
         mod_matrix = np.array([[1.0035,-0.6598, 0.5817,-0.4773],
                                   [1.0032, 0.5647, 0.5275, 0.6403],
                                   [0.9966, 0.4390,-0.5384,-0.7150],
                                   [0.9968,-0.6169,-0.6443, 0.4425]])
         demodM = np.linalg.inv(mod_matrix)
+        
     elif instrument == 'HRT40_old': #E2E doc
         demodM = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
                             [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
@@ -341,11 +354,17 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
                                       [0.9954, 0.3356,-0.6126,-0.7143],
                                       [0.9989,-0.7474,-0.5179, 0.4126]]) #MIA
         demodM = np.linalg.inv(mod_matrix)
-    elif instrument == 'HRT50': #E2E doc
+    elif instrument == 'HRT50_E2E': #E2E doc
         demodM = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
                      [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
                      [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
                      [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
+    elif instrument == 'HRT50': #MODEL FIT  INTA April 2022
+        mod_matrix = np.array([[ 1.0014  ,0.56715 , 0.3234 ,-0.74743 ], 
+                               [ 1.0007 , 0.0037942 , 0.69968 , 0.71423],
+                               [ 1.0002 , -0.98937 , 0.04716 ,-0.20392],
+                               [ 0.99769 , 0.27904 ,-0.86715 , 0.39908]])
+        demodM = np.linalg.inv(mod_matrix)
     else:
         printc('No demod available in demod_phi.py',color = bcolors.FAIL)
         raise SystemError()
