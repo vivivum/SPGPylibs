@@ -196,17 +196,19 @@ def fits_get_sampling(file,verbose = False):
     except Exception:
         print("Unable to open fits file: {}",file)        
 
-def fits_get_part(file, wave, npol):
+def fits_get_part(file, wave, npol,info = False):
     '''helper function to load FITS data set
     wave and npol reref to wave and npol (wow!)
     '''
     try:
     #        with pyfits.open(file, do_not_scale_image_data=True, memmap=True, mode='denywrite') as hdu_list:
         with pyfits.open(file, mode='denywrite') as hdu_list:
-            hdu_list.info()
+            if info:
+                hdu_list.info()
             data = hdu_list[0].data.astype(np.dtype('float32')) 
+            header = hdu_list[0].header
             image = data[wave*4+npol,:,:]
-        return image
+        return image,header
     except Exception:
         print("Unable to open fits file: {}",file)        
 
