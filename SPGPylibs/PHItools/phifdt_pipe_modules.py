@@ -1,5 +1,6 @@
 ### phifdt_pipe_modules
 
+from sys import exit
 import numpy as np 
 import random, statistics
 from scipy.ndimage import gaussian_filter
@@ -281,6 +282,22 @@ def applyPrefilter_dos(data, wvltsData, prefilter, prefScale, wvltsPref, directi
         else:
             print("Ivnalid direction! Must be 1 (mult) or -1 (div).")
     return dataPrefApplied
+
+def check_pmp_temp(hdr_arr):
+    """
+    check science scans have same PMP temperature set point
+    From HRT software (Jonas et al)
+    """
+    first_pmp_temp = hdr_arr['HPMPTSP1']
+    # result = all(hdr['HPMPTSP1'] == first_pmp_temp for hdr in hdr_arr)
+    if first_pmp_temp:
+        print(f"The scan have a PMP Temperature Set Point: {first_pmp_temp}")
+        pmp_temp = str(first_pmp_temp)
+        return pmp_temp
+    else:
+        print("The scans have different PMP Temperatures! Please fix \n Ending Process")
+
+        exit(1)
 
 def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = False,modulate = False):
     '''

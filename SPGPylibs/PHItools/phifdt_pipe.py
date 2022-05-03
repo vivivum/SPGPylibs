@@ -14,7 +14,7 @@ from .phi_rte import *
 #from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d,find_string
 from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_apply_demodulation,\
     crosstalk_ItoQUV,cross_talk_QUV,crosstalk_ItoQUV2d,phi_correct_ghost,phi_correct_fringes,\
-    generate_level2
+    generate_level2,check_pmp_temp
 
 import SPGPylibs.GENtools.plot_lib as plib
 import SPGPylibs.GENtools.cog as cog
@@ -193,6 +193,7 @@ def phifdt_pipe(json_input = None,
     version = 'V1.0 13th September 2021'
     version = 'V1.0 3th November 2021'
     #added json configuration and modify all keyword names to be consistent with HRT pipe
+    version = 'V1.1 13th April 2022'
 
     version_cmilos = 'CMILOS v0.91 (July - 2021)'
 
@@ -351,6 +352,17 @@ def phifdt_pipe(json_input = None,
         printc('         data cropped to: [',PXBEG1,',',PXEND1,'],[',PXBEG2,',',PXEND2,']',color=bcolors.WARNING)
     
     data_scale = fits_get(data_filename,scaling = True)
+
+    #-----------------
+    # CHECK PMP Temperature
+    #-----------------
+    if instrument == 'auto':
+        instrument = check_pmp_temp(header)
+        instrument = 'FDT'+instrument
+        printc('Instrument: ',instrument,color=bcolors.OKGREEN)
+
+    else:
+        pass
 
     #-----------------
     # READ FLAT FIELDS
