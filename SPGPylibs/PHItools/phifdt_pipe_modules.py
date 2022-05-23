@@ -305,11 +305,26 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
     ATTENTION: FDT40 is fixed to the one Johann is using!!!!
     '''
 
+    def rotation_matrix(angle_rot):
+        c, s = np.cos(2*angle_rot*np.pi/180), np.sin(2*angle_rot*np.pi/180)
+        return np.matrix([[1, 0, 0, 0], [0, c, s, 0], [0, -s, c, 0], [0, 0, 0, 1]])
+    def rotate_m(angle,matrix):
+        rot = rotation_matrix(127.6)
+        return np.matmul(matrix,angle)
+
     if instrument == 'FDT40': #MODEL FIT  INTA April 2022
         mod_matrix = np.array( [[ 0.99913 , -0.69504 , -0.38074 , -0.60761 ],\
                                 [ 1.0051  ,  0.41991 , -0.73905 ,  0.54086 ],\
                                 [ 0.99495 ,  0.44499 ,  0.36828 , -0.8086  ],\
                                 [ 1.0008  , -0.38781 ,  0.91443 ,  0.13808 ]] )
+        demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'FDT40r':  #MODEL FIT  ROTATED 127.6 degree (counterclockwise viewing from detector)
+        mod_matrix = np.array(
+                            [[ 0.99493622, -0.17760949,  0.761317  , -0.60735698],
+                            [ 1.00582275, -0.81799487, -0.21224808,  0.54241813],
+                            [ 0.99684194,  0.24220817, -0.52514488, -0.8134466 ],
+                            [ 1.0023991 ,  0.98423895,  0.13729987,  0.13481875]])
+        # same as mod_matrix = rotate_m(127.6,mod_matrix)
         demodM = np.linalg.inv(mod_matrix)
     elif instrument == 'FDT40_old': # Johanns (it is the average in the central area of the one onboard) 
         mod_matrix = np.array([[1.0006,-0.7132, 0.4002,-0.5693],
@@ -335,6 +350,14 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
                                   [0.99523, 0.46132,0.54165,-0.69603],
                                   [0.99838,-0.61944,0.66189, 0.42519]])
         demodM = np.linalg.inv(mod_matrix)
+    elif instrument == 'FDT45r':  #MODEL FIT  ROTATED -129
+        mod_matrix = np.array( [[ 1.00234094 ,-0.41906999  ,0.74917275 ,-0.50334909],
+                                [ 1.00217352, -0.64539594 ,-0.43787681 , 0.64452649],
+                                [  0.9940154,   0.41165963, -0.57186307, -0.71895057],
+                                [ 1.00147014,  0.79262462 , 0.45277008 , 0.40793693]])
+        demodM = np.linalg.inv(mod_matrix)
+
+
     elif instrument == 'FDT45_HREW':  #MODEL FIT  INTA April 2022
         mod_matrix = np.array([[1.0022,-0.6543, -0.57471,-0.49363],
                                   [1.0038, 0.54924, -0.53817, 0.64209],
@@ -675,6 +698,7 @@ def phi_correct_ghost_single(data,header,rad,verbose=False):
     mean_intensity = 0
 
     # STEP --->>> Find center 
+    # TODO Do not determine the center but get it from the header information
     centers[1],centers[0],radius = find_center(data)  #cy,cx....
 
     # STEP --->>> Generate CLV from averaged data
