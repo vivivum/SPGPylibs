@@ -307,8 +307,8 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
 
     def rotation_matrix(angle_rot):
         c, s = np.cos(2*angle_rot*np.pi/180), np.sin(2*angle_rot*np.pi/180)
-        return np.matrix([[1, 0, 0, 0], [0, c, s, 0], [0, -s, c, 0], [0, 0, 0, 1]])
-    def rotate_m(angle,matrix):
+        return np.array([[1, 0, 0, 0], [0, c, s, 0], [0, -s, c, 0], [0, 0, 0, 1]])
+    def rotate_m(angle,matrix): 
         rot = rotation_matrix(angle)
         return np.matmul(matrix,rot)
 
