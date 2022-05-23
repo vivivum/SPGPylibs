@@ -309,14 +309,16 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
         c, s = np.cos(2*angle_rot*np.pi/180), np.sin(2*angle_rot*np.pi/180)
         return np.matrix([[1, 0, 0, 0], [0, c, s, 0], [0, -s, c, 0], [0, 0, 0, 1]])
     def rotate_m(angle,matrix):
-        rot = rotation_matrix(127.6)
-        return np.matmul(matrix,angle)
+        rot = rotation_matrix(angle)
+        return np.matmul(matrix,rot)
 
     if instrument == 'FDT40': #MODEL FIT  INTA April 2022
         mod_matrix = np.array( [[ 0.99913 , -0.69504 , -0.38074 , -0.60761 ],\
                                 [ 1.0051  ,  0.41991 , -0.73905 ,  0.54086 ],\
                                 [ 0.99495 ,  0.44499 ,  0.36828 , -0.8086  ],\
                                 [ 1.0008  , -0.38781 ,  0.91443 ,  0.13808 ]] )
+        # angle = 127.6
+        # mod_matrix = rotate_m(angle,mod_matrix)
         demodM = np.linalg.inv(mod_matrix)
     elif instrument == 'FDT40r':  #MODEL FIT  ROTATED 127.6 degree (counterclockwise viewing from detector)
         mod_matrix = np.array(
@@ -324,7 +326,6 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
                             [ 1.00582275, -0.81799487, -0.21224808,  0.54241813],
                             [ 0.99684194,  0.24220817, -0.52514488, -0.8134466 ],
                             [ 1.0023991 ,  0.98423895,  0.13729987,  0.13481875]])
-        # same as mod_matrix = rotate_m(127.6,mod_matrix)
         demodM = np.linalg.inv(mod_matrix)
     elif instrument == 'FDT40_old': # Johanns (it is the average in the central area of the one onboard) 
         mod_matrix = np.array([[1.0006,-0.7132, 0.4002,-0.5693],
