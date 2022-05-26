@@ -17,6 +17,8 @@ import SPGPylibs.GENtools.plot_lib as plib
 # from platform import node
 import os
 
+FDT_MOD_ROTATION_ANGLE = -127.6
+
 def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = False):
 
     #-----------------
@@ -317,8 +319,7 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
                                 [ 1.0051  ,  0.41991 , -0.73905 ,  0.54086 ],\
                                 [ 0.99495 ,  0.44499 ,  0.36828 , -0.8086  ],\
                                 [ 1.0008  , -0.38781 ,  0.91443 ,  0.13808 ]] )
-        # angle = 127.6
-        # mod_matrix = rotate_m(angle,mod_matrix)
+        mod_matrix = rotate_m(FDT_MOD_ROTATION_ANGLE,mod_matrix)
         demodM = np.linalg.inv(mod_matrix)
     elif instrument == 'FDT40r':  #MODEL FIT  ROTATED 127.6 degree (counterclockwise viewing from detector)
         mod_matrix = np.array(
@@ -350,6 +351,7 @@ def phi_apply_demodulation(data,instrument,header = False,demod=False,verbose = 
                                   [1.0041, 0.54693, -0.55299, 0.633],
                                   [0.99523, 0.46132,0.54165,-0.69603],
                                   [0.99838,-0.61944,0.66189, 0.42519]])
+        mod_matrix = rotate_m(FDT_MOD_ROTATION_ANGLE,mod_matrix)
         demodM = np.linalg.inv(mod_matrix)
     elif instrument == 'FDT45r':  #MODEL FIT  ROTATED -129
         mod_matrix = np.array( [[ 1.00234094 ,-0.41906999  ,0.74917275 ,-0.50334909],

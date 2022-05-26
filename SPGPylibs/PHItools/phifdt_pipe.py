@@ -29,7 +29,7 @@ def phifdt_pipe(json_input = None,
     data_f: str = None,  dark_f: str = None,  flat_f: str = None,
     input_data_dir: str = './',   output_dir:str = './',
     instrument: str = 'FDT40',
-    flat_c:bool = True, dark_c:bool = True, ItoQUV:bool = False, VtoQU:bool = False, ind_wave:bool = False,                         #correction options
+    flat_c:bool = True, dark_c:bool = True, ItoQUV:bool = False, VtoQU:bool = False, ind_wave:bool = False,        #correction options
     hough_params:list = [250, 800, 100], 
     norm_f:bool = False, flat_scaling:float = 1., flat_index:list = None,                                          #flatfield options
     prefilter:bool = True, prefilter_fits:str = '0000990710_noMeta.fits',
