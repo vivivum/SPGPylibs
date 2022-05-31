@@ -21,6 +21,7 @@ import SPGPylibs.GENtools.cog as cog
 
 from platform import node
 FIGUREOUT = '.png'
+SIX_FLATS = 1
 
 #global variables 
 PLT_RNG = 5
@@ -35,9 +36,9 @@ def phifdt_pipe(json_input = None,
     prefilter:bool = True, prefilter_fits:str = '0000990710_noMeta.fits',
     realign:bool = False, verbose:bool = True, shrink_mask:int = 2, correct_fringes:str = False,
     correct_ghost:bool = False, putmediantozero:bool = True,
-    rte = False, debug:bool = False, nlevel:float = 0.3, center_method:str = 'circlefit',
+    debug:bool = False, nlevel:float = 0.3, center_method:str = 'circlefit',
     vers = '01',
-    RTE_code = 'cmilos',
+    rte: str = False, RTE_code: str = 'cmilos',
     do2d = 0, outfile = None #not in use
     ) -> int: 
     
@@ -257,16 +258,22 @@ def phifdt_pipe(json_input = None,
     else:
         raise ValueError("input data type nor .fits neither .fits.gz")
 
-    if RTE_code == 'cmilos':
-        #MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]+'.x'
-        MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
-    elif RTE_code == 'pmilos':
-        MILOS_EXECUTABLE = 'pmilos'
-    else:
-        #check if RTE is on
-        if (rte != 'RTE') and (rte != 'RTE') and (rte != 'RTE'):
-            print('Error setting RTE. RTE_code: ',RTE_code,' RTE option: ',rte)
-            return
+    #TODO: check if inversions are requested: RTE and then find cmilos in such a case.
+    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
+        printc(' RTE on. Looking for milos...',bcolors.OKGREEN)
+
+        if RTE_code == 'cmilos': #TODO add .x after first orbit is done
+            #MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]+'.x'
+            MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
+            
+        elif RTE_code == 'pmilos':
+            MILOS_EXECUTABLE = 'pmilos'
+
+        else: #TODO This is nonsense stuff
+            #check if RTE is on
+            if (rte != 'RTE') and (rte != 'RTE') and (rte != 'RTE'):
+                print('Error setting RTE. RTE_code: ',RTE_code,' RTE option: ',rte)
+                return
 
     #-----------------
     # READ DATA
@@ -395,6 +402,10 @@ def phifdt_pipe(json_input = None,
         fz,fy,fx = flat.shape
         flat = np.reshape(flat,(fz//4,4,fy,fx))
 
+        # if SIX_FLATS:
+        #     for i in range(6):
+        #         mm = np.mean(flat[i,:,:,:],axis = 0)
+        #         flat[i,:,:,:] = mm[np.newaxis,:,:]
 
         if verbose:
             plib.show_one(flat[0,0,:,:],xlabel='pixel',ylabel='pixel',title='Flat first image raw (1 of 24)',cbarlabel='Any (as input)',save=None,cmap='gray')
@@ -1041,7 +1052,8 @@ def phifdt_pipe(json_input = None,
         rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
         rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
 
-        #np.savez_compressed(output_dir+'npz/'+outfile_L2+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
+        # writeto = set_level(outfile_L2,'stokes','_RTE')
+        # np.savez_compressed(output_dir+outfile_L2, rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
 
         b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
         # b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
