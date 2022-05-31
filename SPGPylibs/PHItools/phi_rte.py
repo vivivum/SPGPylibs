@@ -47,14 +47,32 @@ def phi_rte(data,wave_axis,rte_mode,output_dir,cmilos = None,options = None):
         if options is None:
             options = np.zeros((4))#,dtype=DTYPE_INT)
             options[0] = len(wave_axis) #NLAMBDA wave axis dimension
-            options[1] = 15 #MAX_ITER max number of iterations
-            options[2] = 0 #CLASSICAL_ESTIMATES [0,1] classical estimates ON or OFF
+            options[1] = 30 #MAX_ITER max number of iterations
+            options[2] = 1 #CLASSICAL_ESTIMATES [0,1] classical estimates ON or OFF
             options[3] = 0 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
             print('No options')
         else:
             print(len(options) == 4)
     except:
         print('ups')
+    # options = np.zeros((7))#,dtype=DTYPE_INT)
+    # options[0] = len(wave_axis) #NLAMBDA wave axis dimension
+    # options[1] = 15 #MAX_ITER max number of iterations
+    # options[2] = 0 #CLASSICAL_ESTIMATES [0,1] classical estimates ON or OFF
+    # options[3] = 0 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
+    # options[4] = 100 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
+    # options[5] = 40 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
+    # options[6] = 25 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
+
+    if rte_mode == 'RTE':
+        options[2] = 0
+    elif rte_mode == 'CE':
+        options[2] = 2
+    elif rte_mode == 'CE+RTE':
+        options[2] = 1
+    else:
+        printc('RET option not recognized: ',rte_mode,color=bcolors.FAIL)
+        return
 
     if cmilos == None: #meaning you will use python wrapper
         print('shape input',data.shape) 
@@ -100,16 +118,6 @@ def phi_rte(data,wave_axis,rte_mode,output_dir,cmilos = None,options = None):
                         f.write('%e %e %e %e %e \n' % (wave_axis[k],data[k,0,j,i],data[k,1,j,i],data[k,2,j,i],data[k,3,j,i]))
 
         printc('  ---- >>>>> Inverting data.... ',color=bcolors.OKGREEN)
-
-        if rte_mode == 'RTE':
-            options[2] = 0
-        elif rte_mode == 'CE':
-            options[2] = 2
-        elif rte_mode == 'CE+RTE':
-            options[2] = 1
-        else:
-            printc('RET option not recognized: ',rte_mode,color=bcolors.FAIL)
-            return
 
         trozo = " "+str(options[0].astype(int))+" "+str(options[1].astype(int))+" "+str(options[2].astype(int))+" "+str(options[3].astype(int))
         #GV adding dir to filein/out
