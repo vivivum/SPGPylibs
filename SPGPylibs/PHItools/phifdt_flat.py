@@ -9,7 +9,7 @@
 #              the circular Hough Transform in the frequency domain.
 #-----------------------------------------------------------------------------
 
-from asyncore import file_dispatcher
+# from asyncore import file_dispatcher
 import numpy as np
 import matplotlib.pyplot as plt
 from .tools import printc,bcolors,timeit
@@ -17,8 +17,171 @@ from .phi_gen import *
 from .phi_utils import *
 from .phi_fits import *
 from .phi_reg import *
-from .phifdt_pipe_modules import phi_correct_dark
+from .phifdt_pipe_modules import phi_correct_dark,phi_apply_demodulation,phi_correct_ghost_single
 from SPGPylibs.GENtools import *
+
+from typing import Tuple
+
+SIGMA_NORMA = 5
+
+def nneckel(r: float) -> np.ndarray:
+    '''
+    This functions provides de Neckel ClV at 625 nm
+
+        Provided r (solar radius) the program estimates the heliocentric angle $\mu$
+        
+        mu = np.sqrt( (1 - r_vector**2/r**2) ) = cos(theta)
+        The ClV is given by:
+
+        I = I0 * ( 1 - sum_(k=1)^(order) a_k * mu^k)
+        where mu = cos(theta)
+       
+    Args:
+        r (float) the radious of the solar disk 
+
+    Returns:
+       The center to limb variation
+
+    Examples:
+    '''
+
+    r_vector = np.arange(0, np.max(r), 1)
+    mu = np.sqrt( (1 - r_vector**2/r**2) )
+
+    f1 = 0.31414418403067174 
+    f2 = 1.3540877312885482  
+    f3 = -1.827014432405401 
+    f4 = 2.355950448408068 
+    f5 = -1.6848471461910317 
+    f6 = 0.48767921486914473
+
+    return f1 + f2*mu + f3*mu**2 + f4*mu**3 + f5*mu**4 + f6*mu**5
+
+def nclv(r: float,pos: float = None, pars: np.ndarray = False) -> np.ndarray:
+    '''
+    This functions provides de fit CLV to PHI data 
+
+        Provided r (solar radius) the program estimates the heliocentric angle $\mu$
+        
+        mu = np.sqrt( (1 - r_vector**2/r**2) ) = cos(theta)
+        The ClV is given by:
+
+        I = I0 * ( 1 - sum_(k=1)^(order) a_k * mu^k)
+        where mu = 1 - cos(theta)
+       
+    Args:
+        r (float) the radious of the solar disk 
+        pos (float) the distance (radius) from disc center (sqrt(x**2 + y**2)) 
+
+    Returns:
+       The center to limb variation
+
+    Examples:
+    '''
+    try:
+        if not(pars):
+            pars = [1. , 0.43386383 , 0.12007579 ,0.06161676]
+            pars = [1. , 0.44984082 , 0.11827295 ,0.05089393]  #Rad = 789
+    except:
+        pass
+    try:
+        if pos == None:
+            r_vector = np.arange(0, np.max(r), 1)
+        else:
+            r_vector = pos
+    except:
+        print('joe')
+    mu = 1 - np.sqrt( (1 - r_vector**2/r**2) )
+    f = 0
+    for i in range(len(pars)-1):
+        f += pars[i+1]*mu**(i+1)
+    return pars[0] * ( 1 - f)
+    # return pars[0] * ( 1 - pars[1]*mu - pars[2]*mu**2 - pars[3]*mu**3)
+
+def azimutal_mask(sx: int,sy: int,center: Tuple[int,int],r: float, pars:np.ndarray = False) -> np.ndarray:
+    '''
+        This functions provides a CLV mask given the dimensions and the center and radius
+       
+    Args:
+        sx (int) x image dimensions
+        sy (int) y image dimensions
+        center (xc,yc) a tuple with the center of the disk
+        r (float) the radious of the solar disk 
+
+    Returns:
+       the mask
+
+    Examples:
+        mask = azimutal_mask(2048,2048,[996,1245],786) #(996, 1245) 786
+
+    '''
+
+    x_axis = np.arange(0, sx, 1)
+    y_axis = np.arange(0, sy, 1)
+    x_axis = x_axis - center[0] + 0.5  #if dimensions are odd add 0.5 for center
+    y_axis = y_axis - center[1] + 0.5
+    mask = np.zeros((sy,sx))
+    for i in range(sx):
+        for j in range(sy):
+            pxy = np.sqrt(x_axis[i]**2+y_axis[j]**2)
+            if pxy < r:
+                mask[int(j),int(i)] = nclv(r,pos = pxy,pars = pars)
+    return mask
+
+def fit_clv(data,centers,npars = 4,verbose = False):
+    intensity, rad = azimutal_average(data,[centers[0],centers[1]])
+    yd,xd = data.shape
+
+    ints = np.zeros((int(np.sqrt(xd**2+yd**2))))
+    ints_rad = np.zeros((int(np.sqrt(xd**2+yd**2))))
+
+    ints[0:len(intensity)] = intensity
+    ints_rad[0:len(intensity)] = rad
+
+    # STEP --->>> FIT LIMB DATA
+    der = (np.roll(intensity,1)-intensity)
+    idx_max = np.where(der == np.max(der))
+    clv = intensity[0:int(idx_max[0])+1] 
+    clv_rho = rad[0:int(idx_max[0])+1]
+    mu = np.sqrt( (1 - clv_rho**2/clv_rho[-1]**2) )
+
+    u = 0.5
+    I0 = 100
+    ande = np.where(mu > 0.1)
+    pars = newton(clv[ande],mu[ande],[I0,u,0.2,0.2,0.2],limb_darkening)
+
+    if verbose:
+        plt.plot(clv_rho,clv)
+        plt.xlabel('Solar radious [pixel]')
+        plt.ylabel('Intensity [DN]')
+        plt.show()
+
+        ints_fit = np.zeros((int(np.sqrt(xd**2+yd**2))))
+        ints_syn = np.zeros((int(np.sqrt(xd**2+yd**2))))
+        ints_fit_pars = np.zeros((5))
+
+        fit, _ = limb_darkening(mu,pars)
+        ints_fit[0:len(fit)] = fit
+        ints_fit_pars[:] = pars
+
+        ints_syn = np.copy(ints)
+        ints_syn[0:len(fit)] = fit
+
+        # STEP --->>> NORMALIZE
+        ints_syn = ints_syn / ints_fit_pars[0]
+        ints_fit = ints_fit / ints_fit_pars[0]
+        ints = ints / ints_fit_pars[0]
+
+        plt.plot(ints_fit,label='fitted clv')
+        plt.plot(ints,'.',label='real clv')
+        plt.plot(ints_syn,'--',label='synt clv')
+        plt.xlabel('Heliocentric angle ['+r'$\theta$]')
+        plt.ylabel('Intensity [DN]')
+        plt.legend()
+        plt.show()
+
+    print(pars)
+    return pars
 
 def centers_flat(n_images,inner_radius,outer_radius,steps,r_width,binmask,imsize,verbose=None):
     ############################
@@ -342,8 +505,9 @@ def do_hough(image,inner_radius, outer_radius, steps, org_centers=None,method='p
     return centers, radius
 
 @timeit  
-def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
-    bit_trun = 0,verbose = 0, expand=0, c_term = 0,imasize=[2048,2048]):
+def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd = 0.05, iter=15, \
+    bit_trun = 0,verbose = 0, expand=0, c_term = 0,imasize=[2048,2048],clv = False,\
+    normalize = False):
     '''
     Khun-Lin-Lorantz algorithm ()
     Input: 
@@ -375,6 +539,22 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
     imsize = image[0].shape
     n_images = len(image)
 
+    def donorma(Im,n,dntype='zero'):
+        idx = np.where(n > 0)
+        s = Im[idx]
+        #  calculate average of gain table for normalization
+        sm = np.mean(s)
+        sm2 = np.mean(s**2)
+        five_sigma = SIGMA_NORMA * np.sqrt(sm2-sm*sm)
+        idx2 = np.where(np.abs(s-sm) < five_sigma)
+        sm = np.mean(s[idx2])
+        if dntype == 'zero':
+            Im -= sm
+        if dntype == 'one':
+            Im /= sm
+        
+        return Im, sm
+
     ############################
     # set displacements of observed images (A) wth respect Object image (centered) 
     ############################
@@ -399,13 +579,68 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
             mask[i][x, y] = 1
 
     ############################
+    # NORMALIZATION Option 1 
+    ############################
+    norma = np.zeros((n_images))
+    if normalize == 1:
+        for i in range(n_images):
+            image[i], norma[i] = donorma(image[i],mask[i],dntype='one') 
+            print('Normalization image ',i,': ', norma[i])
+
+    ############################
+    # calculate a mask with the center to limb variation of the sun to flat the images
+    ############################
+    if clv: 
+        print('Correcting CLV')
+        if clv < 0:
+            print('Reevaluating limb darkening')
+            pars = fit_clv(image[0],rel_centers[0,:])
+        else:
+            pars = False
+
+        amask = azimutal_mask(imsize[0],imsize[1],(imsize[0]//2, imsize[1]//2),radious,pars = pars)
+
+        #find px outside threshols
+        print('... clv threshold ', clv)
+
+        for i in range(n_images): 
+            image_dummy = image[i]/shift(amask, shift=[xyshifts[i, 0], xyshifts[i, 1]], fill_value = 0)    # if any scale
+            image_dummy[np.bitwise_not(np.isfinite(image_dummy))] = 0
+            if normalize != 1:
+                image_dummy,norma_ = donorma(image_dummy,mask[i],dntype='one')
+            idx = np.where(image_dummy > (1 + clv))
+            mask[i][idx] = 0
+            idx = np.where(image_dummy < (1 - clv))
+            mask[i][idx] = 0
+
+    ############################
     # DO LOG
     ############################
 
     D = np.log10(image) 
     # replace NaNs and Infs by 0
-    D[np.isneginf(D)] = 0
-    D[np.isnan(D)] = 0
+    D[np.bitwise_not(np.isfinite(D))] = 0
+    
+    ############################
+    # NORMALIZATION Option 2
+    ############################
+    if normalize == 2:
+        tn = 0
+        for i in range(n_images):
+            norma = np.mean(D[i][np.where(mask[i] != 0)])
+            print('Normalization to around zero in the log images: ', norma)
+            D[i] = D[i] - norma
+            tn += norma
+        tn /= n_images
+
+        # for i in range(n_images):
+        #     D[i],norma[i] = donorma(D[i],mask[i],dntype='zero')
+        #     print('Normalization image ',i,': ', norma[i])
+
+        #     _,norma[i] = donorma(D[i],mask[i],dntype='zero')
+        # for i in range(n_images-1):
+        #     D[i] = D[i] - [norma[i+1]-norma[i]]
+
 
     if method == 'kll':
 
@@ -415,6 +650,8 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
 
         n = np.zeros([imsize[0], imsize[1]], dtype=np.float64)
         sum_image = np.zeros([imsize[0], imsize[1]], dtype=np.float64)
+
+        pairs = [] #for debugging purposes
 
         print('Rel centers: ',rel_centers)
         #  for [iq, ir] in itertools.combinations(range(n_images), 2): # overall 36 combinations
@@ -435,16 +672,15 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
                 aa = (D[iq] - t_image_2) * t_mask_2  #add _2
                 bb = (D[ir] - t_image_1) * t_mask_1  #add _1 
                 image_pair = aa + bb
-
                 sum_image += image_pair 
+                pairs.append(image_pair) #for debugging purposes
                 
                 n += t_mask_1 # accumulate valid pixels first sumatorio
                 n += t_mask_2 # accumulate valid pixels second sumatorio
 
         K = sum_image / n.astype(np.float64) 
         # replace NaNs and Infs by 0
-        K[np.isneginf(K)] = 0
-        K[np.isnan(K)] = 0
+        K[np.bitwise_not(np.isfinite(K))] = 0
         if verbose == 1:
             plt.imshow(K,cmap='gray')
             plt.clim(vmax=0.02,vmin=-0.02)
@@ -463,8 +699,8 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
             for iq in range(1,n_images):
                 for ir in range(iq):
                     # shift of iq with respect ir
-                    dx = rel_centers[iq, 0] - rel_centers[ir, 0]
-                    dy = rel_centers[iq, 1] - rel_centers[ir, 1]
+                    dx = rel_centers[iq, 0] - rel_centers[ir, 0] 
+                    dy = rel_centers[iq, 1] - rel_centers[ir, 1] 
                     if verbose == 2:
                         print('dx,dy',dx,dy,iq,ir)
                     t_mask_1 = mask[ir] & shift(mask[iq], [-dx, -dy])
@@ -475,32 +711,128 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
                     correction = (t_image_1 + t_image_2) 
                     r_res +=  correction 
 
-            G = K + r_res / n.astype(np.float64) 
+            # G = K + r_res / n.astype(np.float64) 
+            corr = r_res / n.astype(np.float64)
+            # corr = donorma(corr,n)
+            G = K + corr
             # replace NaNs and Infs by 0
-            G[np.isneginf(G)] = 0
-            G[np.isnan(G)] = 0
+            G[np.bitwise_not(np.isfinite(G))] = 0
 
             idx = np.where(n > 0)
             s = G[idx]
             #  calculate average of gain table for normalization
             sm = np.mean(s)
             sm2 = np.mean(s**2)
-            five_sigma = 5*np.sqrt(sm2-sm*sm)
+            five_sigma = 5 * np.sqrt(sm2-sm*sm)
             idx2 = np.where(np.abs(s-sm) < five_sigma)
             sm = np.mean(s[idx2])
-            G[idx] = G[idx] - sm
+            # G[idx] = G[idx] - sm  
+            G = G - sm  
+            # G,sm = donorma(G,n,dntype='zero')
 
-            print('Iteration: ', itera, five_sigma, '5*rms', sm, ' of ', iter)
+            change = np.std(K - G)
+
+            print('Iteration: ', itera, SIGMA_NORMA, '5*rms', sm, ' of ', iter,' change:', change)
             if verbose == 1:
-                plt.imshow(G, cmap='gray', vmin=-0.05, vmax=0.05)
+                plt.imshow(G,cmap='gray')
+                plt.clim(vmax=0.02,vmin=-0.02)
+                plt.colorbar()
+                plt.show()
+
+                plt.imshow(K - G,cmap='gray')
+                plt.clim(vmax=0.02,vmin=-0.02)
                 plt.colorbar()
                 plt.show()
 
         g = np.power(10, G,dtype='d')#/np.log(10,dtype='d')  + 0.5672334407 - 0.0018501610250685886#0.566 #exp(2.303)
-        g[np.isneginf(g)] = 0
-        g[np.isnan(g)] = 0
+        g[np.bitwise_not(np.isfinite(g))] = 0
+        # g[np.isneginf(g)] = 0
+        # g[np.isnan(g)] = 0
 
-        return g
+        return g,norma
+
+    elif method == 'chae2':
+
+        tmask = np.sum(mask,axis=0)
+        # mask_Ob,dummy = generate_circular_mask([imsize[0]-1, imsize[1]-1],radious,radious)  
+        # mask_Ob,dummy = generate_circular_mask([imsize[0]-1, imsize[1]-1],radious - expand,radious - expand)  
+        mask_Ob = shift(mask[0], shift=[-xyshifts[0,0],-xyshifts[0,1]], fill_value = 0)
+
+        #Constant term
+        if c_term == 0:
+            fit_c = 0
+            c_term = np.log10(np.ones((n_images)))
+        else:
+            c_term = np.log10(np.ones((n_images)))
+        
+        flat = np.log10(np.ones_like(D[0]))
+        Ob = np.zeros_like(D[0])
+
+        for i in range(n_images):
+            # shift input image to the center of the frame.
+            Ob += shift(D[i], shift = -xyshifts[i,:])
+        Ob = Ob / float(n_images)
+        Ob[np.isneginf(Ob)] = 0.
+        Ob[np.isnan(Ob)] = 0.
+
+        idx = tmask >= 1
+
+        for k in range(iter):
+
+            numerator = np.zeros((imsize))
+            for i in range(n_images):
+                numerator += ((c_term[i] + Ob - shift(D[i] - flat, shift = -xyshifts[i,:]))*mask_Ob) #(i+xk,j+yk) Eq 8
+
+            # Ob -= (numerator/mask_Ob/n_images)
+            Ob -= (numerator/mask_Ob/tmask)
+            Ob[np.isneginf(Ob)] = 0.
+            Ob[np.isnan(Ob)] = 0.
+
+            if verbose == 3:
+                tshow = 10**Ob
+                plt.imshow(tshow,cmap='gray',vmin=np.median(tshow[idx])*0.9,vmax=np.median(tshow[idx])*1.1)
+                plt.show()
+            
+            numerator = np.zeros((imsize))
+            for i in range(n_images):
+                dummy = (c_term[i] + shift(Ob, shift = +xyshifts[i,:]) + flat - D[i])*mask[i]
+                dummy[np.bitwise_not(np.isfinite(dummy))] = 0
+                numerator += dummy
+                c_term[i] -= ( np.sum(dummy[idx]) / np.sum(mask[i]) )
+            
+            dummy = (numerator/tmask)
+            flat -= dummy
+            flat[np.isneginf(flat)] = 0.
+            flat[np.isnan(flat)] = 0.
+
+            if verbose == 3:
+                plt.imshow(flat,cmap='gray',vmin=-0.02,vmax=0.02)
+                plt.show()
+            if verbose >= 1:
+                print('Iter: ',k, ' STD: ',np.max(np.abs(dummy[idx])),np.exp(c_term))
+
+            s = flat[idx]
+            sm = np.mean(s)
+            sm2 = np.mean(s**2)
+            five_sigma = 5*np.sqrt(sm2-sm*sm)
+            print('Iteration: ', k, five_sigma, '5*rms', sm, ' of ', k, ' STD: ',np.max(np.abs(dummy[idx])))
+
+
+        flat, mf = donorma(flat,tmask)
+        Ob = Ob + mf + np.mean(c_term)
+        # flat = flat - np.mean(flat)
+        # Ob = Ob + np.mean(flat) + np.mean(c_term)
+        c_term = c_term - np.mean(c_term)
+
+        flat = np.power(10, flat,dtype='d')
+        flat[np.isneginf(flat)] = 0
+        flat[np.isnan(flat)] = 0
+
+        if verbose >= 2:
+            plt.imshow(flat,cmap='gray',vmin=0.95,vmax=1.05)#vmin=)np.min(,vmax=0.05)
+            plt.show()
+
+        return flat, norma
 
     elif method == 'chae':
 
@@ -534,13 +866,14 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
             Ob[np.isneginf(Ob)] = 0.
             Ob[np.isnan(Ob)] = 0.
 
-            if verbose == 3:
+            if verbose == 1:
                 plt.imshow(Ob,cmap='gray',vmin=1,vmax=2)
                 plt.show()
             
             numerator = np.zeros((imsize))
             for i in range(n_images):
                 dummy = (c_term[i] + shift(Ob, shift = +xyshifts[i,:]) + flat - D[i])*mask[i]
+                dummy[np.bitwise_not(np.isfinite(dummy))] = 0
                 numerator += dummy
                 c_term[i] -= ( np.sum(dummy) / np.sum(mask[i]) )
             
@@ -549,7 +882,7 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
             flat[np.isneginf(flat)] = 0.
             flat[np.isnan(flat)] = 0.
 
-            if verbose == 3:
+            if verbose == 1:
                 plt.imshow(flat,cmap='gray',vmin=-0.02,vmax=0.02)
                 plt.show()
             if verbose >= 1:
@@ -561,8 +894,11 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
             five_sigma = 5*np.sqrt(sm2-sm*sm)
             print('Iteration: ', k, five_sigma, '5*rms', sm, ' of ', k, ' STD: ',np.max(np.abs(dummy[idx])))
 
-        flat = flat - np.mean(flat)
-        Ob = Ob + np.mean(flat) + np.mean(c_term)
+        # flat = flat - np.mean(flat)
+        # Ob = Ob + np.mean(flat) + np.mean(c_term)
+        # c_term = c_term - np.mean(c_term)
+        flat, mf = donorma(flat,tmask)
+        Ob = Ob + mf + np.mean(c_term)
         c_term = c_term - np.mean(c_term)
 
         flat = np.power(10, flat,dtype='d')
@@ -573,8 +909,8 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
             plt.imshow(flat,cmap='gray',vmin=0.95,vmax=1.05)#vmin=)np.min(,vmax=0.05)
             plt.show()
 
-        return flat
-    
+        return flat, norma
+
     elif method == 'alter':
 
         #Extracting flat-field images from scene-based image sequences using phase
@@ -630,13 +966,14 @@ def fdt_flat_gen(image, rel_centers, method, radious = 0, thrd=0.05, iter=15, \
         g[np.isneginf(g)] = 0
         g[np.isnan(g)] = 0
 
-        return g
+        return g, norma
     else:
-        return None
+        return None, None
 
-def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 0, shifts = None, verbose = 1,
-    correct_ghost = 0,expand = 1,thrd = 0,iter = 4, normalize = 1 , disp_method = 'Hough', c_term = 0,
-    inner_radius = 400, outer_radius = 800, steps = 20,shifts_file = False,imasize = [2048,2048],single = False):
+def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, r_shifts = 0, shifts = None, verbose = 1,
+    correct_ghost = 0,expand = 1,thrd = 0.,iter = 4, normalize = False , disp_method = 'Hough', c_term = 0,
+    inner_radius = 400, outer_radius = 800, steps = 20,shifts_file = False,imasize = [2048,2048],single = False,
+    clv = False):
     '''
     The Dark, if provided, should have the same scaling as the data and same size!!!!!!!
     This program does not take care of sizes. For that go to fdt_pipeline
@@ -655,7 +992,13 @@ def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 
             img,header = fits_get(i)
             image.append(img)
     else:
-        image = [fits_get_part(i,wavelength,npol) for i in files]
+        image = [] 
+        header = []
+        for i in files:
+            im,hd = fits_get_part(i,wavelength,npol)
+            image.append(im)
+            header.append(hd)
+
     n_images = len(image)
     ys,xs = image[0].shape
     ############################
@@ -668,7 +1011,7 @@ def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 
             image[i] = image[i] - dark
     except:
         pass
-
+    
     #TODO To be implemented (detailes dark correction)
     # try:
     #     for i in range(n_images):
@@ -679,16 +1022,42 @@ def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 
     # except:
     #     pass
     
-    if read_shits == 1:
+    ######################################
+    # Correct demodulation imbalances!!!!! 
+    ######################################
+    # I1 = a1 I + b1 Q + c1 U + d1 V
+    # I2 = a2 I + b2 Q + c2 U + d2 V
+    # I3 = a3 I + b3 Q + c3 U + d3 V
+    # I4 = a4 I + b4 Q + c4 U + d4 V
+
+    # I = a1 I1 + b1 I2 + c1 I3 + d1 I4
+    # Q = a2 I1 + b2 I2 + c2 I3 + d2 I4
+    # U = a3 I1 + b3 I2 + c3 I3 + d3 I4
+    # V = a4 I1 + b4 I2 + c4 I3 + d4 I4
+
+    # remove cross-talk?
+    # clean flat polarization?
+    
+    if r_shifts == 1:
         try:
             print('... read user input shifts_file ...')
             centers = read_shifts(shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt')
             radius  = read_shifts(shifts_file+'_rad_w'+str(wavelength)+'_n'+str(npol)+'.txt')
+            print("File: ",shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt')        
             for i in range(n_images):
                 print('Image',i,'c: ',centers[i,0],',',centers[i,1],' rad: ', radius[i])
         except Exception:
-            print("Unable to open fits file: {}",shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt')        
-    elif read_shits == 2:
+            print("Unable to open file: {}",shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt')        
+        # print('... read user input shifts_file ...')
+        # # print(wavelength,npol)
+        # fileis = shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt'
+        # # print(fileis)
+        # centers = read_shifts(fileis)
+        # radius  = read_shifts(shifts_file+'_rad_w'+str(wavelength)+'_n'+str(npol)+'.txt')
+        # print("File: ",shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt')        
+        # for i in range(n_images):
+        #     print('Image',i,'c: ',centers[i,0],',',centers[i,1],' rad: ', radius[i])
+    elif r_shifts == 2:
         print('... shifts provided by user ...')
         centers = shifts[0]
         print(centers, '... read ')
@@ -726,39 +1095,36 @@ def fdt_flat(files, wavelength, npol, method = 'kll', dark = None, read_shits = 
             for i in range(n_images):
                 centers[i,1],centers[i,0],radius[i] = find_center(image[i],sjump = 4,njumps = 100,threshold = 0.8)
                 print, 'Image',i,'c: ',centers[i,0],',',centers[i,1],' rad: ', radius[i]
+
+            if shifts_file:
+                _ = write_shifts(shifts_file+'_cnt_w'+str(wavelength)+'_n'+str(npol)+'.txt', centers)
+                _ = write_shifts(shifts_file+'_rad_w'+str(wavelength)+'_n'+str(npol)+'.txt', radius )
         else:
-            pass
+            print('Use "Hough" or "FFT" or "circle"')
     #make sure we have integer numpy numbers in the centers 
     centers = np.array(centers).astype(int)
     mean_radii = np.mean(radius)
 
     if correct_ghost == 1:
-        coef = [-1.98787669,1945.28944245]
-        print(' Ghost corrrection...')
-        poly1d_fn = np.poly1d(coef)
-        sh = poly1d_fn(centers[4,:]).astype(int) #np.array([ -1.99350209*centers[4,0] + 1948.44866543,-1.98963222*centers[4,1] + 1949.61650596]).astype(int)
-        reflection = image[4] - shift(image[4], shift=sh) * 0.004
-        reflection = shift(reflection, shift=[-centers[4,1]+1024,-centers[4,0]+1024])
+        # coef = [-1.98787669,1945.28944245]
+        # print(' Ghost corrrection...')
+        # poly1d_fn = np.poly1d(coef)
+        # sh = poly1d_fn(centers[4,:]).astype(int) #np.array([ -1.99350209*centers[4,0] + 1948.44866543,-1.98963222*centers[4,1] + 1949.61650596]).astype(int)
+        # reflection = image[4] - shift(image[4], shift=sh) * 0.004
+        # reflection = shift(reflection, shift=[-centers[4,1]+1024,-centers[4,0]+1024])
+        # for i in range(9):
+        #     sh = poly1d_fn(centers[i,:]).astype(int) 
+        #     image[i] = image[i] - shift(reflection, shift=[sh[1]+centers[i,1]-1024,sh[0]+centers[i,0]-1024]) * 0.004
         for i in range(9):
-            sh = poly1d_fn(centers[i,:]).astype(int) 
-            image[i] = image[i] - shift(reflection, shift=[sh[1]+centers[i,1]-1024,sh[0]+centers[i,0]-1024]) * 0.004
-
-    #PROBAR CON TODA LA IMAGES TODO 1
-    for i in range(n_images):
-        norma = np.mean(image[i][centers[i,1]-100:centers[i,1]+100,centers[i,0]-100:centers[i,0]+100])
-        if normalize == 1:
-            image[i] = image[i]/norma
-            print('Normalization: ', norma)
-        else:
-            norma = 0
-        pass
+            image[i],header[i] = phi_correct_ghost_single(image[i],header[i],radius[i],verbose=verbose)
 
     if thrd != 0:
-        gain = fdt_flat_gen(image, centers,method,iter=iter,thrd=thrd,verbose = verbose, c_term = c_term,imasize = imasize)
+        gain, norma = fdt_flat_gen(image, centers,method,iter=iter,verbose = verbose, c_term = c_term,
+            normalize = normalize, imasize = imasize, thrd = thrd, clv = clv)
     else:
-        gain = fdt_flat_gen(image, centers,method,iter=iter,radious=mean_radii,expand=expand,verbose = verbose, c_term = c_term, imasize = imasize)
-
-        return gain, norma
+        gain, norma = fdt_flat_gen(image, centers,method,iter=iter,verbose = verbose, c_term = c_term,
+            normalize = normalize, imasize = imasize, radious = mean_radii, expand=expand, clv = clv)
+    return gain, norma
 
 def fdt_flat_testrun():
     '''
@@ -794,7 +1160,7 @@ def fdt_flat_testrun():
       for npol in range(4):
         print(wavelength,npol,'................')
         gain, norma_out = fdt_flat(files, wavelength, npol, method = 'kll', dark = dark,read_shits = False, 
-            shifts_file = 'shifts/shifts', correct_ghost = 0 , expand = 10, normalize = 0, 
+            shifts_file = 'shifts/shifts', correct_ghost = 0 , expand = 10, normalize = False, 
             iter = 3,verbose=True)#,steps = -1)
         
         #steps = 20)
