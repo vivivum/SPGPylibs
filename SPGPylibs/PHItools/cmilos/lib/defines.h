@@ -44,12 +44,12 @@
 #define INITIAL_MODEL_B 400
 #define INITIAL_MODEL_GM 30
 #define INITIAL_MODEL_AZI 120
-#define INITIAL_MODEL_ETHA0 3
-#define INITIAL_MODEL_LAMBDADOPP 0.025  //en A
-#define INITIAL_MODEL_AA 1.0
+#define INITIAL_MODEL_ETHA0 10.0    // changed from 3.0 to 10.0  May 2022
+#define INITIAL_MODEL_LAMBDADOPP 0.035  //en A  changed from 0.025 to 0.035 May 2022
+#define INITIAL_MODEL_AA 2.0    // changed from 1.0 to 2.0  May 2022
 #define INITIAL_MODEL_VLOS 0.01 // Km/s
-#define INITIAL_MODEL_S0 0.15
-#define INITIAL_MODEL_S1 0.85
+#define INITIAL_MODEL_S0 0.22   // changed from 0.15 to 0.22 May 2022
+#define INITIAL_MODEL_S1 0.85   // changed from 0.85 to 0.78 May 2022
 
 
 //NumeroS cuanticos
@@ -85,7 +85,7 @@
 #define PI 	3.14159265358979323846264338327950288419716939937510
  		 	
 #define ILAMBDA 10
-#define TOPLIM 0.000000000001
+#define TOPLIM 1e-24
 #define SLIGHT 0
 #define NOISE 0.001
 
