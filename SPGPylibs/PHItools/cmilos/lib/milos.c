@@ -151,6 +151,7 @@ void call_milos(const int *options, size_t size, const double *waveaxis, const d
 	double toplim;
 	int miter;
 	PRECISION weight[4]={1.,10.,10.,4.};
+	// PRECISION weight[4]={1.,12.,12.,10.};
 	int nweight;
 
 	int fix[]={1.,1.,1.,1.,1.,1.,1.,1.,1.,0.,0.};  //Parametros invertidos
@@ -1417,8 +1418,8 @@ int check(Init_Model *model){
 
 	if(model->aa < 0.0001)  // idl 1e-4
 		model->aa = 0.0001;
-	if(model->aa > 10)            //10
-		model->aa = 10;
+	if(model->aa > 100)            //// changed from 10.0 to 100.0  May 2022
+		model->aa = 100;
 
 	//S0
 	if(model->S0 < 0.0001)
