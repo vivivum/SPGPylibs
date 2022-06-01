@@ -1241,7 +1241,7 @@ int mil_svd(PRECISION *h,PRECISION *beta,PRECISION *delta){
 //	static double aux2[NTERMS*NTERMS];
 	static	PRECISION aux2[NTERMS];
 	int aux_nf,aux_nc;
-	PRECISION factor,maximo,minimo;
+	PRECISION factor,maximo,minimo,wmax,wmin;
 	int posi,posj;
 
 	epsilon= 1e-12;
@@ -1252,20 +1252,88 @@ int mil_svd(PRECISION *h,PRECISION *beta,PRECISION *delta){
 	minimo=1000000000;
 
 
-	/**/
-	for(j=0;j<NTERMS*NTERMS;j++){
-		h1[j]=h[j];
-	}
 
-	if(USE_SVDCMP){
+	if(USE_SVDCMP){ // NUMERICAL RECIPES CASE
 
+		/**/
+		for(j=0;j<NTERMS*NTERMS;j++){
+			h1[j]=h[j];
+		}
 		svdcmp(h1,NTERMS,NTERMS,w,v);
+ 
+ 		static PRECISION vaux[NTERMS*NTERMS],waux[NTERMS];
 
+		for(j=0;j<NTERMS*NTERMS;j++){
+				vaux[j]=v[j];//*factor;
+		}
+
+		for(j=0;j<NTERMS;j++){
+				waux[j]=w[j];//*factor;
+		}
+
+		multmatrix(beta,1,NTERMS,vaux,NTERMS,NTERMS,aux2,&aux_nf,&aux_nc);
+
+		// for(i=0;i<NTERMS;i++){
+		// 	aux2[i]= aux2[i]*((fabs(waux[i]) > epsilon) ? (1/waux[i]): 0.0);
+		// }
+
+		wmax = 0.0;
+		for(i=1;i<=NTERMS;i++) if (w[i] > wmax) wmax=w[i];
+		wmin = wmax*1e-24;
+
+		for(i=0;i<NTERMS;i++){
+			aux2[i]= aux2[i]*((fabs(waux[i]) > wmin) ? (1/waux[i]): 0.0);
+		}
+
+		multmatrix(vaux,NTERMS,NTERMS,aux2,NTERMS,1,delta,&aux_nf,&aux_nc);
+
+// 		float wmax,wmin,**un,*wn,**vn,*x; //*b,,*x; int i,j;
+
+// 		for(i=1;i<=NTERMS;i++)
+// 			for(j=1;j<=NTERMS;j++) 
+// 				un[i][j]=h[i*(j+1)];
+// 		svdcmp(un,NTERMS,NTERMS,wn,vn);
+// 		wmax=0.0;
+// 		for(j=1;j<=NTERMS;j++) if (wn[j] > wmax) wmax=w[j];
+// 		for(j=1;j<=NTERMS;j++) if (wn[j] < wmin) wn[j]=0.0;
+// 		wmin=wmax*1e-24;
+// 		svbksb(un,wn,vn,NTERMS,NTERMS,beta,x);
+
+// void svbksb(u,w,v,m,n,b,x)
+// float **u,w[],**v,b[],x[];
+// int m,n;
+// {
+// 	int jj,j,i;
+// 	float s,*tmp,*vector();
+// 	void free_vector();
+
+// 	tmp=vector(1,n);
+// 	for (j=1;j<=n;j++) {
+// 		s=0.0;
+// 		if (w[j]) {
+// 			for (i=1;i<=m;i++) s += u[i][j]*b[i];
+// 			s /= w[j];
+// 		}
+// 		tmp[j]=s;
+// 	}
+// 	for (j=1;j<=n;j++) {
+// 		s=0.0;
+// 		for (jj=1;jj<=n;jj++) s += v[j][jj]*tmp[jj];
+// 		x[j]=s;
+// 	}
+// 	free_vector(tmp,1,n);
+// }
+
+		return 1;
 
 	}
-	else{
-		//printf(" NORMALIZACION y CORDIC######################################\n");
-		//	NORMALIZACION
+	else{ // CORDIC CASE
+
+		/**/
+		for(j=0;j<NTERMS*NTERMS;j++){
+			h1[j]=h[j];
+		}
+
 		for(j=0;j<NTERMS*NTERMS;j++){
 				if(fabs(h[j])>maximo){
 					maximo=fabs(h[j]);
@@ -1307,27 +1375,27 @@ int mil_svd(PRECISION *h,PRECISION *beta,PRECISION *delta){
 			w[j]=w2[j]*factor;
 		}
 
+		static PRECISION vaux[NTERMS*NTERMS],waux[NTERMS];
+
+		for(j=0;j<NTERMS*NTERMS;j++){
+				vaux[j]=v[j];//*factor;
+		}
+
+		for(j=0;j<NTERMS;j++){
+				waux[j]=w[j];//*factor;
+		}
+
+		multmatrix(beta,1,NTERMS,vaux,NTERMS,NTERMS,aux2,&aux_nf,&aux_nc);
+
+		for(i=0;i<NTERMS;i++){
+			aux2[i]= aux2[i]*((fabs(waux[i]) > epsilon) ? (1/waux[i]): 0.0);
+		}
+
+		multmatrix(vaux,NTERMS,NTERMS,aux2,NTERMS,1,delta,&aux_nf,&aux_nc);
+
+		return 1;
+
 	}
-
-	static PRECISION vaux[NTERMS*NTERMS],waux[NTERMS];
-
-	for(j=0;j<NTERMS*NTERMS;j++){
-			vaux[j]=v[j];//*factor;
-	}
-
-	for(j=0;j<NTERMS;j++){
-			waux[j]=w[j];//*factor;
-	}
-
-	multmatrix(beta,1,NTERMS,vaux,NTERMS,NTERMS,aux2,&aux_nf,&aux_nc);
-
-	for(i=0;i<NTERMS;i++){
-		aux2[i]= aux2[i]*((fabs(waux[i]) > epsilon) ? (1/waux[i]): 0.0);
-	}
-
-	multmatrix(vaux,NTERMS,NTERMS,aux2,NTERMS,1,delta,&aux_nf,&aux_nc);
-
-	return 1;
 
 }
 
