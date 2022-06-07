@@ -1310,6 +1310,7 @@ def phi_correct_fringes(data,header,option,verbose=False):
     24 Feb 2022: change int in freq by round since we we were floor rounding the pixel positions 
     '''
     version = 'phi_correct_fringes V1.0 Jun 2021'
+    version = 'phi_correct_fringes V1.1 Jun 2022'
     
     xd  = int(header['NAXIS1'])    
     yd  = int(header['NAXIS2'])    
@@ -1444,6 +1445,220 @@ def phi_correct_fringes(data,header,option,verbose=False):
     # FINGING - Need to include Ajusta senos contras!!!!
     #-----------------
     elif option == 'manual':
+
+        printc('-->>>>>>> Removing fringes with fixed freq. --',color=bcolors.OKGREEN)
+        printc('          ',version,'--',color=bcolors.OKGREEN)
+        printc('Freq. updated on 3-June-2022 (H. Strecker and D. Orozco Suarez',color=bcolors.WARNING)
+
+        if xd == 2048:
+            freq_x_Q = np.array([0.01318359375 ,0.01318359375]) 
+            freq_y_Q = np.array([0.00195312500 ,0.00732421875])
+            freq_x_U = np.array([0.01318359375 ,0.01318359375]) 
+            freq_y_U = np.array([0.00195312500 ,0.00732421875])
+            freq_x_V = np.array([0.01318359375 ,0.01318359375, 0.00976562500, 0.0078125000]) 
+            freq_y_V = np.array([0.00195312500 ,0.00732421875, 0.00830078125, 0.0107421875])
+            win_halfw = 2 
+            #
+        if xd == 1024:#added by Hanna 31-may-2022: Frequencies lead to lower left corener of affected region in PS
+            freq_x_Q = np.array([0.01269531, 0.01269531]) 
+            freq_y_Q = np.array([0.00097656, 0.00683594])
+            freq_x_U = np.array([0.01269531, 0.01269531]) 
+            freq_y_U = np.array([0.00097656, 0.00683594])
+            freq_x_V = np.array([0.01269531, 0.01269531, 0.00976563, 0.00683594]) 
+            freq_y_V = np.array([0.00097656, 0.00683594, 0.00781250, 0.01074219])
+            boxx = np.array([1,1,1,1])
+            boxy = np.array([1,1,1,1])
+            #
+        if xd == 1280:#added by Hanna 02-june-2022: Frequencies lead to lower left corener of affected region in PS
+            freq_x_Q = np.array([0.01250000, 0.01250000]) 
+            freq_y_Q = np.array([0.00078125, 0.00625000])
+            freq_x_U = np.array([0.01250000, 0.01250000]) 
+            freq_y_U = np.array([0.00078125, 0.00625000])
+            freq_x_V = np.array([0.01250000, 0.01250000, 0.00937500, 0.00703125]) 
+            freq_y_V = np.array([0.00078125, 0.00625000, 0.00703125, 0.01015625])
+            boxx = np.array([1,1,1,1])
+            boxy = np.array([2,2,2,1])
+            #
+        if xd == 1536:
+            pass
+            # freq_x_Q = np.array([0.01318359375 ,0.01318359375]) 
+            # freq_y_Q = np.array([0.00195312500 ,0.00732421875])
+            # freq_x_U = np.array([0.01318359375 ,0.01318359375]) 
+            # freq_y_U = np.array([0.00195312500 ,0.00732421875])
+            # freq_x_V = np.array([0.01318359375 ,0.01318359375, 0.00976562500, 0.0078125000]) 
+            # freq_y_V = np.array([0.00195312500 ,0.00732421875, 0.00830078125, 0.0107421875])
+            # win_halfw = 2 
+
+        #freq to pixel in xd, yd (lower left corner)
+        px_x_Q = np.round(freq_x_Q*xd).astype(int)
+        px_y_Q = np.round(freq_y_Q*yd).astype(int)
+        px_x_U = np.round(freq_x_U*xd).astype(int)
+        px_y_U = np.round(freq_y_U*yd).astype(int)
+        px_x_V = np.round(freq_x_V*xd).astype(int)
+        px_y_V = np.round(freq_y_V*yd).astype(int)
+
+        #Generate unique number to identify pixel which should not included in averaging
+        #CaseI: Stokes Q and U with 2 frequencies
+        p = 0
+        totn_pixQU = ((1+boxx[0]) * (1+boxy[0])) + ((1+boxx[1]) * (1+boxy[1]))
+        allpixQU = np.zeros([2,totn_pixQU],dtype='int')
+        for i in range(len(px_x_Q)):
+            for x in range(boxx[i]+1):
+                for y in range(boxy[i]+1):
+                    allpixQU[0,p] = px_x_Q[i] + x
+                    allpixQU[1,p] = px_y_Q[i] + y
+                    p = p + 1
+                    #
+        ignore_QU = ((allpixQU[0,:])**2 + 3*allpixQU[0,:] + 2*allpixQU[0,:]*allpixQU[1,:] + allpixQU[1,:] + (allpixQU[1,:])**2)/2.
+        #CaseII: Stokes V with 4 frequencies
+        p = 0
+        totn_pixV = (1+boxx[0])*(1+boxy[0]) + (1+boxx[1])*(1+boxy[1]) + (1+boxx[2])*(1+boxy[2]) + (1+boxx[3])*(1+boxy[3])
+        allpixV = np.zeros([2,totn_pixV],dtype='int')
+        for i in range(len(px_x_V)):
+            for x in range(boxx[i]+1):
+                for y in range(boxy[i]+1):
+                    allpixV[0,p] = px_x_V[i] + x
+                    allpixV[1,p] = px_y_V[i] + y
+                    p = p + 1
+                    #      
+        ignore_V = ((allpixV[0,:])**2 + 3*allpixV[0,:] + 2*allpixV[0,:]*allpixV[1,:] + allpixV[1,:] + (allpixV[1,:])**2)/2.
+        #            
+        #Define lower left corner of region to determine treshold value
+        lc_x_Q = px_x_Q - 2
+        lc_y_Q = px_y_Q - 2
+        lc_x_U = px_x_U - 2
+        lc_y_U = px_y_U - 2
+        lc_x_V = px_x_V - 2
+        lc_y_V = px_y_V - 2
+    
+        #loop over wavelegnth (1) and modulatin(2)
+        for j in np.arange(1,4):
+            if j == 1:
+                px_x = px_x_Q
+                px_y = px_y_Q
+                lc_x = lc_x_Q
+                lc_y = lc_y_Q
+            if j == 2:
+                px_x = px_x_U
+                px_y = px_y_U
+                lc_x = lc_x_U
+                lc_y = lc_y_U
+            if j == 3:
+                px_x = px_x_V
+                px_y = px_y_V
+                lc_x = lc_x_V
+                lc_y = lc_y_V
+                #    
+
+            #Define box size for region to average across
+            boxtx = boxx + 4
+            boxty = boxy + 4
+        #consider that first frequency is at the lower box boundary
+            if lc_y[0] < 0:
+                boxty[0] = boxty[0] + lc_y[0]##not sure whether it works with l for boxty, if so then it could go higher with l=0
+                lc_y[0] = 0
+
+            for i in range(zd//4):
+
+                FT = np.fft.fft2(data[i,j,:,:])
+                ps = (FT*np.conj(FT)).astype(np.float)
+                
+
+                #loop across two frequencies for Stokes Q and U and over four for Stokes V
+                for l in range(len(px_x)):
+                    
+
+                    box_corx = []
+                    box_cory = []
+                    for x in np.arange(lc_x[l], lc_x[l] + boxtx[l]+1):
+                        for y in np.arange(lc_y[l], lc_y[l] + boxty[l]+1):
+                            #Generate an unique value for the coordinates  
+                            xy = ((x)**2 + 3*x + 2*x*y + y+(y)**2)/2.
+                            test_in = -1
+                            if (j == 1) or (j == 2):
+                                test_in = (xy == ignore_QU)
+                            if (j == 3) :
+                                test_in = (xy == ignore_V)
+                            ##no idea what happens if the result is wrong...? in idl it is -1
+                            # print(x,y,xy,test_in,np.any(test_in))
+                            if not(np.any(test_in)):
+                                box_corx = np.append(box_corx, x)
+                                box_cory = np.append(box_cory, y)
+                                    #
+                    box_cory = np.asarray(box_cory).astype(int)
+                    box_corx = np.asarray(box_corx).astype(int)
+                    print(j,i,l,box_cory,box_corx,px_y[l],px_y[l]+boxy[l],px_x[l],px_x[l]+boxx[l])
+                    mean_ps = np.mean(ps[box_cory, box_corx])
+                    sdev_ps = np.std(ps[box_cory, box_corx])   
+                    ft_mean = np.mean(FT[box_cory, box_corx])
+                    ft_sdev = np.std(FT[box_cory, box_corx])
+
+                    #Determine pixel where values are larger than the average of surroundings
+                    index = -1 ##generate empty arry 
+                    index = np.where(ps[px_y[l]:px_y[l]+boxy[l]+1, px_x[l]:px_x[l]+boxx[l]+1] > mean_ps+0.5*sdev_ps)
+                    if np.any(index):##no idea what happens if the result is wrong...? in idl it is -1
+                        row = index[0]##maybe col and row must be swapped the x and y thing is still not clear to me... plus I am not sure whether it works like this to get the index in x and y
+                        col = index[1]
+                        xl = col + px_x[l]
+                        yl = row + px_y[l]
+                        #Determine swaped coordinates for Q and U
+                        xlswap = yl
+                        ylswap = xl
+                        #Replace selected pixel by symmetric xy values in FFT domain
+                        if (j == 1) or (j == 2):
+                            FT[yl, xl] = FT[ylswap,xlswap]
+                        if (j == 3):
+                            FT[yl, xl] = ft_mean + 0.5*ft_sdev
+                        ##Consider symmetry of frequencies, not sure wether for python a -1 is needed... I checked the maps in IDL and there adding a -1 is wrong
+                        xu = xd - xl 
+                        yu = yd - yl
+                        xuswap = yu
+                        yuswap = xu
+                        if (j == 1) or (j == 2):
+                            FT[yu, xu] = FT[yuswap,xuswap]
+                        if (j == 3):
+                            FT[yu, xu] = ft_mean + 0.5*ft_sdev
+                    else:
+                        print('No correction necessary')
+
+                    #for values smaller than average of surroundings
+                    index = -1 ##generate empty arry        
+                    index = np.where(ps[px_y[l]:px_y[l]+boxy[l]+1,px_x[l]:px_x[l]+boxx[l]+1] < mean_ps - 0.5*sdev_ps)
+                    if np.any(index):
+                        row = index[0]#maybe col and row must be swapped the x and y thing is still not clear to me...
+                        col = index[1]
+                        xl = col + px_x[l]
+                        yl = row + px_y[l]
+                        #Determine swaped coordinates for Q and U
+                        xlswap = yl
+                        ylswap = xl
+                        #Replace selected pixel by symmetric xy vvalues in FFT domain
+                        if (j == 1) or (j == 2):
+                            FT[yl, xl] = FT[ylswap,xlswap]
+                        if (j == 3):
+                            FT[yl, xl] = ft_mean + 0.5*ft_sdev
+                        #Consider symmetry of frequencies, not sure wether for python a -1 is needed... I checked the maps in IDL and there adding a -1 is wrong
+                        xu = xd - xl 
+                        yu = yd - yl
+                        xuswap = yu
+                        yuswap = xu
+                        if (j == 1) or (j == 2):
+                            FT[yu, xu] = FT[yuswap,xuswap]
+                        if (j == 3):
+                            FT[yu, xu] = ft_mean + 0.5*ft_sdev  
+                    else:
+                        print('No correction necessary for smaller ')
+
+                #restransform
+                data[i,j,:,:]= np.fft.ifft2(FT)    
+
+        if 'CAL_FRIN' in header:  # Check for existence
+            header['CAL_FRIN'] = version
+        else:
+            header.set('CAL_FRIN', version, 'Fringe correction ( name+version of py module if True )',after='CAL_DARK')
+
+
+    elif option == 'old_manual':
         printc('-->>>>>>> Removing fringes with fixed freq. --',color=bcolors.OKGREEN)
         printc('          ',version,'--',color=bcolors.OKGREEN)
 
@@ -1455,12 +1670,14 @@ def phi_correct_fringes(data,header,option,verbose=False):
         # freq_x_V = np.array([0.01328125,0.01328125,0.0078125,0.01015625]) 
         # freq_y_V = np.array([0.00234375,0.00703125,0.0109375,0.00859375])
         printc('Freq. updated on 11-August-2021 (H. Strecker and D. Orozco Suarez',color=bcolors.WARNING)
+        
         freq_x_Q = np.array([0.01318359375 ,0.01318359375]) 
         freq_y_Q = np.array([0.00195312500 ,0.00732421875])
         freq_x_U = np.array([0.01318359375 ,0.01318359375]) 
         freq_y_U = np.array([0.00195312500 ,0.00732421875])
         freq_x_V = np.array([0.01318359375 ,0.01318359375, 0.00976562500, 0.0078125000]) 
         freq_y_V = np.array([0.00195312500 ,0.00732421875, 0.00830078125, 0.0107421875])
+        win_halfw = 2 
 
         #freq to pixel yd,xd
         px_x_Q = freq_x_Q*xd
@@ -1488,7 +1705,6 @@ def phi_correct_fringes(data,header,option,verbose=False):
         px_y_V = np.round(px_y_V).astype(int)
 
         wsize = 50
-        win_halfw = 2 
 
         printc('freq_x_Q [f,px] ',freq_x_Q,px_x_Q,color=bcolors.OKBLUE)
         printc('freq_y_Q [f,px] ',freq_y_Q,px_y_Q,color=bcolors.OKBLUE)
