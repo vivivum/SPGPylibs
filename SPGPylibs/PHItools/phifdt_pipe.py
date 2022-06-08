@@ -1,6 +1,7 @@
 import json
 import numpy as np 
 import os.path, datetime, subprocess
+from scipy.ndimage import gaussian_filter
 #from astropy.io import fits as pyfits
 #from time import sleep
 #from scipy.ndimage import gaussian_filter#, rotate
@@ -17,7 +18,7 @@ from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_appl
     generate_level2,check_pmp_temp
 
 import SPGPylibs.GENtools.plot_lib as plib
-import SPGPylibs.GENtools.cog as cog
+# import SPGPylibs.GENtools.cog as cog
 
 from platform import node
 FIGUREOUT = '.png'
@@ -195,6 +196,8 @@ def phifdt_pipe(json_input = None,
     version = 'V1.0 3th November 2021'
     #added json configuration and modify all keyword names to be consistent with HRT pipe
     version = 'V1.1 13th April 2022'
+    #modifies normalization within RTE
+    version = 'V1.1 8th June 2022'
 
     version_cmilos = 'CMILOS v0.91 (July - 2021)'
 
@@ -250,6 +253,37 @@ def phifdt_pipe(json_input = None,
         printc(' Using sequencial mode ',bcolors.OKGREEN)
         printc('    (hopefully with the right inputs since ERROR handling is not yet fully in place) ',bcolors.OKGREEN)
 
+    #check all input files exist
+
+    data_filename = input_data_dir + data_f
+
+    if os.path.isfile(data_filename):
+        printc("Data file exist",bcolors.OKGREEN)
+    else:
+        printc("Data file do not exist in current location ", data_filename,bcolors.FAIL)
+        raise Exception("input files error") 
+
+    if flat_c:
+        if os.path.isfile(flat_f):
+            printc("Flat file exist",bcolors.OKGREEN)
+        else:
+            printc("Flat file do not exist in current location ", flat_f,bcolors.FAIL)
+            raise Exception("input files error") 
+
+    if dark_c:
+        if os.path.isfile(dark_f):
+            printc("Dark file exist",bcolors.OKGREEN)
+        else:
+            printc("Dark file do not exist in current location ", dark_f,bcolors.FAIL)
+            raise Exception("input files error") 
+
+    if prefilter:
+        if os.path.isfile(prefilter_fits):
+            printc("Prefilter file exist",bcolors.OKGREEN)
+        else:
+            printc("Prefilter file do not exist in current location ", prefilter_fits,bcolors.FAIL)
+            raise Exception("input files error") 
+
     #CHECK IF input is FITS OR FITS.GZ
     if  data_f.endswith('.fits'):
         filetype = '.fits'
@@ -259,7 +293,7 @@ def phifdt_pipe(json_input = None,
         raise ValueError("input data type nor .fits neither .fits.gz")
 
     #TODO: check if inversions are requested: RTE and then find cmilos in such a case.
-    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
+    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE' or rte == 'RTEn' or rte == 'CEn' or rte == 'CE+RTEn':
         printc(' RTE on. Looking for milos...',bcolors.OKGREEN)
 
         if RTE_code == 'cmilos': #TODO add .x after first orbit is done
@@ -279,13 +313,6 @@ def phifdt_pipe(json_input = None,
     # READ DATA
     #-----------------
     
-    data_filename = input_data_dir + data_f
-
-    if os.path.isfile(data_filename):
-        print("File exist")
-    else:
-        print("File not exist")
-
     try:
         data, header = fits_get(data_filename)
         printc('-->>>>>>> Reading Data file: '+data_filename,color=bcolors.OKGREEN)
@@ -681,7 +708,7 @@ def phifdt_pipe(json_input = None,
     #-----------------
 
     if correct_ghost:
-        data,header = phi_correct_ghost(data,header,radius,verbose = True)
+        data,header = phi_correct_ghost(data,header,radius,verbose = verbose)
 
     #-----------------
     # REALIGN DATA BEFORE DEMODULATION
@@ -1018,7 +1045,7 @@ def phifdt_pipe(json_input = None,
         # Add a new key to the header
         # header.insert(20, ('NEWKEY', 'OMIT', 'test'))
         #header.set('NEWKEY','50.5')
-        hdu_list.writeto(output_dir+'level2/'+outfile_L2, clobber=True)
+        hdu_list.writeto(output_dir+'level2/'+outfile_L2,overwrite=True)
     #        hdu_list.writeto(directory+outfile+'_L1.fits', clobber=True)
 
     # with pyfits.open(data_f) as hdu_list:
@@ -1028,43 +1055,51 @@ def phifdt_pipe(json_input = None,
     #-----------------
     # INVERSION OF DATA WITH CMILOS
     #-----------------
-    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
+    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE' or rte == 'RTEn' or rte == 'CEn' or rte == 'CE+RTEn' :
 
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
         
+        if rte == 'RTEn' or rte == 'CEn' or rte == 'CE+RTEn' :
+
+            #preliminary removal of QUV residuals
+            for i in range(3):
+                signal = data[0,i+1,:,:] #np.mean(d[:,3,:,:],axis=0)
+                signal = np.clip(signal,-0.001,0.001)
+                filtered = gaussian_filter(signal, sigma=25)
+                for j in range(5):
+                    data[j,i+1,:,:] -= filtered
+            if rte == 'RTEn':
+                rte = 'RTE'
+            if rte == 'CE+RTEn':
+                rte = 'CE+RTE'
+            if rte == 'CEn':
+                rte = 'CE'
+            
         rte_invs = np.zeros((12,yd,xd)).astype(float)
         rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte,output_dir,milos_executable = MILOS_EXECUTABLE)
 
-        rte_invs_noth = np.copy(rte_invs)
-        umbral = 3.
+        # rte_invs_stokes_mask = np.copy(rte_invs)
 
-        noise_in_V =  np.mean(data[0,3,rry[0]:rry[1],rrx[0]:rrx[1]])
-        low_values_flags = np.max(np.abs(data[:,3,:,:]),axis=0) < noise_in_V*umbral  # Where values are low
-        rte_invs[2,low_values_flags] = 0
-        rte_invs[3,low_values_flags] = 0
-        rte_invs[4,low_values_flags] = 0
+        # umbral = 3.
+        # noise_in_V =  np.mean(data[0,3,rry[0]:rry[1],rrx[0]:rrx[1]])
+        # low_values_flags = np.max(np.abs(data[:,3,:,:]),axis=0) < noise_in_V*umbral  # Where values are low
+
+        # rte_invs_stokes_mask[2,low_values_flags] = 0
+        # rte_invs_stokes_mask[3,low_values_flags] = 0
+        # rte_invs_stokes_mask[4,low_values_flags] = 0
+
         for i in range(12):
             rte_invs[i,:,:] = rte_invs[i,:,:] * mask
+
         #save plots!!!!
         if verbose:
-            plib.show_four_row(rte_invs_noth[2,:,:],rte_invs_noth[3,:,:],rte_invs_noth[4,:,:],rte_invs_noth[8,:,:],svmin=[0,0,0,-6.],svmax=[1200,180,180,+6.],title=['Field strengh [Gauss]','Field inclination [degree]','Field azimuth [degree]','LoS velocity [km/s]'],xlabel='Pixel',ylabel='Pixel')#,save=outfile+'_VLoS.png')
             plib.show_four_row(rte_invs[2,:,:],rte_invs[3,:,:],rte_invs[4,:,:],rte_invs[8,:,:],svmin=[0,0,0,-6.],svmax=[1200,180,180,+6.],title=['Field strengh [Gauss]','Field inclination [degree]','Field azimuth [degree]','LoS velocity [km/s]'],xlabel='Pixel',ylabel='Pixel')#,save=outfile+'BLoS.png')
-        rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
-        rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
 
         # writeto = set_level(outfile_L2,'stokes','_RTE')
         # np.savez_compressed(output_dir+outfile_L2, rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
 
-        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
-        # b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
-        # b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
-        # b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
-        # b_los = np.zeros((2048,2048))
-        # b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = b_los_cropped
-
-        v_los = rte_invs_noth[8,:,:] * mask
-        # v_los = np.zeros((2048,2048))
-        # v_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = v_los_cropped
+        b_los = rte_invs[2,:,:]*np.cos(rte_invs[3,:,:]*np.pi/180.) 
+        v_los = (rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]]) ) 
         if verbose:
             plib.show_one(v_los,vmin=-2.5,vmax=2.5,title='LoS velocity')
             plib.show_one(b_los,vmin=-30,vmax=30,title='LoS magnetic field')
@@ -1084,49 +1119,47 @@ def phifdt_pipe(json_input = None,
         #HRT version
 
         with pyfits.open(data_filename) as hdu_list:
-            hdu_list[0].data = rte_invs_noth[2,:,:] * mask
+            hdu_list[0].data = rte_invs[2,:,:] 
     #            header = hdu_list[0].header
             hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','bmag')
-            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         # with pyfits.open(data_filename) as hdu_list:
-            hdu_list[0].data = rte_invs_noth[3,:,:] * mask
+            hdu_list[0].data = rte_invs[3,:,:] 
             # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','binc')
-            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         # with pyfits.open(data_filename) as hdu_list:
-            hdu_list[0].data = rte_invs[4,:,:] * mask
+            hdu_list[0].data = rte_invs[4,:,:] 
             # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','bazi')
-            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = b_los
             # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','blos')
-            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = v_los
             # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','vlos')
-            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
             # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','icnt')
-            hdu_list.writeto(output_dir+'level2/'+writeto, clobber=True)
+            hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
 
         #-----------------
         # PLOTS VLOS
         #-----------------
-        Zm = np.ma.masked_where(mask == 1, mask)
-
         plt.figure(figsize=(10, 10))
         ax = plt.gca()
         plt.title('PHI-FDT LoS velocity',size=20)
@@ -1168,7 +1201,7 @@ def phifdt_pipe(json_input = None,
         ax.set_yticks([])
                     
         #im = ax.imshow(np.fliplr(rotate(b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1], 52, reshape=False)), cmap='gray',vmin=-100,vmax=100) 
-        im = ax.imshow(b_los, cmap='gray',vmin=-100,vmax=100)
+        im = ax.imshow(b_los, cmap='rainbow',vmin=-100,vmax=100)
 
         divider = plib.make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -1186,7 +1219,6 @@ def phifdt_pipe(json_input = None,
         #-----------------
         # PLOTS AZIMUTH
         #-----------------
-        Zm = np.ma.masked_where(mask == 1, mask)
 
         plt.figure(figsize=(10, 10))
         ax = plt.gca()
@@ -1198,7 +1230,7 @@ def phifdt_pipe(json_input = None,
         ax.set_xticks([])
         ax.set_yticks([])
 
-        im = ax.imshow(rte_invs[4,:,:] * mask, cmap='bwr',vmin=0,vmax=180)
+        im = ax.imshow(rte_invs[4,:,:], cmap='rainbow',vmin=0,vmax=180)
 
         divider = plib.make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -1207,6 +1239,62 @@ def phifdt_pipe(json_input = None,
         cbar.ax.tick_params(labelsize=16)
 
         writeto = set_level(outfile_L2,'stokes','bazi')
+        writeto = set_level(writeto,filetype,FIGUREOUT) 
+
+        plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+        plt.close()
+
+        #-----------------
+        # PLOTS INCLINATION
+        #-----------------
+
+        plt.figure(figsize=(10, 10))
+        ax = plt.gca()
+        plt.title('PHI-FDT field inclination',size=20)
+
+        # Hide grid lines
+        ax.grid(False)
+        # Hide axes ticks
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        im = ax.imshow(rte_invs[3,:,:], cmap='rainbow',vmin=0,vmax=180)
+
+        divider = plib.make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        cbar = plib.plt.colorbar(im, cax=cax)
+        cbar.set_label('[km/s]')
+        cbar.ax.tick_params(labelsize=16)
+
+        writeto = set_level(outfile_L2,'stokes','binc')
+        writeto = set_level(writeto,filetype,FIGUREOUT) 
+
+        plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+        plt.close()
+
+        #-----------------
+        # PLOTS FIELD STRENGTH
+        #-----------------
+
+        plt.figure(figsize=(10, 10))
+        ax = plt.gca()
+        plt.title('PHI-FDT field strength',size=20)
+
+        # Hide grid lines
+        ax.grid(False)
+        # Hide axes ticks
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        im = ax.imshow(rte_invs[2,:,:], cmap='rainbow',vmin=0,vmax=2500)
+
+        divider = plib.make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        cbar = plib.plt.colorbar(im, cax=cax)
+        cbar.set_label('[km/s]')
+        cbar.ax.tick_params(labelsize=16)
+
+        writeto = set_level(outfile_L2,'stokes','bmag')
         writeto = set_level(writeto,filetype,FIGUREOUT) 
 
         plt.savefig(output_dir+'pngs/'+writeto,dpi=300)

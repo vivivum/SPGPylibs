@@ -834,7 +834,6 @@ def phi_correct_ghost(data,header,rad,verbose=False):
     coef = [-1.98787669,1945.28944245] #empirically (first version)
     coef = [-1.9999,1942.7] #empirically (updated by trial and error)
     #coef = [-1.999,1944] #empirically (updated by trial and error)
-    #TBD FINETUNING!!!!!
 
     #correct center:
     center_c = np.copy(center)
