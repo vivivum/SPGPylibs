@@ -6,7 +6,7 @@ import random, statistics
 from scipy.ndimage import gaussian_filter
 from matplotlib import pyplot as plt
 from .tools import printc,bcolors,fix_path
-from .phi_fits import fits_get
+from .phi_fits import fits_get,scale_data
 from .phi_rte import phi_rte
 from .phi_utils import find_string,azimutal_average,newton,limb_darkening,genera_2d
 from .phi_gen import bin_annulus,shift,find_center,apod,rebin,generate_circular_mask
@@ -18,6 +18,16 @@ import SPGPylibs.GENtools.plot_lib as plib
 import os
 
 FDT_MOD_ROTATION_ANGLE = -127.6
+FIVE_SIGMA = 5
+
+def zero_level(input,mask):
+    s = input[mask > 0]
+    #  calculate average of gain table for normalization
+    sm = np.mean(s)
+    sm2 = np.mean(s**2)
+    five_sigma = FIVE_SIGMA * np.sqrt(sm2-sm*sm)
+    sm = np.mean(s[np.abs(s-sm) < five_sigma])
+    return sm
 
 def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = False):
 
@@ -31,11 +41,16 @@ def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = Fa
 
     try:
         dark,dark_header = fits_get(dark_f)
-        dark = dark / 256.
+        DID = dark_header['PHIDATID']
+        printc('Dark DID: ',DID,color=bcolors.OKBLUE)
     except Exception:
         printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
         raise 
 
+    if dark_header['IMGDIRX'] == 'YES':
+        printc("Flipping the dark: ",color=bcolors.FAIL)
+        dark = np.fliplr(dark)
+    
     # locations = find_string(dark_f,'_')
     # try:
     #     DID = dark_f[locations[-1]+1:locations[-1]+10]
@@ -45,10 +60,13 @@ def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = Fa
     #     printc('DID: ',DID,' -->> NOT A NUMBER',color=bcolors.FAIL)
     #     raise 
 
-    DID = dark_header['PHIDATID']
-    printc('Dark DID: ',DID,color=bcolors.OKBLUE)
-    dark_scale = fits_get(dark_f,scaling = True)
+    # printc('-->>>>>>> Scaling DARK... ',color=bcolors.OKGREEN)
+    # dark = scale_data(dark,dark_header)
+    # dark = dark / 256.
 
+    scaling = 1
+    dark_scale = fits_get(dark_f,get_scaling = True)
+    
     if dark_scale["Present"][0] == data_scale["Present"][0]:
         scaling = dark_scale["scaling"][0] / data_scale["scaling"][0]
     else:
@@ -56,7 +74,8 @@ def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = Fa
 
     if scaling != 1:
         printc('          checking scalling and correcting for it in the dark.',dark_scale,data_scale,scaling,color=bcolors.WARNING)
-        dark = dark * scaling
+        # dark = dark * scaling
+        print(scaling,'scaling')
 
     if get_dark:  #for kll
         printc('-->>>>>>> Dark is output in phi_correct_dark()',color=bcolors.OKGREEN)
@@ -77,6 +96,9 @@ def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = Fa
     if verbose:
         dummy = data[0,0,:,:]
     data = data - dark[np.newaxis,np.newaxis,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
+
+    columns = np.mean(data[0,0,0:50,:],axis=0)
+    data = data - columns[np.newaxis,np.newaxis,np.newaxis,:]
     data = np.abs(data)
 
     if 'CAL_DARK' in header:  # Check for existence
@@ -111,7 +133,7 @@ def phi_correct_prefilter(prefilter_fits,header,data,voltagesData,verbose = Fals
     yd  = int(header['NAXIS2'])    
     zd  = int(header['NAXIS3'])    
 
-    prefdata,h = fits_get(prefilter_fits)
+    prefdata,h = fits_get(prefilter_fits,scale = False)
     prefdata = prefdata.astype(float)
     prefdata = prefdata[:,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
     #PREFILTER INFO
@@ -1048,18 +1070,19 @@ def phi_correct_ghost(data,header,rad,verbose=False):
             data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  # * mean_intensity[i,j] / mean_intensity[i,0]
             #data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * 0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
             if verbose and only_one_vorbose:
-                plib.show_two(datap[i,j,:,:],data[i,j,:,:],vmin=[0,0],vmax=[1,1],block=True,pause=0.1,title=['Before','After'],xlabel='Pixel',ylabel='Pixel')
+                l = ints_fit_pars[i][0]
+                plib.show_two(datap[i,j,:,:],data[i,j,:,:],vmin=[0,0],vmax=[l*0.01,l*0.01],block=True,pause=0.1,title=['Before','After'],xlabel='Pixel',ylabel='Pixel')
                 plt.plot(datap[0,0,0:200,200])
                 plt.plot(data[0,0,0:200,200])
-                plt.ylim([0, 5])
+                plt.ylim([0, l*0.01])
                 plt.show()
                 plt.plot(datap[0,0,200,0:200])
                 plt.plot(data[0,0,200,0:200])
-                plt.ylim([0, 5])
+                plt.ylim([0, l*0.01])
                 plt.show()
 
             only_one_vorbose = 0
-        
+
     if 'CAL_GHST' in header:  # Check for existence
         header['CAL_GHST'] = version
     else:

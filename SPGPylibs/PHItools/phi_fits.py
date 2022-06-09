@@ -13,7 +13,7 @@ import numpy as np
 from .phi_utils import find_string
 from os import path,walk
 
-def fits_get(file,info = False,head = 0,scaling = False):
+def fits_get(file,info = False,head = 0,get_scaling = False, scale = True):
     '''helper function to load FITS data set
     if only file data is given, return data (16bits) + header: d,h = fits_get(file)
     if info = True prints fits info (headers structure)
@@ -31,15 +31,15 @@ def fits_get(file,info = False,head = 0,scaling = False):
         except Exception:
             print("Unable to open fits file: {}",file)        
             raise
-    if scaling == True:
+    if get_scaling == True:
         index = 1
         scaling = {"Present": [False,True], "scaling": [0,0]}
-        while True:
+        while True: 
             try:
                 dummy_head = getheader(file,index)
-            except Exception:
-                print("Unable to open fits file: {}",file)        
-                raise
+            except:
+                print("index in get_scaling is out bounds: {}",index)        
+                break
             if dummy_head['EXTNAME'] == 'PHI_FITS_imageSummary':
                 with pyfits.open(file) as hdu_list:
                     header_data = hdu_list[index].data
@@ -49,7 +49,7 @@ def fits_get(file,info = False,head = 0,scaling = False):
                         scaling["Present"][1] = True
                         scaling["scaling"][0] = 0.
                         scaling["scaling"][1] = float(header_data[0][12])
-                        return scaling
+                        break
                     #case 2 if that there is more than TWO scaling data
                     if len(header_data) > 2:
                         #check the first one from below and if it is IMGFMT_16_0_S store it and continue
@@ -58,19 +58,74 @@ def fits_get(file,info = False,head = 0,scaling = False):
                             scaling["Present"][1] = True
                             scaling["scaling"][0] = float(header_data[-1][12])
                             scaling["scaling"][1] = float(header_data[-3][12])
-                            return scaling
+                            break
                         if header_data[-1][3] == 'IMGFMT_24_8':
                             scaling["Present"][0] = False
                             scaling["Present"][1] = True
                             scaling["scaling"][0] = 0.
                             scaling["scaling"][1] = float(header_data[-1][12])
-                            return scaling
+                            break
             index += 1
+        return scaling
     with pyfits.open(file) as hdu_list:
         if head != 0:
-            return hdu_list[head].data , hdu_list[head].header 
+            data = hdu_list[head].data
+            header = hdu_list[head].header 
         else:
-            return hdu_list[head].data.astype(np.dtype('float32')) , hdu_list[head].header
+            data = hdu_list[head].data.astype(np.dtype('float32'))
+            header = hdu_list[head].header 
+
+        if scale:
+            print('-->>>>>>> Scaling data... ')
+            try:
+                head = 9
+                data_ext9 =  hdu_list[head].data
+                header_ext9 = hdu_list[head].header
+                IMGformat = data_ext9['PHI_IMG_format'][-1] 
+            except:
+                print("PHI_IMG_format not found: Most likely file does not have 9th Image extension")
+                IMGformat = 'IMGFMT_16'
+            
+    if scale:
+        if IMGformat != 'IMGFMT_24_8':
+            print('          INPUT IS DIVIDED by 256.   ')
+            data /=  256.
+        else:
+            print("Dataset downloaded as raw: no bit convert scaling needed")
+
+        try:    
+            maxRange = data_ext9['PHI_IMG_maxRange']
+            data *= maxRange[0]/maxRange[-1]
+            print("max range ",maxRange[0],maxRange[-1],maxRange[0]/maxRange[-1])
+        except:
+            print("PHI_IMG_maxRange not found: Most likely file does not have 9th Image extension")
+            data *= 81920/128
+            print("max range ",81920,128,81920/128)
+           
+    return data, header
+
+def scale_data(data,header):
+    try:
+        IMGformat = header['PHI_IMG_format'][-1] 
+    except:
+        print("PHI_IMG_format not found: Most likely file does not have 9th Image extension")
+        IMGformat = 'IMGFMT_16'
+    if IMGformat != 'IMGFMT_24_8':
+        print('          INPUT IS DIVIDED by 256.   ')
+        data /=  256.
+    else:
+        print("Dataset downloaded as raw: no bit convert scaling needed")
+
+    try:    
+        maxRange = header['PHI_IMG_maxRange']
+        data *= maxRange[0]/maxRange[-1]
+        print("max range ",maxRange[0],maxRange[-1],maxRange[0]/maxRange[-1])
+    except:
+        print("PHI_IMG_maxRange not found: Most likely file does not have 9th Image extension")
+        data *= 81920/128
+        print("max range ",81920,128,81920/128)
+                
+    return data
 
 def fits_get_fpatimes(file,offset = None):
     '''

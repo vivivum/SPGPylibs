@@ -15,7 +15,7 @@ from .phi_rte import *
 #from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d,find_string
 from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_apply_demodulation,\
     crosstalk_ItoQUV,cross_talk_QUV,crosstalk_ItoQUV2d,phi_correct_ghost,phi_correct_fringes,\
-    generate_level2,check_pmp_temp
+    generate_level2,check_pmp_temp,zero_level
 
 import SPGPylibs.GENtools.plot_lib as plib
 # import SPGPylibs.GENtools.cog as cog
@@ -314,23 +314,37 @@ def phifdt_pipe(json_input = None,
     #-----------------
     
     try:
-        data, header = fits_get(data_filename)
         printc('-->>>>>>> Reading Data file: '+data_filename,color=bcolors.OKGREEN)
-        #
-        # PXBEG1  =                  385 ; First read-out pixel in dimension 1            
-        # PXEND1  =                 1664 ; Last read-out pixel in dimension 1             
-        # PXBEG2  =                  385 ; First read-out pixel in dimension 2            
-        # PXEND2  =                 1664 ; Last read-out pixel in dimension 2             
+        data, header = fits_get(data_filename)
+    except:
+        printc("ERROR, Unable to open fits file: {}",data_filename,color=bcolors.FAIL)
+        raise
 
-        DID = header['PHIDATID']
-        ACC = header['ACCACCUM']
-        printc('-->>>>>>> data DID '+DID,color=bcolors.OKGREEN)
-        printc('          DATA IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
-        printc('-->>>>>>> Reshaping data to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
-        zd,yd,xd = data.shape
-        data = np.reshape(data,(zd//4,4,yd, xd))
-        data = data / 256. #from fix to 32
-        data = np.ascontiguousarray(data)
+    DID = header['PHIDATID']
+    ACC = header['ACCACCUM']
+    printc('-->>>>>>> data DID '+DID,color=bcolors.OKGREEN)
+
+    # printc('-->>>>>>> Scaling data... ',color=bcolors.OKGREEN)
+    # try:
+    #     data_ext9, header_ext9 = fits_get(data_filename,head = 9)
+    #     print('esta')
+    # except:
+    #     print('noesta')
+
+    # data = scale_data(data,data_ext9)
+    # data = data / 256. #from fix to 32
+    # printc('          DATA IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
+
+    
+    # PXBEG1  =                  385 ; First read-out pixel in dimension 1            
+    # PXEND1  =                 1664 ; Last read-out pixel in dimension 1             
+    # PXBEG2  =                  385 ; First read-out pixel in dimension 2            
+    # PXEND2  =                 1664 ; Last read-out pixel in dimension 2             
+
+    printc('-->>>>>>> Reshaping data to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
+    zd,yd,xd = data.shape
+    data = np.reshape(data,(zd//4,4,yd, xd))
+    data = np.ascontiguousarray(data)
 
         #/ PHI_FITS_FPA_settings 
         # FPIMGCMD= 8 / FPA image command 
@@ -349,10 +363,6 @@ def phifdt_pipe(json_input = None,
         # ACCCOLIT= 1 / ACCU number of column iterations set 
         # ACCACCUM= 20 / ACCU number of accumulations set 
         # ACCADDR = 0 / ACCU readout address (start) 
-
-    except Exception:
-        printc("ERROR, Unable to open fits file: {}",data_filename,color=bcolors.FAIL)
-        return 0
 
     header['history'] = ' Data processed with phifdt_pipe.py '+ version
     header['history'] = '      and time '+ str(datetime.datetime.now())
@@ -385,7 +395,7 @@ def phifdt_pipe(json_input = None,
     if xd < 2047:    
         printc('         data cropped to: [',PXBEG1,',',PXEND1,'],[',PXBEG2,',',PXEND2,']',color=bcolors.WARNING)
     
-    data_scale = fits_get(data_filename,scaling = True)
+    data_scale = fits_get(data_filename,get_scaling = True)
 
     #-----------------
     # CHECK PMP Temperature
@@ -408,7 +418,7 @@ def phifdt_pipe(json_input = None,
         printc('          input should be [wave X Stokes,y-dim,x-dim].',color=bcolors.OKGREEN)
 
         try:
-            dummy,flat_header = fits_get(flat_f)
+            dummy,flat_header = fits_get(flat_f,scale = False)
             fz_d,fy_d,fx_d = dummy.shape
         except Exception:
             printc("ERROR, something happened while reading the file: {}",flat_f,color=bcolors.FAIL)
@@ -744,7 +754,13 @@ def phifdt_pipe(json_input = None,
     data, header = phi_apply_demodulation(data,instrument,header=header)
 
     if verbose == 1:
-        plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom = 3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        mi = np.min(data[3,1,:,:])
+        ma = np.max(data[3,1,:,:])
+        mac = np.max(data[3,0,:,:])
+        plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],\
+        zoom = 2,\
+        svmin=[0,-mi,-mi,-mi],\
+        svmax=[mac,ma,ma,ma])
 
     # with pyfits.open(data_filename) as hdu_list:
     #     hdu_list[0].data = data
@@ -772,7 +788,7 @@ def phifdt_pipe(json_input = None,
         plib.show_four_row(datan[3,0,:,:],datan[3,1,:,:],datan[3,2,:,:],datan[3,3,:,:])
 
     if verbose == 1:
-        plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom = 3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom = 2,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
 
     #-----------------
     # GHOST CORRECTION  AFTER DEMODULATION
@@ -967,9 +983,12 @@ def phifdt_pipe(json_input = None,
         printc('-->>>>>>> Putting median to zero ',color=bcolors.OKGREEN)
         printc('          Median evaluated in x = [',rrx_m[0],':',rrx_m[1],'] y = [',rry_m[0],':',rry_m[1],']',' using ',factor*100,"% of the disk",color=bcolors.OKBLUE)
         for i in range(zd//4):
-            PQ = np.median( data[i,1, maski > 0])#,axis=(1,2))
-            PU = np.median( data[i,2, maski > 0])#,axis=(1,2))
-            PV = np.median( data[i,3, maski > 0])#,axis=(1,2))
+            # PQ = np.median( data[i,1, maski > 0])#,axis=(1,2))
+            # PU = np.median( data[i,2, maski > 0])#,axis=(1,2))
+            # PV = np.median( data[i,3, maski > 0])#,axis=(1,2))
+            PQ = zero_level(data[i,1,:,:],maski)
+            PU = zero_level(data[i,2,:,:],maski)
+            PV = zero_level(data[i,3,:,:],maski)
         # PQ = np.median(data[:,1,rry[0]:rry[1],rrx[0]:rrx[1]],axis=(1,2))
         # PU = np.median(data[:,2,rry[0]:rry[1],rrx[0]:rrx[1]],axis=(1,2))
         # PV = np.median(data[:,3,rry[0]:rry[1],rrx[0]:rrx[1]],axis=(1,2))
