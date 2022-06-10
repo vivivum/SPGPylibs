@@ -127,7 +127,7 @@ def show_three(im1,im2,im3,vmin=[None,None,None],vmax=[None,None,None],block=Tru
 
 def show_four_row(im1,im2,im3,im4,svmin=0,svmax=0,title=['','','',''],xlabel='Pixel',ylabel='Pixel',save=False,zoom=1,block=True):
 
-    fig, maps = plt.subplots(1,4,figsize=(12*zoom,6*zoom))
+    fig, maps = plt.subplots(1,4,figsize=(12*zoom,3*zoom))
     plt.subplots_adjust(hspace=0.3, wspace=0.3)
     yd,xd = im1.shape
     for i in range(4):

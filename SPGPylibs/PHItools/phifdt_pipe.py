@@ -754,13 +754,11 @@ def phifdt_pipe(json_input = None,
     data, header = phi_apply_demodulation(data,instrument,header=header)
 
     if verbose == 1:
-        mi = np.min(data[3,1,:,:])
-        ma = np.max(data[3,1,:,:])
         mac = np.max(data[3,0,:,:])
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],\
         zoom = 2,\
-        svmin=[0,-mi,-mi,-mi],\
-        svmax=[mac,ma,ma,ma])
+        svmin=[0,-mac*0.01,-mac*0.01,-mac*0.01],\
+        svmax=[mac,mac*0.01,mac*0.01,mac*0.01])
 
     # with pyfits.open(data_filename) as hdu_list:
     #     hdu_list[0].data = data

@@ -97,8 +97,11 @@ def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = Fa
         dummy = data[0,0,:,:]
     data = data - dark[np.newaxis,np.newaxis,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
     
-    columns = np.mean(data[0,0,0:50,:],axis=0)
-    data = data - columns[np.newaxis,np.newaxis,np.newaxis,:]
+    # cx = header['CRPIX1']
+    # radius = header['RSUN_ARC']/header['CDELT1']
+
+    # columns = np.mean(data[0,0,0:20,:],axis=0)
+    # data = data - columns[np.newaxis,np.newaxis,np.newaxis,:]
     data = np.abs(data)
 
     if 'CAL_DARK' in header:  # Check for existence
@@ -1471,6 +1474,7 @@ def phi_correct_fringes(data,header,option,verbose=False):
         printc('-->>>>>>> Removing fringes with fixed freq. --',color=bcolors.OKGREEN)
         printc('          ',version,'--',color=bcolors.OKGREEN)
         printc('Freq. updated on 3-June-2022 (H. Strecker and D. Orozco Suarez',color=bcolors.WARNING)
+        att_factor = 1
 
         if xd == 2048:
             freq_x_Q = np.array([0.01318359375 ,0.01318359375]) 
@@ -1630,18 +1634,18 @@ def phi_correct_fringes(data,header,option,verbose=False):
                             ylswap = xl
                             #Replace selected pixel by symmetric xy values in FFT domain
                             if (j == 1) or (j == 2):
-                                FT[yl, xl] = FT[ylswap,xlswap]
+                                FT[yl, xl] = (FT[ylswap,xlswap])*att_factor
                             if (j == 3):
-                                FT[yl, xl] = ft_mean + 0.5*ft_sdev
+                                FT[yl, xl] = (ft_mean + 0.5*ft_sdev)*att_factor
 
                             xu = xd - xl 
                             yu = yd - yl
                             xuswap = yu
                             yuswap = xu
                             if (j == 1) or (j == 2):
-                                FT[yu, xu] = FT[yuswap,xuswap]
+                                FT[yu, xu] = (FT[yuswap,xuswap])*att_factor
                             if (j == 3):
-                                FT[yu, xu] = ft_mean + 0.5*ft_sdev
+                                FT[yu, xu] = (ft_mean + 0.5*ft_sdev)*att_factor
                         else:
                             print('No correction necessary')
 
@@ -1658,18 +1662,18 @@ def phi_correct_fringes(data,header,option,verbose=False):
                             ylswap = xl
                             #Replace selected pixel by symmetric xy vvalues in FFT domain
                             if (j == 1) or (j == 2):
-                                FT[yl, xl] = FT[ylswap,xlswap]
+                                FT[yl, xl] = (FT[ylswap,xlswap])*att_factor
                             if (j == 3):
-                                FT[yl, xl] = ft_mean + 0.5*ft_sdev
+                                FT[yl, xl] = (ft_mean + 0.5*ft_sdev)*att_factor
                             
                             xu = xd - xl 
                             yu = yd - yl
                             xuswap = yu
                             yuswap = xu
                             if (j == 1) or (j == 2):
-                                FT[yu, xu] = FT[yuswap,xuswap]
+                                FT[yu, xu] = (FT[yuswap,xuswap])*att_factor
                             if (j == 3):
-                                FT[yu, xu] = ft_mean + 0.5*ft_sdev  
+                                FT[yu, xu] = (ft_mean + 0.5*ft_sdev)*att_factor
                         else:
                             print('No correction necessary for smaller ')
                     else:#print if data is 1536 size and frequency needs no correction
