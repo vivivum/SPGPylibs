@@ -96,7 +96,7 @@ def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = Fa
     if verbose:
         dummy = data[0,0,:,:]
     data = data - dark[np.newaxis,np.newaxis,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]
-
+    
     columns = np.mean(data[0,0,0:50,:],axis=0)
     data = data - columns[np.newaxis,np.newaxis,np.newaxis,:]
     data = np.abs(data)
@@ -107,10 +107,10 @@ def phi_correct_dark(dark_f,data,header,data_scale,verbose = False,get_dark = Fa
     if verbose:
         md = np.mean(dark)
         if verbose != True:
-            plib.show_three(dark,dummy,data[0,0,:,:],vmin=[-md,-md,-md],vmax=[md*2,md*2,md*2],block=True,pause=0.1,title=['Dark','Data','Data after dark correction'],
+            plib.show_three(dark[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1],dummy,data[0,0,:,:],vmin=[-md,-md,-md],vmax=[md*2,md*2,md*2],block=True,pause=0.1,title=['Dark','Data','Data after dark correction'],
                 xlabel='Pixel',ylabel='Pixel',cmap='gray',save=verbose)
         else:
-            plib.show_three(dark,dummy,data[0,0,:,:],vmin=[-md,-md,-md],vmax=[md*2,md*2,md*2],block=True,pause=0.1,title=['Dark','Data','Data after dark correction'],
+            plib.show_three(dark[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1],dummy,data[0,0,:,:],vmin=[-md,-md,-md],vmax=[md*2,md*2,md*2],block=True,pause=0.1,title=['Dark','Data','Data after dark correction'],
                 xlabel='Pixel',ylabel='Pixel',cmap='gray')
 
     return data,header
@@ -1502,14 +1502,14 @@ def phi_correct_fringes(data,header,option,verbose=False):
             boxy = np.array([2,2,2,1])
             #
         if xd == 1536:
-            pass
-            # freq_x_Q = np.array([0.01318359375 ,0.01318359375]) 
-            # freq_y_Q = np.array([0.00195312500 ,0.00732421875])
-            # freq_x_U = np.array([0.01318359375 ,0.01318359375]) 
-            # freq_y_U = np.array([0.00195312500 ,0.00732421875])
-            # freq_x_V = np.array([0.01318359375 ,0.01318359375, 0.00976562500, 0.0078125000]) 
-            # freq_y_V = np.array([0.00195312500 ,0.00732421875, 0.00830078125, 0.0107421875])
-            # win_halfw = 2 
+            freq_x_Q = np.array([0.01318359375 ,0.01318359375]) 
+            freq_y_Q = np.array([0.00195312500 ,0.00732421875])
+            freq_x_U = np.array([0]) #Stokes U should not be corrected, as pixels cannot be located
+            freq_y_U = np.array([0])
+            freq_x_V = np.array([0,0,0.00911458, 0.00716146]) 
+            freq_y_V = np.array([0,0,0.00846354, 0.01041667])
+            boxx = np.array([2,1,1,1])
+            boxy = np.array([1,2,1,1])
 
         #freq to pixel in xd, yd (lower left corner)
         px_x_Q = np.round(freq_x_Q*xd).astype(int)
@@ -1553,7 +1553,7 @@ def phi_correct_fringes(data,header,option,verbose=False):
         lc_x_V = px_x_V - 2
         lc_y_V = px_y_V - 2
     
-        #loop over wavelegnth (1) and modulatin(2)
+        #loop over wavelegnth (1) and modulation(2)
         for j in np.arange(1,4):
             if j == 1:
                 px_x = px_x_Q
@@ -1575,9 +1575,11 @@ def phi_correct_fringes(data,header,option,verbose=False):
             #Define box size for region to average across
             boxtx = boxx + 4
             boxty = boxy + 4
-        #consider that first frequency is at the lower box boundary
+            
+            
+            #consider that first frequency is at the lower box boundary
             if lc_y[0] < 0:
-                boxty[0] = boxty[0] + lc_y[0]##not sure whether it works with l for boxty, if so then it could go higher with l=0
+                boxty[0] = boxty[0] + lc_y[0]
                 lc_y[0] = 0
 
             for i in range(zd//4):
@@ -1588,91 +1590,93 @@ def phi_correct_fringes(data,header,option,verbose=False):
 
                 #loop across two frequencies for Stokes Q and U and over four for Stokes V
                 for l in range(len(px_x)):
-                    
+                    #Do not start any correction if the frequency is not defined
+                    if px_x[l] != 0:#add if condition for data with 1536 size
 
-                    box_corx = []
-                    box_cory = []
-                    for x in np.arange(lc_x[l], lc_x[l] + boxtx[l]+1):
-                        for y in np.arange(lc_y[l], lc_y[l] + boxty[l]+1):
-                            #Generate an unique value for the coordinates  
-                            xy = ((x)**2 + 3*x + 2*x*y + y+(y)**2)/2.
-                            test_in = -1
+                        box_corx = []
+                        box_cory = []
+                        for x in np.arange(lc_x[l], lc_x[l] + boxtx[l]+1):
+                            for y in np.arange(lc_y[l], lc_y[l] + boxty[l]+1):
+                                #Generate an unique value for the coordinates  
+                                xy = ((x)**2 + 3*x + 2*x*y + y+(y)**2)/2.
+                                test_in = -1
+                                if (j == 1) or (j == 2):
+                                    test_in = (xy == ignore_QU)
+                                if (j == 3) :
+                                    test_in = (xy == ignore_V)
+                                # print(x,y,xy,test_in,np.any(test_in))
+                                if not(np.any(test_in)):
+                                    box_corx = np.append(box_corx, x)
+                                    box_cory = np.append(box_cory, y)
+                                        #
+                        box_cory = np.asarray(box_cory).astype(int)
+                        box_corx = np.asarray(box_corx).astype(int)
+                        print(j,i,l,box_cory,box_corx,px_y[l],px_y[l]+boxy[l],px_x[l],px_x[l]+boxx[l])
+                        mean_ps = np.mean(ps[box_cory, box_corx])
+                        sdev_ps = np.std(ps[box_cory, box_corx])   
+                        ft_mean = np.mean(FT[box_cory, box_corx])
+                        ft_sdev = np.std(FT[box_cory, box_corx])
+
+                        #Determine pixel where values are larger than the average of surroundings
+                        index = -1 ##generate empty arry 
+                        index = np.where(ps[px_y[l]:px_y[l]+boxy[l]+1, px_x[l]:px_x[l]+boxx[l]+1] > mean_ps+0.5*sdev_ps)
+                        if np.any(index):
+                            row = index[0]
+                            col = index[1]
+                            xl = col + px_x[l]
+                            yl = row + px_y[l]
+                            #Determine swaped coordinates for Q and U
+                            xlswap = yl
+                            ylswap = xl
+                            #Replace selected pixel by symmetric xy values in FFT domain
                             if (j == 1) or (j == 2):
-                                test_in = (xy == ignore_QU)
-                            if (j == 3) :
-                                test_in = (xy == ignore_V)
-                            ##no idea what happens if the result is wrong...? in idl it is -1
-                            # print(x,y,xy,test_in,np.any(test_in))
-                            if not(np.any(test_in)):
-                                box_corx = np.append(box_corx, x)
-                                box_cory = np.append(box_cory, y)
-                                    #
-                    box_cory = np.asarray(box_cory).astype(int)
-                    box_corx = np.asarray(box_corx).astype(int)
-                    print(j,i,l,box_cory,box_corx,px_y[l],px_y[l]+boxy[l],px_x[l],px_x[l]+boxx[l])
-                    mean_ps = np.mean(ps[box_cory, box_corx])
-                    sdev_ps = np.std(ps[box_cory, box_corx])   
-                    ft_mean = np.mean(FT[box_cory, box_corx])
-                    ft_sdev = np.std(FT[box_cory, box_corx])
+                                FT[yl, xl] = FT[ylswap,xlswap]
+                            if (j == 3):
+                                FT[yl, xl] = ft_mean + 0.5*ft_sdev
 
-                    #Determine pixel where values are larger than the average of surroundings
-                    index = -1 ##generate empty arry 
-                    index = np.where(ps[px_y[l]:px_y[l]+boxy[l]+1, px_x[l]:px_x[l]+boxx[l]+1] > mean_ps+0.5*sdev_ps)
-                    if np.any(index):##no idea what happens if the result is wrong...? in idl it is -1
-                        row = index[0]##maybe col and row must be swapped the x and y thing is still not clear to me... plus I am not sure whether it works like this to get the index in x and y
-                        col = index[1]
-                        xl = col + px_x[l]
-                        yl = row + px_y[l]
-                        #Determine swaped coordinates for Q and U
-                        xlswap = yl
-                        ylswap = xl
-                        #Replace selected pixel by symmetric xy values in FFT domain
-                        if (j == 1) or (j == 2):
-                            FT[yl, xl] = FT[ylswap,xlswap]
-                        if (j == 3):
-                            FT[yl, xl] = ft_mean + 0.5*ft_sdev
-                        ##Consider symmetry of frequencies, not sure wether for python a -1 is needed... I checked the maps in IDL and there adding a -1 is wrong
-                        xu = xd - xl 
-                        yu = yd - yl
-                        xuswap = yu
-                        yuswap = xu
-                        if (j == 1) or (j == 2):
-                            FT[yu, xu] = FT[yuswap,xuswap]
-                        if (j == 3):
-                            FT[yu, xu] = ft_mean + 0.5*ft_sdev
-                    else:
-                        print('No correction necessary')
+                            xu = xd - xl 
+                            yu = yd - yl
+                            xuswap = yu
+                            yuswap = xu
+                            if (j == 1) or (j == 2):
+                                FT[yu, xu] = FT[yuswap,xuswap]
+                            if (j == 3):
+                                FT[yu, xu] = ft_mean + 0.5*ft_sdev
+                        else:
+                            print('No correction necessary')
 
-                    #for values smaller than average of surroundings
-                    index = -1 ##generate empty arry        
-                    index = np.where(ps[px_y[l]:px_y[l]+boxy[l]+1,px_x[l]:px_x[l]+boxx[l]+1] < mean_ps - 0.5*sdev_ps)
-                    if np.any(index):
-                        row = index[0]#maybe col and row must be swapped the x and y thing is still not clear to me...
-                        col = index[1]
-                        xl = col + px_x[l]
-                        yl = row + px_y[l]
-                        #Determine swaped coordinates for Q and U
-                        xlswap = yl
-                        ylswap = xl
-                        #Replace selected pixel by symmetric xy vvalues in FFT domain
-                        if (j == 1) or (j == 2):
-                            FT[yl, xl] = FT[ylswap,xlswap]
-                        if (j == 3):
-                            FT[yl, xl] = ft_mean + 0.5*ft_sdev
-                        #Consider symmetry of frequencies, not sure wether for python a -1 is needed... I checked the maps in IDL and there adding a -1 is wrong
-                        xu = xd - xl 
-                        yu = yd - yl
-                        xuswap = yu
-                        yuswap = xu
-                        if (j == 1) or (j == 2):
-                            FT[yu, xu] = FT[yuswap,xuswap]
-                        if (j == 3):
-                            FT[yu, xu] = ft_mean + 0.5*ft_sdev  
-                    else:
-                        print('No correction necessary for smaller ')
+                        #for values smaller than average of surroundings
+                        index = -1      
+                        index = np.where(ps[px_y[l]:px_y[l]+boxy[l]+1,px_x[l]:px_x[l]+boxx[l]+1] < mean_ps - 0.5*sdev_ps)
+                        if np.any(index):
+                            row = index[0]
+                            col = index[1]
+                            xl = col + px_x[l]
+                            yl = row + px_y[l]
+                            #Determine swaped coordinates for Q and U
+                            xlswap = yl
+                            ylswap = xl
+                            #Replace selected pixel by symmetric xy vvalues in FFT domain
+                            if (j == 1) or (j == 2):
+                                FT[yl, xl] = FT[ylswap,xlswap]
+                            if (j == 3):
+                                FT[yl, xl] = ft_mean + 0.5*ft_sdev
+                            
+                            xu = xd - xl 
+                            yu = yd - yl
+                            xuswap = yu
+                            yuswap = xu
+                            if (j == 1) or (j == 2):
+                                FT[yu, xu] = FT[yuswap,xuswap]
+                            if (j == 3):
+                                FT[yu, xu] = ft_mean + 0.5*ft_sdev  
+                        else:
+                            print('No correction necessary for smaller ')
+                    else:#print if data is 1536 size and frequency needs no correction
+                        print('Do not correct this frequency')
 
                 #restransform
-                data[i,j,:,:]= np.fft.ifft2(FT)    
+                data[i,j,:,:]= np.fft.ifft2(FT)
 
         if 'CAL_FRIN' in header:  # Check for existence
             header['CAL_FRIN'] = version
