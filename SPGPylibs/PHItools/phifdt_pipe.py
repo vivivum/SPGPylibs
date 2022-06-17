@@ -1020,6 +1020,11 @@ def phifdt_pipe(json_input = None,
     # SAVE DATA TODO: CMILOS FORMAT AND FITS
     #-----------------
 
+    if 'BTYPE' in header:  # Check for existence
+        header['BTYPE'] = 'Stokes'
+    if 'BUNIT' in header:  # Check for existence
+        header['BUNIT'] = 'Normalized units'
+
     #check if npz,pngs and level2 exist
     dirs = ['pngs','level2']
         
@@ -1136,38 +1141,68 @@ def phifdt_pipe(json_input = None,
         #HRT version
 
         with pyfits.open(data_filename) as hdu_list:
+            #BMAG
             hdu_list[0].data = rte_invs[2,:,:] 
     #            header = hdu_list[0].header
+            if 'BTYPE' in header:  # Check for existence
+                header['BTYPE'] = 'Field strength'
+            if 'BUNIT' in header:  # Check for existence
+                header['BUNIT'] = 'Gauss'
             hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','bmag')
             hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
-
+            #BINC
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs[3,:,:] 
-            # hdu_list[0].header = header
+            if 'BTYPE' in header:  # Check for existence
+                header['BTYPE'] = 'Field inclination'
+            if 'BUNIT' in header:  # Check for existence
+                header['BUNIT'] = 'degrees'
+            hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','binc')
             hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
+            #BINC
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs[4,:,:] 
+            if 'BTYPE' in header:  # Check for existence
+                header['BTYPE'] = 'Field azimuth'
+            if 'BUNIT' in header:  # Check for existence
+                header['BUNIT'] = 'degrees'
+            hdu_list[0].header = header
             # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','bazi')
             hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = b_los
+            if 'BTYPE' in header:  # Check for existence
+                header['BTYPE'] = 'longitudinal magnetic field'
+            if 'BUNIT' in header:  # Check for existence
+                header['BUNIT'] = 'Gauss'
+            hdu_list[0].header = header
             # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','blos')
             hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = v_los
+            if 'BTYPE' in header:  # Check for existence
+                header['BTYPE'] = 'LoS velocity'
+            if 'BUNIT' in header:  # Check for existence
+                header['BUNIT'] = 'km/s'
+            hdu_list[0].header = header
             # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','vlos')
             hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         # with pyfits.open(data_filename) as hdu_list:
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
+            if 'BTYPE' in header:  # Check for existence
+                header['BTYPE'] = 'Intensity [ME]'
+            if 'BUNIT' in header:  # Check for existence
+                header['BUNIT'] = 'Normalized'
+            hdu_list[0].header = header
             # hdu_list[0].header = header
             writeto = set_level(outfile_L2,'stokes','icnt')
             hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
