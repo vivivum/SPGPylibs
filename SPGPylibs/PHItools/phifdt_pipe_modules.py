@@ -670,22 +670,33 @@ def crosstalk_ItoQUV2d(data_demod,size=4):
     #cV1 = image.reconstruct_from_patches_2d(cV1, (yy,xx))
     return cV0,cV1
 
-def phi_correct_ghost_single(data,header,rad,verbose=False): 
+def phi_correct_ghost_single(data,header,rad,verbose=False,center = 0): 
     '''
     Startup version on April 2022. Based on phi_correct_ghost but for just one image
     '''
     version = 'phi_correct_ghost_single V1.0 April 2022'
 
-    center = np.array([header['CRPIX1'],header['CRPIX2']]).astype(int)
-    printc('        Read center from header (updated): x=',center[0],' y=',center[1],color=bcolors.OKBLUE)
+    try:
+        if center == 0:
+            center = np.array([header['CRPIX1'],header['CRPIX2']]).astype(int)
+            printc('        Read center from header (updated): x=',center[0],' y=',center[1],color=bcolors.OKBLUE)
+    except:
+        print('Center is not 0 becouse provided [header is not complete]')
+        
     xd  = int(header['NAXIS1'])    
     yd  = int(header['NAXIS2'])    
     zd  = int(header['NAXIS3'])    
-    PXBEG1  = int(header['PXBEG1']) - 1           
-    PXEND1  = int(header['PXEND1']) - 1          
-    PXBEG2  = int(header['PXBEG2']) - 1           
-    PXEND2  = int(header['PXEND2']) - 1   
-
+    try:
+        PXBEG1  = int(header['PXBEG1']) - 1           
+        PXEND1  = int(header['PXEND1']) - 1          
+        PXBEG2  = int(header['PXBEG2']) - 1           
+        PXEND2  = int(header['PXEND2']) - 1   
+    except:
+        PXBEG1  = 0          
+        PXEND1  = 2047  
+        PXBEG2  = 0         
+        PXEND2  = 2047  
+    print(PXBEG1,PXEND1,PXBEG2,PXEND2)
     printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
 
     #common part
@@ -823,11 +834,13 @@ def phi_correct_ghost_single(data,header,rad,verbose=False):
 
     data = data - reflection * factor / 100. * ints_fit_pars[0]  
 
+
     if 'CAL_GHST' in header:  # Check for existence
-        header['CAL_GHST'] = version
+        header['CAL_GHST']= version
     else:
-        header.set('CAL_GHST', version, 'ghost correction version py module (phifdt_pipe_modules.py)',after='CAL_DARK')
-    
+        header.append('CAL_GHST')
+        header['CAL_GHST'] = version
+
     return data, header
 
 def phi_correct_ghost(data,header,rad,verbose=False): 
@@ -1506,8 +1519,8 @@ def phi_correct_fringes(data,header,option,verbose=False):
             boxy = np.array([2,2,2,1])
             #
         if xd == 1536:
-            freq_x_Q = np.array([0.01318359375 ,0.01318359375]) 
-            freq_y_Q = np.array([0.00195312500 ,0.00732421875])
+            freq_x_Q = np.array([0.01236979, 0.01302083]) 
+            freq_y_Q = np.array([0.00130208, 0.00651042])
             freq_x_U = np.array([0]) #Stokes U should not be corrected, as pixels cannot be located
             freq_y_U = np.array([0])
             freq_x_V = np.array([0,0,0.00911458, 0.00716146]) 
