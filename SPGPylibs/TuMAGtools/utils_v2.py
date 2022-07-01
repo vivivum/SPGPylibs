@@ -234,7 +234,7 @@ def GetDatafromHeader(receivedHeader):
 
 
 def read_Tumag(file, write_fits = False, fits_file_name = 'Image.fits', 
-               plot_flag = False, vmin = 0, vmax = 4096):
+               plot_flag = False, vmin = 0, vmax = 4096, onlyheader = False):
    
     """
     Function that reads TuMag images and thumbnails and return both the data 
@@ -256,7 +256,10 @@ def read_Tumag(file, write_fits = False, fits_file_name = 'Image.fits',
         Minimum value of the map if plt_flag = True. The default is 0.
     vmax : int, optional
         Minimum value of the map if plt_flag = True. The default is 4096.
-
+    onlyheader : Boolean, optional
+        Boolean variable that selects the option of returning only heade.
+        Default is False.
+        
     Returns
     -------
     H : dict
@@ -303,118 +306,126 @@ def read_Tumag(file, write_fits = False, fits_file_name = 'Image.fits',
     # Extract TuMag Header info
     H = GetDatafromHeader(receivedHeader)
 
-    # Bytes per pixel (2 or 4)
-    if H['PipelineConfig'] == 0:
+    if onlyheader:
+        return H 
+    
+    else:
+
+        # Default values
         bytesppx = 2
         dtypef = '<i2'
-    if H['PipelineConfig'] == 1:
-        bytesppx = 4
-        dtypef = '<i4'
-    if H['PipelineConfig'] == 2:
-        bytesppx = 4
-        dtypef = '<i4'
-
-    ImageFlag = False
-
-    # Cheking the size of the image
-
-    # PREVIOUS VERSION
-    if headerVersion == 5:
-
-        # Compute Size of image
-
-        # Normal Image
-        if H['ImageType'] == 0:
-            ImageFlag = True
-            width, height = H['Roi_x_size'], H['Roi_y_size']
-            
-        elif H['ImageType'] == 10:
-            print('Thumbnail containing only header')
-            return H 
-
-        # Thumbnails
-        else:
-            ImageFlag = True
-            factor_bytesppx = bytesppx // 2
-            Size_factor = Thumb_type_5[H['ImageType']]['sf'] # Get the binning
-
-            # Real width and height
-            width = H['Roi_x_size'] // (Size_factor * factor_bytesppx)
-            height = H['Roi_y_size'] // (Size_factor * factor_bytesppx)
-        
-    # CURRENT VERSION -- Header Version 6
-    else:
-        # Compute Size of image
-
-        # Normal Image
-        if H['ImageType'] == 0:
-            print('normal im')
-            ImageFlag = True
-            width, height = H['Roi_x_size'], H['Roi_y_size']
-        
-        elif H['ImageType'] == 10:
-            print('Thumbnail containing only header')
-            
-            return H 
-
-        # Thumbnails
-        else:
-            
-            ImageFlag = True
-            print('This is a thumbnail of type : ')
-            print(Thumb_type_6[H['ImageType']]['type'])
-            
-            Binning = Thumb_type_6[H['ImageType']]['bin'] # Get the binning
-            
-            # Real width and height
-            width = H['Roi_x_size'] // Binning
-            height = H['Roi_y_size'] // Binning
-
-    # If the file contained an image (not header only thumbnail type)
-    if ImageFlag:
-        
-        # Read the image from bytes format
-        Image = np.frombuffer(receivedImage, dtype=dtypef).reshape([height, width]).astype(np.int16)
-        
-        # If a fits file is wanted to be written
-        if write_fits:
-            
-            FITS = fits.PrimaryHDU(Image)
-            head = FITS.header
-            
-            # Cattegories compatible with fits file formatting
-            ReducedKeys = ['CameraID', 'T_start', 'T_end', 'Img_size', 'OM', 
-                           'Pipeconf', 'nacc', 'Img_idx', 'Img_idxe', 'Roix_off',
-                           'Roi_X', 'Roiy_off', 'Roi_y', 'ImgType', 'OM_Count', 
-                           'FW1', 'FW2',  'EtalonDN', 'Etal_sig','LCVR1',
-                           'LCVR2', 'Et_real', 'FW1_real', 'FW2_real', 
-                           'LCVR1_re', 'LCVR2_re']
-            
-            # Description of the fields
-            Comments = ['Camera number', 'Timestamp start', 'Timestamp end', 'Real size (bytes)',
-                        'Observation Mode', 'Pipeline Config', 'Accumulations number', 
-                        'Index of image', 'End of image index', 'ROI X Offset', 
-                        'ROI X', 'ROI Y OFFSET', 'ROY', 'Image type', 'Observation Mode Counter',
-                        'Filter wheel 1 pos', 'Filter wheel 2 pos', 'Etalon Volts (Counts)', 
-                        'Sign of etalon volts', 'LCVR1 volts (Counts)', 'LCVR2 volts (Counts)', 
-                        'Measured value for etalon volts (counts)', 'Measured pos of Filter wheel 1', 
-                        'Measured pos of Filter Wheel 2', 'Measured volts for LCVR1 (Counts)',
-                        'Measured volts for LCVR2 (Counts)']
-            
-            # Saving the header
-            for ind, key in enumerate(H):
-                head.append((ReducedKeys[ind], H[key], Comments[ind]))
-                
-            # Fits writing
-            FITS.writeto(fits_file_name, overwrite=False)
-                
-        # If a plot is wanted to be shown
-        if plot_flag:
-            plt.imshow(Image, cmap = 'inferno', vmin = vmin, vmax = vmax)
-            plt.colorbar()
-            plt.show()
+        # Bytes per pixel (2 or 4)
+        if H['PipelineConfig'] == 0:
+            bytesppx = 2
+            dtypef = '<i2'
+        if H['PipelineConfig'] == 1:
+            bytesppx = 4
+            dtypef = '<i4'
+        if H['PipelineConfig'] == 2:
+            bytesppx = 4
+            dtypef = '<i4'
     
-        return Image, H
+        ImageFlag = False
+    
+        # Cheking the size of the image
+    
+        # PREVIOUS VERSION
+        if headerVersion == 5:
+    
+            # Compute Size of image
+    
+            # Normal Image
+            if H['ImageType'] == 0:
+                ImageFlag = True
+                width, height = H['Roi_x_size'], H['Roi_y_size']
+                
+            elif H['ImageType'] == 10:
+                print('Thumbnail containing only header')
+                return H 
+    
+            # Thumbnails
+            else:
+                
+                print()
+                ImageFlag = True
+                factor_bytesppx = bytesppx // 2
+                Size_factor = Thumb_type_5[H['ImageType']]['sf'] # Get the binning
+    
+                # Real width and height
+                width = H['Roi_x_size'] // (Size_factor * factor_bytesppx)
+                height = H['Roi_y_size'] // (Size_factor * factor_bytesppx)
+            
+        # CURRENT VERSION -- Header Version 6
+        else:
+            # Compute Size of image
+    
+            # Normal Image
+            if H['ImageType'] == 0:
+                ImageFlag = True
+                width, height = H['Roi_x_size'], H['Roi_y_size']
+            
+            elif H['ImageType'] == 10:
+                
+                return H 
+    
+            # Thumbnails
+            else:
+                
+                ImageFlag = True
+                
+                Binning = Thumb_type_6[H['ImageType']]['bin'] # Get the binning
+                
+                # Real width and height
+                width = H['Roi_x_size'] // Binning
+                height = H['Roi_y_size'] // Binning
+    
+        # If the file contained an image (not header only thumbnail type)
+        if ImageFlag:
+            
+            # Read the image from bytes format
+            Image = np.frombuffer(receivedImage, dtype=dtypef).reshape([height, width]).astype(np.uint16)
+            
+            # If a fits file is wanted to be written
+            if write_fits:
+                
+                FITS = fits.PrimaryHDU(Image)
+                head = FITS.header
+                
+                # Cattegories compatible with fits file formatting
+                ReducedKeys = ['CameraID', 'T_start', 'T_end', 'Img_size', 'OM', 
+                               'Pipeconf', 'nacc', 'Img_idx', 'Img_idxe', 'Roix_off',
+                               'Roi_X', 'Roiy_off', 'Roi_y', 'ImgType', 'OM_Count', 
+                               'FW1', 'FW2',  'EtalonDN', 'Etal_sig','LCVR1',
+                               'LCVR2', 'Et_real', 'FW1_real', 'FW2_real', 
+                               'LCVR1_re', 'LCVR2_re']
+                
+                # Description of the fields
+                Comments = ['Camera number', 'Timestamp start', 'Timestamp end', 'Real size (bytes)',
+                            'Observation Mode', 'Pipeline Config', 'Accumulations number', 
+                            'Index of image', 'End of image index', 'ROI X Offset', 
+                            'ROI X', 'ROI Y OFFSET', 'ROY', 'Image type', 'Observation Mode Counter',
+                            'Filter wheel 1 pos', 'Filter wheel 2 pos', 'Etalon Volts (Counts)', 
+                            'Sign of etalon volts', 'LCVR1 volts (Counts)', 'LCVR2 volts (Counts)', 
+                            'Measured value for etalon volts (counts)', 'Measured pos of Filter wheel 1', 
+                            'Measured pos of Filter Wheel 2', 'Measured volts for LCVR1 (Counts)',
+                            'Measured volts for LCVR2 (Counts)']
+                
+                # Saving the header
+                for ind, key in enumerate(H):
+                    head.append((ReducedKeys[ind], H[key], Comments[ind]))
+                    
+                # Fits writing
+                FITS.writeto(fits_file_name, overwrite=False)
+                    
+            # If a plot is wanted to be shown
+            if plot_flag:
+                plt.imshow(Image, cmap = 'inferno', vmin = vmin, vmax = vmax)
+                plt.colorbar()
+                plt.show()
+        
+            return Image, H
+
+
 
 
 
