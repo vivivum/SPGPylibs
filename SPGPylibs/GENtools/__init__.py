@@ -1,3 +1,3 @@
 from .cog import cog
 from .plot_lib import *
-from .idlsmooth import idlsmooth
+from .idl_smooth import idl_smooth
