@@ -1,6 +1,9 @@
 from matplotlib import pyplot as plt
+import matplotlib.colors as colors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
+import itertools
+from os import path
 
 plt.style.use('seaborn-white')
 import matplotlib.pylab as pylab
@@ -11,7 +14,11 @@ params = {'legend.fontsize': 'x-large',
          'xtick.labelsize':'10',
          'ytick.labelsize':'10'}
 pylab.rcParams.update(params)
+
 PLT_RNG = 3
+RUNTIME_DIRECTORY = path.realpath(__file__)
+RUNTIME_DIRECTORY = RUNTIME_DIRECTORY[:RUNTIME_DIRECTORY.rfind('/')-len(RUNTIME_DIRECTORY)+1]
+CMAP_DATA_DIR = f'{RUNTIME_DIRECTORY}cvs/'
 
 #Function for color bar
 def colorbar(mappable):
@@ -20,6 +27,45 @@ def colorbar(mappable):
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     return fig.colorbar(mappable, cax=cax)
+
+def cmap_from_rgb_file(name, fname):
+    """
+    Create a colormap from a RGB .csv file.
+
+    The .csv file must have 3  equal-length columns of integer data, with values
+    between 0 and 255, which are the red, green, and blue values for the colormap.
+
+    Parameters
+    ----------
+    name : str
+        Name of the colormap.
+    fname : str
+        Filename of data file. Relative to the sunpy colormap data directory.
+
+    Returns
+    -------
+    matplotlib.colors.LinearSegmentedColormap
+    """
+    
+    data = np.loadtxt(CMAP_DATA_DIR + fname, delimiter=',')
+    #data = np.loadtxt(fname, delimiter=',')
+    if data.shape[1] != 3:
+        raise RuntimeError(f'RGB data files must have 3 columns (got {data.shape[1]})')
+    return _cmap_from_rgb(data[:, 0], data[:, 1], data[:, 2], name)
+
+def create_cdict(r, g, b):
+    """
+    Create the color tuples in the correct format.
+    """
+    i = np.linspace(0, 1, r.size)
+    cdict = {name: list(zip(i, el / 255.0, el / 255.0))
+             for el, name in [(r, 'red'), (g, 'green'), (b, 'blue')]}
+    return cdict
+
+
+def _cmap_from_rgb(r, g, b, name):
+    cdict = create_cdict(r, g, b)
+    return colors.LinearSegmentedColormap(name, cdict)
 
 def show_one(img,vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Image no title',cbarlabel='Some units',save=False,cmap='gray'):
 
@@ -223,6 +269,22 @@ def show_all(image,save=False):
                vmax=image[:,:,i].mean() + PLT_RNG * image[:,:,i].std(),\
                 interpolation='none')
         colorbar(im)
+    if save != False:
+        plt.savefig(save)
+        plt.clf()
+        return
+    plt.show()
+    return
+
+def show_all2(image,save=False,rng = 0.05):
+    row,column = 4,6
+    fig, maps = plt.subplots(row,column, sharex='col', sharey='row',figsize=(6*3,4*3))
+    plt.subplots_adjust(top=0.92)
+    for i, j in itertools.product(range(column), range(row)):
+        im = maps[j, i].imshow(image[i,j,:,:],\
+        cmap='gray',vmin=image[i,j,:,:].mean() - rng * image[i,j,:,:].std(),
+            vmax=image[i,j,:,:].mean() + rng * image[i,j,:,:].std(),\
+                interpolation='none')
     if save != False:
         plt.savefig(save)
         plt.clf()

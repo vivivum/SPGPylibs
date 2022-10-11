@@ -19,7 +19,7 @@ DTYPE_INT = np.intc
 DTYPE_DOUBLE = np.float_
 
 @timeit
-def phi_rte(data,wave_axis,rte_mode,output_dir,cmilos = None,options = None):
+def phi_rte(data: np.ndarray,wave_axis: np.ndarray,rte_mode:str,output_dir:str,cmilos = None,options:list = None):
     ''' For the moment this is just isolated from the main pipeline
     input should be: 
             l,p,x,y = data.shape  -cmilos  (DEFAULT)
@@ -49,8 +49,11 @@ def phi_rte(data,wave_axis,rte_mode,output_dir,cmilos = None,options = None):
             options[0] = len(wave_axis) #NLAMBDA wave axis dimension
             options[1] = 30 #MAX_ITER max number of iterations
             options[2] = 1 #CLASSICAL_ESTIMATES [0,1] classical estimates ON or OFF
-            options[3] = 0 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
+            options[3] = 0 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 2-> RFS
             print('No options')
+            # options[4] = 100 #FWHM = atof(argv[5]);
+            # options[5] = 40  #DELTA = atof(argv[6]);
+            # options[6] = 25  #NMUESTRAS_G = atoi(argv[7]);
         else:
             print(len(options) == 4)
     except:
@@ -60,9 +63,6 @@ def phi_rte(data,wave_axis,rte_mode,output_dir,cmilos = None,options = None):
     # options[1] = 15 #MAX_ITER max number of iterations
     # options[2] = 0 #CLASSICAL_ESTIMATES [0,1] classical estimates ON or OFF
     # options[3] = 0 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
-    # options[4] = 100 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
-    # options[5] = 40 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
-    # options[6] = 25 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 0-> RFS
 
     if rte_mode == 'RTE':
         options[2] = 0
@@ -70,6 +70,16 @@ def phi_rte(data,wave_axis,rte_mode,output_dir,cmilos = None,options = None):
         options[2] = 2
     elif rte_mode == 'CE+RTE':
         options[2] = 1
+    elif rte_mode == 'CE+RTE+PSF':
+        options = np.zeros((7))#,dtype=DTYPE_INT)
+        options[0] = len(wave_axis) #NLAMBDA wave axis dimension
+        options[1] = 30 #MAX_ITER max number of iterations
+        options[2] = 1 #CLASSICAL_ESTIMATES [0,1] classical estimates ON or OFF
+        options[3] = 0 #RFS [0,1,2] 0.-> Inversion, 1-> synthesis 2-> RFS
+        options[4] = 105 #FWHM = atof(argv[5]);
+        options[5] = 70  #DELTA = atof(argv[6]);
+        options[6] = 25  #NMUESTRAS_G = atoi(argv[7]);
+
     else:
         printc('RET option not recognized: ',rte_mode,color=bcolors.FAIL)
         return
@@ -119,7 +129,10 @@ def phi_rte(data,wave_axis,rte_mode,output_dir,cmilos = None,options = None):
 
         printc('  ---- >>>>> Inverting data.... ',color=bcolors.OKGREEN)
 
-        trozo = " "+str(options[0].astype(int))+" "+str(options[1].astype(int))+" "+str(options[2].astype(int))+" "+str(options[3].astype(int))
+        if rte_mode == 'CE+RTE+PSF':
+            trozo = " "+str(options[0].astype(int))+" "+str(options[1].astype(int))+" "+str(options[2].astype(int))+" "+str(options[3].astype(int))+" "+str(options[4].astype(int))+" "+str(options[5].astype(int))+" "+str(options[6].astype(int))
+        else:
+            trozo = " "+str(options[0].astype(int))+" "+str(options[1].astype(int))+" "+str(options[2].astype(int))+" "+str(options[3].astype(int))
         #GV adding dir to filein/out
         #printc(cmilos+trozo+" dummy_in.txt  >  dummy_out.txt",color=bcolors.OKGREEN)
         #rte_on = subprocess.call(cmilos+trozo+" dummy_in.txt  >  dummy_out.txt",shell=True)

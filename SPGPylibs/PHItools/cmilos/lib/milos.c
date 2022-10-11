@@ -151,7 +151,7 @@ void call_milos(const int *options, size_t size, const double *waveaxis, const d
 	double toplim;
 	int miter;
 	PRECISION weight[4]={1.,10.,10.,4.};
-	// PRECISION weight[4]={1.,12.,12.,10.};
+	// PRECISION weight[4]={1.,14.,14.,10.};
 	int nweight;
 
 	int fix[]={1.,1.,1.,1.,1.,1.,1.,1.,1.,0.,0.};  //Parametros invertidos

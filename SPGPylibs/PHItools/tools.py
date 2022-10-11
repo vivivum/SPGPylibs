@@ -87,7 +87,14 @@ def fix_path(path, dir='forward', verbose=False):
     :return: corrected path
     """
     path = repr(path)
-    if dir == 'forward':
+    if dir == 'backward':
+        path = path.replace("\\\\", "")
+        path = path.split("'")[1]
+        if verbose == True:
+            print('backward')
+            print(path)
+        return path
+    elif dir == 'forward':
         path = path.replace(")", "\)")
         path = path.replace("(", "\(")
         path = path.replace(" ", "\ ")
@@ -96,15 +103,6 @@ def fix_path(path, dir='forward', verbose=False):
             print('forward')
             print(path)
         return path
-    elif dir == 'backward':
-        path = path.replace("\\\\", "")
-        path = path.split("'")[1]
-        if verbose == True:
-            print('backward')
-            print(path)
-        return path
-    else:
-        pass
 
 
 def find_div(x: int, lim: int) -> None:

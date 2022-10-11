@@ -1,3 +1,32 @@
+"""phifdt_pipe 
+
+Main routine for onground data procesing of PHI/FDT raw data
+
+Example:
+    Examples can be given using either the ``Example`` or ``Examples``
+    sections. Sections support any reStructuredText formatting, including
+    literal blocks::
+
+        $ python example_google.py
+
+Section breaks are created by resuming unindented text. Section breaks
+are also implicitly created anytime a new section starts.
+
+Attributes:
+    module_level_variable1 (int): Module level variables may be documented in
+        either the ``Attributes`` section of the module docstring, or in an
+        inline docstring immediately following the variable.
+
+        Either form is acceptable, but the two should not be mixed. Choose
+        one convention to document module level variables and be consistent
+        with it.
+
+Todo:
+    * For module TODOs
+    * You have to also use ``sphinx.ext.todo`` extension
+
+"""
+
 import json
 import numpy as np 
 import os.path, datetime, subprocess
@@ -21,27 +50,50 @@ import SPGPylibs.GENtools.plot_lib as plib
 # import SPGPylibs.GENtools.cog as cog
 
 from platform import node
-FIGUREOUT = '.png'
-SIX_FLATS = 1
+import matplotlib
 
 #global variables 
+FIGUREOUT = '.png'
+SIX_FLATS = False
+SIGMA_MEDIAN_FILTER = 30.
 PLT_RNG = 5
+PERCENT_OF_DISK_FOR_MASKI = 0.8  # 80% of the disk
 
 def phifdt_pipe(json_input = None, 
-    data_f: str = None,  dark_f: str = None,  flat_f: str = None,
-    input_data_dir: str = './',   output_dir:str = './',
+    data_f: str = None,
+    dark_f: str = None,
+    flat_f: str = None,
+    input_data_dir: str = './',
+    output_dir:str = './',
     instrument: str = 'FDT40',
-    flat_c:bool = True, dark_c:bool = True, ItoQUV:bool = False, VtoQU:bool = False, ind_wave:bool = False,        #correction options
+    flat_c:bool = True,
+    dark_c:bool = True,
+    ItoQUV:bool = False,
+    VtoQU:bool = False,
+    ind_wave:bool = False,        
     hough_params:list = [250, 800, 100], 
-    norm_f:bool = False, flat_scaling:float = 1., flat_index:list = None,                                          #flatfield options
-    prefilter:bool = True, prefilter_fits:str = '0000990710_noMeta.fits',
-    realign:bool = False, verbose:bool = True, shrink_mask:int = 2, correct_fringes:str = False,
-    correct_ghost:bool = False, putmediantozero:bool = True,
-    debug:bool = False, nlevel:float = 0.3, center_method:str = 'circlefit',
+    norm_f:bool = False,
+    flat_scaling:float = 1., 
+    flat_index:list = None,                                          
+    prefilter:bool = True,
+    prefilter_fits:str = '0000990710_noMeta.fits',
+    realign:bool = False,
+    verbose:bool = True,
+    shrink_mask:int = 2,
+    correct_fringes:str = False,
+    fringe_threshold: float = 0,
+    correct_ghost:bool = False,
+    putmediantozero:bool = True,
+    debug:bool = False,
+    nlevel:float = 0.3,
+    center_method:str = 'circlefit',
     vers = '01',
-    rte: str = False, RTE_code: str = 'cmilos',
-    do2d = 0, outfile = None #not in use
-    ) -> int: 
+    rte: str = False,
+    RTE_code: str = 'cmilos',
+    pol_c_file: str = None,
+    do2d = 0, outfile = None,
+    extra_offset: int = 0,
+    scattering_veil: float = 0) -> int: 
     
     '''
     Parameters
@@ -195,16 +247,21 @@ def phifdt_pipe(json_input = None,
     version = 'V1.0 13th September 2021'
     version = 'V1.0 3th November 2021'
     #added json configuration and modify all keyword names to be consistent with HRT pipe
-    version = 'V1.1 13th April 2022'
+    version = 'V1.1 13th April 2022' 
     #modifies normalization within RTE
     version = 'V1.1 8th June 2022'
+    VERS_SW = 'V1.1 June 8th 2022'
+    VERS_SW = 'V1.2 Sep 30th 2022'
+    # added documentation (partly) and many modifications
+    # 1- 
 
     version_cmilos = 'CMILOS v0.91 (July - 2021)'
+    VERS_RTE = 'CMILOS v0.91 (July - 2021)'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI FDT data reduction software (for develping purposes only) ',bcolors.OKGREEN)
-    printc('  version: '+ version,bcolors.OKGREEN)
-    printc('  version_cmilos: '+ version_cmilos,bcolors.OKGREEN)
+    printc('  VERS_SW: '+ VERS_SW,bcolors.OKGREEN)
+    printc('  cmilos version: '+ VERS_RTE,bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     if json_input:
@@ -245,6 +302,14 @@ def phifdt_pipe(json_input = None,
         realign = CONFIG['realign']
         ind_wave = CONFIG['ind_wave']
         nlevel = CONFIG['nlevel']
+        try: 
+            fringe_threshold = CONFIG['fringe_threshold']
+        except:
+            fringe_threshold = 0
+        try: 
+            pol_c_file = CONFIG['pol_c_file']
+        except:
+            pol_c_file = None
 
         import pprint
         # Prints the nicely formatted dictionary
@@ -293,15 +358,16 @@ def phifdt_pipe(json_input = None,
         raise ValueError("input data type nor .fits neither .fits.gz")
 
     #TODO: check if inversions are requested: RTE and then find cmilos in such a case.
-    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE' or rte == 'RTEn' or rte == 'CEn' or rte == 'CE+RTEn':
+    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE' or rte == 'RTEn' or rte == 'CEn' or rte == 'CE+RTEn' or rte == 'CE+RTE+PSF':
         printc(' RTE on. Looking for milos...',bcolors.OKGREEN)
 
         if RTE_code == 'cmilos': #TODO add .x after first orbit is done
             #MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]+'.x'
             MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
-            
+            print('Milos in',MILOS_EXECUTABLE)
         elif RTE_code == 'pmilos':
             MILOS_EXECUTABLE = 'pmilos'
+            print('Using pmilos')
 
         else: #TODO This is nonsense stuff
             #check if RTE is on
@@ -322,8 +388,14 @@ def phifdt_pipe(json_input = None,
 
     DID = header['PHIDATID']
     ACC = header['ACCACCUM']
-    printc('-->>>>>>> data DID '+DID,color=bcolors.OKGREEN)
 
+    printc('-->>>>>>> data DID '+DID,color=bcolors.OKGREEN)
+    
+    if 'VERS_SW' in header:  # Check for existence
+        header['VERS_SW'] = VERS_SW
+    else:
+        header.set('VERS_SW', VERS_SW,after='PHIDATID')
+        
     # printc('-->>>>>>> Scaling data... ',color=bcolors.OKGREEN)
     # try:
     #     data_ext9, header_ext9 = fits_get(data_filename,head = 9)
@@ -364,7 +436,7 @@ def phifdt_pipe(json_input = None,
         # ACCACCUM= 20 / ACCU number of accumulations set 
         # ACCADDR = 0 / ACCU readout address (start) 
 
-    header['history'] = ' Data processed with phifdt_pipe.py '+ version
+    header['history'] = ' Data processed with phifdt_pipe.py '+ VERS_SW
     header['history'] = '      and time '+ str(datetime.datetime.now())
     header['history'] = ' Parameters normalize_flat: '+ str(norm_f)
     header['history'] = ' Parameters flat_scaling: '+ str(flat_scaling)
@@ -439,10 +511,10 @@ def phifdt_pipe(json_input = None,
         fz,fy,fx = flat.shape
         flat = np.reshape(flat,(fz//4,4,fy,fx))
 
-        # if SIX_FLATS:
-        #     for i in range(6):
-        #         mm = np.mean(flat[i,:,:,:],axis = 0)
-        #         flat[i,:,:,:] = mm[np.newaxis,:,:]
+        if SIX_FLATS:
+            for i in range(6):
+                mm = np.mean(flat[i,:,:,:],axis = 0)
+                flat[i,:,:,:] = mm[np.newaxis,:,:]
 
         if verbose:
             plib.show_one(flat[0,0,:,:],xlabel='pixel',ylabel='pixel',title='Flat first image raw (1 of 24)',cbarlabel='Any (as input)',save=None,cmap='gray')
@@ -472,7 +544,7 @@ def phifdt_pipe(json_input = None,
             cy = c[1]
             #TBE PUT IN CORRECT UNITS
         elif center_method  == 'circlefit':
-            cy,cx,radius=find_center(data[0,0,:,:])  #OJO Cy... Cx
+            cy,cx,radius=find_center(data[0,0,:,:],sjump = 4,njumps = 100,threshold = 0.8)  #OJO Cy... Cx
             c = np.array([int(cx),int(cy)])   #El vector es [0,1,2,...] == [x,y,z,...] == [cx,cy,cz,...] Pero esto ultimo esta al reves
             radius = int(radius)
         elif center_method == None:
@@ -718,7 +790,7 @@ def phifdt_pipe(json_input = None,
     #-----------------
 
     if correct_ghost:
-        data,header = phi_correct_ghost(data,header,radius,verbose = verbose)
+        data,header = phi_correct_ghost(data,header,radius,verbose = verbose,extra_offset = extra_offset)
 
     #-----------------
     # REALIGN DATA BEFORE DEMODULATION
@@ -766,6 +838,21 @@ def phifdt_pipe(json_input = None,
     #     hdu_list.writeto('dummy.fits', clobber=True)
 
     #-----------------
+    # GENERATE maski (circular mask emaller than the sun) 
+    #-----------------
+
+    rrx_m = [int(c[0]-radius*PERCENT_OF_DISK_FOR_MASKI),int(c[0]+radius*PERCENT_OF_DISK_FOR_MASKI)]
+    rry_m = [int(c[1]-radius*PERCENT_OF_DISK_FOR_MASKI),int(c[1]+radius*PERCENT_OF_DISK_FOR_MASKI)]
+    maski,coords = generate_circular_mask([xd-1,yd-1],radius*PERCENT_OF_DISK_FOR_MASKI,radius*PERCENT_OF_DISK_FOR_MASKI)
+    maski = shift(maski, shift=(c[0]-xd//2,c[1]-yd//2), fill_value=0).astype(int)
+
+    if scattering_veil:
+        veil = data[0,0,:,:]
+        data[:,0,:,:] = (data[:,0,:,:] - scattering_veil*veil[np.newaxis,:,:])/(1-scattering_veil)
+    # Borrero paper
+
+
+    #-----------------
     # APPLY NORMALIZATION 
     #-----------------
     printc('-->>>>>>> Applying normalization --',color=bcolors.OKGREEN)
@@ -788,6 +875,7 @@ def phifdt_pipe(json_input = None,
     if verbose == 1:
         plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom = 2,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
 
+
     #-----------------
     # GHOST CORRECTION  AFTER DEMODULATION
     #-----------------
@@ -798,17 +886,10 @@ def phifdt_pipe(json_input = None,
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
-    if ItoQUV or putmediantozero:
-            factor_media = 0.8  # 80% of the disk
-            rrx_m = [int(c[0]-radius*factor_media),int(c[0]+radius*factor_media)]
-            rry_m = [int(c[1]-radius*factor_media),int(c[1]+radius*factor_media)]
-            maski,coords = generate_circular_mask([xd-1,yd-1],radius*factor_media,radius*factor_media)
-            maski = shift(maski, shift=(c[0]-xd//2,c[1]-yd//2), fill_value=0).astype(int)
-
     if ItoQUV:
         printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V --',color=bcolors.OKGREEN)
-        printc('          Using ',factor_media*100,'% of the disk                     ',color=bcolors.OKGREEN)
-        printc('          Crosstalk evaluated in x = [',rrx_m[0],':',rrx_m[1],'] y = [',rry_m[0],':',rry_m[1],']',' using ',factor_media*100,"% of the disk",color=bcolors.OKBLUE)
+        printc('          Using ',PERCENT_OF_DISK_FOR_MASKI*100,'% of the disk                     ',color=bcolors.OKGREEN)
+        printc('          Crosstalk evaluated in x = [',rrx_m[0],':',rrx_m[1],'] y = [',rry_m[0],':',rry_m[1],']',' using ',PERCENT_OF_DISK_FOR_MASKI*100,"% of the disk",color=bcolors.OKBLUE)
 
         if ind_wave:
             for i in range(zd//4):
@@ -954,30 +1035,81 @@ def phifdt_pipe(json_input = None,
         cV0 = cV0.reshape(dim,dim)
         cV1 = cV1.reshape(dim,dim)
         plib.show_one(cV0,vmin=-0.005,vmax=0.005)
+        plib.show_one(cV1)#,vmin=-0.005,vmax=0.005)
         data[:,3,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] = \
             data[:,3,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] -\
             cV0*data[:,0,ry[0]+nsize//2:ry[1]-nsize//2-1,rx[0]+nsize//2:rx[1]-nsize//2-1] #- 0.95*cV1
+        plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I - after fringe','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
 
-    #-----------------
+    # -----------------
     # FRINGING - 
     #-----------------
 
-    if correct_fringes == 'auto' or correct_fringes == 'manual':
+    if correct_fringes == 'auto' or correct_fringes == 'manual' or correct_fringes == 'old_manual' or correct_fringes == 'sauto' or correct_fringes == 'manual-forced':
         if verbose:
             plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I - before fringe','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
-        data, header = phi_correct_fringes(data,header,option=correct_fringes,verbose=verbose)
+        data, header = phi_correct_fringes(data,header,option=correct_fringes,verbose=verbose,fringe_threshold=fringe_threshold)
         if verbose:
             plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I - after fringe','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
     elif correct_fringes == False:
         pass
     else:
-        printc('Error in option finge correction. Options are "manual", "auto" or false. Given: ',color=bcolors.WARNING)
+        printc('Error in option finge correction. Options are "manual", "auto", "sauto", "manual-forced", or false. Given: ',color=bcolors.WARNING)
         print(correct_fringes)
+
     #-----------------
     # MEDIAN TO CERO
     #-----------------
 
     if putmediantozero:
+        if putmediantozero == '2D':
+            #TODO Include masking of ARs
+
+            data_dummy = np.copy(data)
+
+            c_x,c_y,rd = find_center(data[0,0,:,:],sjump = 4,njumps = 100,threshold = 0.8)
+            maskk,dummy = generate_circular_mask([xd-1,yd-1],round(rd)+1,round(rd)+1)
+            maskk = shift(maskk, shift=(round(c_y)-yd//2,round(c_x)-xd//2), fill_value=0)
+            printc('   RX = ', rx, 'RY = ', ry, color=bcolors.WARNING)
+
+            mask_blurred = gaussian_filter(maskk.astype(float), sigma=(SIGMA_MEDIAN_FILTER, SIGMA_MEDIAN_FILTER))#, truncate=3.5)
+            mask_blurred *= maskk
+            # mask_blurred = mask_blurred.astype(float)
+            # mask_blurred /= mask_blurred[yd//2,xd//2]
+            if verbose:
+                plt.imshow(maskk)
+                plt.colorbar()
+                plt.show()
+                plt.imshow(mask_blurred)
+                plt.colorbar()
+                plt.show()
+
+            #mask_blurred *= mask
+            for p in range(3):
+                # md = np.mean(data[:,p+1,:,:],axis=0)
+                md = data[0,p+1,:,:]
+                # apply Gaussian blur, creating a new image
+                md_blurred = gaussian_filter(md*maskk, sigma=(SIGMA_MEDIAN_FILTER, SIGMA_MEDIAN_FILTER))#, truncate=3.5)
+                if verbose:
+                    plt.imshow(md_blurred,clim=(-0.002,0.002))
+                    plt.colorbar()
+                    plt.show()
+                md_blurred /= mask_blurred
+                md_blurred[np.bitwise_not(np.isfinite(md_blurred))] = 0
+                if verbose:
+                    plt.imshow(md_blurred,clim=(-0.002,0.002))
+                    plt.colorbar()
+                    plt.show()
+                    plt.imshow(data[0,p+1,:,:],clim=(-0.002,0.002))
+                    plt.colorbar()
+                    plt.show()
+                data[:,p+1,:,:] -= md_blurred[np.newaxis,:,:]
+                if verbose: 
+                    plt.imshow(data[0,p+1,:,:],clim=(-0.002,0.002))
+                    plt.colorbar()
+                    plt.show()
+            data[np.bitwise_not(np.isfinite(data))] = 0
+                
         printc('-->>>>>>> Putting median to zero ',color=bcolors.OKGREEN)
         printc('          Median evaluated in x = [',rrx_m[0],':',rrx_m[1],'] y = [',rry_m[0],':',rry_m[1],']',' using ',factor*100,"% of the disk",color=bcolors.OKBLUE)
         for i in range(zd//4):
@@ -994,12 +1126,18 @@ def phifdt_pipe(json_input = None,
             data[i,2,:,:] = data[i,2,:,:] - PU#[:,np.newaxis,np.newaxis]
             data[i,3,:,:] = data[i,3,:,:] - PV#[:,np.newaxis,np.newaxis]
             printc(PQ,PU,PV)
-            
-    # plib.show_four_row(data[0,0,:,:],data[0,1,:,:],data[0,2,:,:],data[0,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+
+    plib.show_four_row(data[0,0,:,:],data[0,1,:,:],data[0,2,:,:],data[0,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+    plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+    plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+    plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+    plib.show_four_row(data[4,0,:,:],data[4,1,:,:],data[4,2,:,:],data[4,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+    plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
     # ctnd = data[0,1:3,:,:]
     # for i in range(zd//4):
     #     data[i,1:3,:,:] = data[i,1:3,:,:] - ctnd
     # plib.show_four_row(data[0,0,:,:],data[0,1,:,:],data[0,2,:,:],data[0,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+    print('La vin compae')
 
     if verbose == 1:
         plib.show_hist(data[0,1, maski > 0].flatten(), bins='auto',title=' ',leave='open',color='green')
@@ -1013,8 +1151,7 @@ def phifdt_pipe(json_input = None,
     #CHECK FOR INFs
     #-----------------
 
-    data[np.isinf(data)] = 0
-    data[np.isnan(data)] = 0
+    data[np.bitwise_not(np.isfinite(data))] = 0
 
     #-----------------
     # SAVE DATA TODO: CMILOS FORMAT AND FITS
@@ -1074,10 +1211,64 @@ def phifdt_pipe(json_input = None,
     #     hdu_list[0].data = mask
     #     hdu_list.writeto(directory+outfile+'_red-mask.fits', clobber=True)
 
+    #special option for further correction of data
+    if pol_c_file != None:
+        with pyfits.open(pol_c_file) as hdu_list:
+            md = hdu_list[0].data 
+
+        for j in range(1,4):
+            for k in range(6):
+                data[k,j,:,:] = data[k,j,:,:] - md[j-1,:,:]
+
+    #-----------------
+    # Cavity maps
+    #-----------------
+
+    fig, maps = plt.subplots(2,3, sharex='col', sharey='row',figsize=(10,6))
+    fig.subplots_adjust(top=0.92,hspace=0.05)
+    fig.suptitle(header['DATE-AVG'], y=0.96, fontsize=14)
+
+    im1 = maps[0, 0].imshow((data[0,0,:,:]-data[1,0,:,:])*1000.,interpolation='none')
+    plib.colorbar(im1)
+    maps[0, 0].title.set_text('data[0,0,:,:]-data[1,0,:,:]')
+    maps[0, 0].title.set_size(12)
+
+    im1 = maps[0, 1].imshow((data[0,0,:,:]-data[2,0,:,:])*1000.,interpolation='none')
+    plib.colorbar(im1)
+    maps[0, 1].title.set_text('data[0,0,:,:]-data[3,0,:,:]')
+    maps[0, 1].title.set_size(12)
+
+    im1 = maps[0, 2].imshow((data[0,0,:,:]-data[3,0,:,:])*1000.,interpolation='none')
+    plib.colorbar(im1)
+    maps[0, 2].title.set_text('data[0,0,:,:]-data[3,0,:,:]')
+    maps[0, 2].title.set_size(12)
+
+    im1 = maps[1, 0].imshow((data[3,0,:,:]-data[5,0,:,:])*1000.,interpolation='none')
+    plib.colorbar(im1)
+    maps[1, 0].title.set_text('data[3,0,:,:]-data[5,0,:,:]')
+    maps[1, 0].title.set_size(12)
+
+    im1 = maps[1, 1].imshow((data[4,0,:,:]-data[5,0,:,:])*1000.,interpolation='none')
+    plib.colorbar(im1)
+    maps[1, 1].title.set_text('data[4,0,:,:]-data[5,0,:,:]')
+    maps[1, 1].title.set_size(12)
+
+    im1 = maps[1, 2].imshow((data[2,0,:,:]-data[3,0,:,:])*1000.,interpolation='none')
+    plib.colorbar(im1)
+    maps[1, 2].title.set_text('data[2,0,:,:]-data[3,0,:,:]')
+    maps[1, 2].title.set_size(12)
+
+    #ax.imshow(Zm, cmap='gray')
+    writeto = set_level(outfile_L2,'stokes','-cavity-')
+    writeto = set_level(writeto,filetype,FIGUREOUT) 
+
+    plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+    plt.close()
+
     #-----------------
     # INVERSION OF DATA WITH CMILOS
     #-----------------
-    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE' or rte == 'RTEn' or rte == 'CEn' or rte == 'CE+RTEn' :
+    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE' or rte == 'RTEn' or rte == 'CEn' or rte == 'CE+RTEn' or rte == 'CE+RTE+PSF':
 
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
         
@@ -1097,8 +1288,23 @@ def phifdt_pipe(json_input = None,
             if rte == 'CEn':
                 rte = 'CE'
             
+        if rte == 'CE+RTE+PSF':
+            MILOS_EXECUTABLE = 'milos.'+node().split('.')[0]
+            print('Milos in',MILOS_EXECUTABLE)
+            RTE_code = 'cmilos'
+            wave_axis = np.roll(wave_axis,-1)
+            data = np.roll(data,-1,axis=0)
+
+
         rte_invs = np.zeros((12,yd,xd)).astype(float)
         rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = generate_level2(data[:,:,ry[0]:ry[1],rx[0]:rx[1]],wave_axis,rte,output_dir,milos_executable = MILOS_EXECUTABLE)
+
+        with pyfits.open(data_filename) as hdu_list:
+            hdu_list[0].data = rte_invs
+            hdu_list[0].header = header
+            writeto = set_level(outfile_L2,'stokes','FullModel')
+            hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
+
 
         # rte_invs_stokes_mask = np.copy(rte_invs)
 
@@ -1109,7 +1315,6 @@ def phifdt_pipe(json_input = None,
         # rte_invs_stokes_mask[2,low_values_flags] = 0
         # rte_invs_stokes_mask[3,low_values_flags] = 0
         # rte_invs_stokes_mask[4,low_values_flags] = 0
-
         for i in range(12):
             rte_invs[i,:,:] = rte_invs[i,:,:] * mask
 
@@ -1121,7 +1326,8 @@ def phifdt_pipe(json_input = None,
         # np.savez_compressed(output_dir+outfile_L2, rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
 
         b_los = rte_invs[2,:,:]*np.cos(rte_invs[3,:,:]*np.pi/180.) 
-        v_los = (rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]]) ) 
+        # v_los = (rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]]) ) 
+        v_los = rte_invs[8,:,:] 
         if verbose:
             plib.show_one(v_los,vmin=-2.5,vmax=2.5,title='LoS velocity')
             plib.show_one(b_los,vmin=-30,vmax=30,title='LoS magnetic field')
@@ -1129,7 +1335,7 @@ def phifdt_pipe(json_input = None,
         printc('  ---- >>>>> Updating L2 header.... ',color=bcolors.OKGREEN)
 
         header['history'] = ' RTE CMILOS INVERTER: '+ rte
-        header['history'] = ' CMILOS VER: '+ version_cmilos
+        header['history'] = ' CMILOS VER: '+ VERS_RTE
 
         if 'RTE_ITER' in header:  # Check for existence
             header['RTE_ITER'] = str(15)
@@ -1139,6 +1345,10 @@ def phifdt_pipe(json_input = None,
         printc('  ---- >>>>> Saving L2 data.... ',color=bcolors.OKGREEN)
 
         #HRT version
+        if rte != 'CE':
+            icont = rte_invs[9,:,:]+rte_invs[10,:,:]
+        else:
+            icont = data[0,0,:,:]
 
         with pyfits.open(data_filename) as hdu_list:
             #BMAG
@@ -1197,7 +1407,7 @@ def phifdt_pipe(json_input = None,
             hdu_list.writeto(output_dir+'level2/'+writeto,overwrite=True)
 
         # with pyfits.open(data_filename) as hdu_list:
-            hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
+            hdu_list[0].data = icont
             if 'BTYPE' in header:  # Check for existence
                 header['BTYPE'] = 'Intensity [ME]'
             if 'BUNIT' in header:  # Check for existence
@@ -1209,148 +1419,218 @@ def phifdt_pipe(json_input = None,
 
         printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
 
-        #-----------------
-        # PLOTS VLOS
-        #-----------------
-        plt.figure(figsize=(10, 10))
-        ax = plt.gca()
-        plt.title('PHI-FDT LoS velocity',size=20)
+        idx = np.where(mask == 0)
 
-        # Hide grid lines
-        ax.grid(False)
-        # Hide axes ticks
-        ax.set_xticks([])
-        ax.set_yticks([])
+        fig, maps = plt.subplots(2,3, sharex='col', sharey='row',figsize=(10,6))
+        fig.subplots_adjust(top=0.92,hspace=0.05)
+        fig.suptitle(header['DATE-AVG'], y=0.96, fontsize=14)
 
-    #        im = ax.imshow(np.fliplr(rotate(v_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1], 52, reshape=False)), cmap='bwr',vmin=-3.,vmax=3.)
-        im = ax.imshow(v_los, cmap='bwr',vmin=-3.,vmax=3.)
+        icont[idx] = 0
+        im1 = maps[0, 0].imshow(icont,cmap='gist_heat',vmin=0.2,vmax=1.2,interpolation='none')
+        plib.colorbar(im1)
+        maps[0, 0].title.set_text('Continuum intensity')
+        maps[0, 0].title.set_size(12)
 
-        divider = plib.make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        cbar = plib.plt.colorbar(im, cax=cax)
-        cbar.set_label('[km/s]')
-        cbar.ax.tick_params(labelsize=16)
+        hmimag = plib.cmap_from_rgb_file('HMI', 'hmi_mag.csv')
+        b_los[idx] = 0.
+        im2 = maps[0, 1].imshow(b_los,cmap=hmimag,vmin=-50,vmax=50,interpolation='none')
+        plib.colorbar(im2)
+        maps[0, 1].title.set_text('LoS magnetic field [gauss]')
+        maps[0, 1].title.set_size(12)
+        
+        im3 = maps[0, 2].imshow(v_los,cmap=hmimag,vmin=-1.5,vmax=1.5,interpolation='none')
+        plib.colorbar(im3)
+        maps[0, 2].title.set_text('LoS velocity [km/s]')
+        maps[0, 2].title.set_size(12)
+
+        im4 = maps[1, 0].imshow(rte_invs[3,:,:] ,cmap='seismic',vmin=40,vmax=140,interpolation='none')
+        plib.colorbar(im4)
+        maps[1, 0].title.set_text('Field inclination [degree]')
+        maps[1, 0].title.set_size(12)
+
+        im5 = maps[1, 1].imshow(rte_invs[2,:,:] ,cmap='gnuplot_r',vmin=0,vmax=400,interpolation='none')
+        plib.colorbar(im5)
+        maps[1, 1].title.set_text('Field strength [gauss]')
+        maps[1, 1].title.set_size(12)
+
+        im6 = maps[1, 2].imshow(rte_invs[4,:,:] ,cmap='hsv',vmin=20,vmax=160,interpolation='none')
+        plib.colorbar(im6)
+        maps[1, 2].title.set_text('Azimuth [degree]')
+        maps[1, 2].title.set_size(12)
 
         #ax.imshow(Zm, cmap='gray')
-        writeto = set_level(outfile_L2,'stokes','vlos')
+        writeto = set_level(outfile_L2,'stokes','plot')
         writeto = set_level(writeto,filetype,FIGUREOUT) 
 
         plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
         plt.close()
+
+        # plt.figure(figsize=(10, 10))
+        # ax = plt.gca()
+        # plt.title('PHI-FDT LoS velocity',size=20)
+
+        # # Hide grid lines
+        # ax.grid(False)
+        # # Hide axes ticks
+        # ax.set_xticks([])
+        # ax.set_yticks([])
+
+        # im = ax.imshow(v_los, cmap='bwr',vmin=-3.,vmax=3.)
+
+        # divider = plib.make_axes_locatable(ax)
+        # cax = divider.append_axes("right", size="5%", pad=0.05)
+        # cbar = plib.plt.colorbar(im, cax=cax)
+        # cbar.set_label('[km/s]')
+        # cbar.ax.tick_params(labelsize=16)
+
+        # #ax.imshow(Zm, cmap='gray')
+        # writeto = set_level(outfile_L2,'stokes','vlos')
+        # writeto = set_level(writeto,filetype,FIGUREOUT) 
+
+        # plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+        # plt.close()
+
+        #-----------------
+        # PLOTS VLOS
+        #-----------------
+        # plt.figure(figsize=(10, 10))
+        # ax = plt.gca()
+        # plt.title('PHI-FDT LoS velocity',size=20)
+
+        # # Hide grid lines
+        # ax.grid(False)
+        # # Hide axes ticks
+        # ax.set_xticks([])
+        # ax.set_yticks([])
+
+        # im = ax.imshow(v_los, cmap='bwr',vmin=-3.,vmax=3.)
+
+        # divider = plib.make_axes_locatable(ax)
+        # cax = divider.append_axes("right", size="5%", pad=0.05)
+        # cbar = plib.plt.colorbar(im, cax=cax)
+        # cbar.set_label('[km/s]')
+        # cbar.ax.tick_params(labelsize=16)
+
+        # #ax.imshow(Zm, cmap='gray')
+        # writeto = set_level(outfile_L2,'stokes','vlos')
+        # writeto = set_level(writeto,filetype,FIGUREOUT) 
+
+        # plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+        # plt.close()
 
         #-----------------
         # PLOTS BLOS
         #-----------------
 
-        plt.figure(figsize=(10, 10))
-        ax = plt.gca()
-        plt.title('PHI-FDT Magnetogram',size=20)
+        # plt.figure(figsize=(10, 10))
+        # ax = plt.gca()
+        # plt.title('PHI-FDT Magnetogram',size=20)
 
-        # Hide grid lines
-        ax.grid(False)
-        # Hide axes ticks
-        ax.set_xticks([])
-        ax.set_yticks([])
+        # # Hide grid lines
+        # ax.grid(False)
+        # # Hide axes ticks
+        # ax.set_xticks([])
+        # ax.set_yticks([])
                     
-        #im = ax.imshow(np.fliplr(rotate(b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1], 52, reshape=False)), cmap='gray',vmin=-100,vmax=100) 
-        im = ax.imshow(b_los, cmap='rainbow',vmin=-100,vmax=100)
+        # #im = ax.imshow(np.fliplr(rotate(b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1], 52, reshape=False)), cmap='gray',vmin=-100,vmax=100) 
+        # im = ax.imshow(b_los, cmap='Greys',vmin=-100,vmax=100)
 
-        divider = plib.make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        cbar = plib.plt.colorbar(im, cax=cax)
-        # cbar.set_label('Stokes V amplitude [%]')
-        cbar.set_label('LoS magnetic field [Mx/cm$^2$]')
-        cbar.ax.tick_params(labelsize=16)
-        #ax.imshow(Zm, cmap='gray')
+        # divider = plib.make_axes_locatable(ax)
+        # cax = divider.append_axes("right", size="5%", pad=0.05)
+        # cbar = plib.plt.colorbar(im, cax=cax)
+        # # cbar.set_label('Stokes V amplitude [%]')
+        # cbar.set_label('LoS magnetic field [Mx/cm$^2$]')
+        # cbar.ax.tick_params(labelsize=16)
+        # #ax.imshow(Zm, cmap='gray')
 
-        writeto = set_level(outfile_L2,'stokes','blos')
-        writeto = set_level(writeto,filetype,FIGUREOUT) 
-        plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
-        plt.close()
+        # writeto = set_level(outfile_L2,'stokes','blos')
+        # writeto = set_level(writeto,filetype,FIGUREOUT) 
+        # plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+        # plt.close()
 
         #-----------------
         # PLOTS AZIMUTH
         #-----------------
 
-        plt.figure(figsize=(10, 10))
-        ax = plt.gca()
-        plt.title('PHI-FDT field azimuth',size=20)
+        # plt.figure(figsize=(10, 10))
+        # ax = plt.gca()
+        # plt.title('PHI-FDT field azimuth',size=20)
 
-        # Hide grid lines
-        ax.grid(False)
-        # Hide axes ticks
-        ax.set_xticks([])
-        ax.set_yticks([])
+        # # Hide grid lines
+        # ax.grid(False)
+        # # Hide axes ticks
+        # ax.set_xticks([])
+        # ax.set_yticks([])
 
-        im = ax.imshow(rte_invs[4,:,:], cmap='rainbow',vmin=0,vmax=180)
+        # im = ax.imshow(rte_invs[4,:,:], cmap='Greys',vmin=0,vmax=180)
 
-        divider = plib.make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        cbar = plib.plt.colorbar(im, cax=cax)
-        cbar.set_label('[km/s]')
-        cbar.ax.tick_params(labelsize=16)
+        # divider = plib.make_axes_locatable(ax)
+        # cax = divider.append_axes("right", size="5%", pad=0.05)
+        # cbar = plib.plt.colorbar(im, cax=cax)
+        # cbar.set_label('[km/s]')
+        # cbar.ax.tick_params(labelsize=16)
 
-        writeto = set_level(outfile_L2,'stokes','bazi')
-        writeto = set_level(writeto,filetype,FIGUREOUT) 
+        # writeto = set_level(outfile_L2,'stokes','bazi')
+        # writeto = set_level(writeto,filetype,FIGUREOUT) 
 
-        plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
-        plt.close()
+        # plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+        # plt.close()
 
         #-----------------
         # PLOTS INCLINATION
         #-----------------
 
-        plt.figure(figsize=(10, 10))
-        ax = plt.gca()
-        plt.title('PHI-FDT field inclination',size=20)
+        # plt.figure(figsize=(10, 10))
+        # ax = plt.gca()
+        # plt.title('PHI-FDT field inclination',size=20)
 
-        # Hide grid lines
-        ax.grid(False)
-        # Hide axes ticks
-        ax.set_xticks([])
-        ax.set_yticks([])
+        # # Hide grid lines
+        # ax.grid(False)
+        # # Hide axes ticks
+        # ax.set_xticks([])
+        # ax.set_yticks([])
 
-        im = ax.imshow(rte_invs[3,:,:], cmap='rainbow',vmin=0,vmax=180)
+        # im = ax.imshow(rte_invs[3,:,:], cmap='Greys',vmin=0,vmax=180)
 
-        divider = plib.make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        cbar = plib.plt.colorbar(im, cax=cax)
-        cbar.set_label('[km/s]')
-        cbar.ax.tick_params(labelsize=16)
+        # divider = plib.make_axes_locatable(ax)
+        # cax = divider.append_axes("right", size="5%", pad=0.05)
+        # cbar = plib.plt.colorbar(im, cax=cax)
+        # cbar.set_label('[km/s]')
+        # cbar.ax.tick_params(labelsize=16)
 
-        writeto = set_level(outfile_L2,'stokes','binc')
-        writeto = set_level(writeto,filetype,FIGUREOUT) 
+        # writeto = set_level(outfile_L2,'stokes','binc')
+        # writeto = set_level(writeto,filetype,FIGUREOUT) 
 
-        plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
-        plt.close()
+        # plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+        # plt.close()
 
         #-----------------
         # PLOTS FIELD STRENGTH
         #-----------------
 
-        plt.figure(figsize=(10, 10))
-        ax = plt.gca()
-        plt.title('PHI-FDT field strength',size=20)
+        # plt.figure(figsize=(10, 10))
+        # ax = plt.gca()
+        # plt.title('PHI-FDT field strength',size=20)
 
-        # Hide grid lines
-        ax.grid(False)
-        # Hide axes ticks
-        ax.set_xticks([])
-        ax.set_yticks([])
+        # # Hide grid lines
+        # ax.grid(False)
+        # # Hide axes ticks
+        # ax.set_xticks([])
+        # ax.set_yticks([])
 
-        im = ax.imshow(rte_invs[2,:,:], cmap='rainbow',vmin=0,vmax=2500)
+        # im = ax.imshow(rte_invs[2,:,:], cmap='Greys',vmin=0,vmax=800)
 
-        divider = plib.make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        cbar = plib.plt.colorbar(im, cax=cax)
-        cbar.set_label('[km/s]')
-        cbar.ax.tick_params(labelsize=16)
+        # divider = plib.make_axes_locatable(ax)
+        # cax = divider.append_axes("right", size="5%", pad=0.05)
+        # cbar = plib.plt.colorbar(im, cax=cax)
+        # cbar.set_label('[km/s]')
+        # cbar.ax.tick_params(labelsize=16)
 
-        writeto = set_level(outfile_L2,'stokes','bmag')
-        writeto = set_level(writeto,filetype,FIGUREOUT) 
+        # writeto = set_level(outfile_L2,'stokes','bmag')
+        # writeto = set_level(writeto,filetype,FIGUREOUT) 
 
-        plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
-        plt.close()
+        # plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+        # plt.close()
 
         printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
 

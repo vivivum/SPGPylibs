@@ -7,16 +7,20 @@
 # Description: 
 #-----------------------------------------------------------------------------
 
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.signal import fftconvolve, tukey, savgol_filter
 from itertools import combinations
-from .tools import * 
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.ndimage import gaussian_filter
+from scipy.signal import fftconvolve, savgol_filter
+from scipy.signal.windows import tukey
+
 import SPGPylibs.GENtools.plot_lib as plib
+
 
 # __all__ = ['bar', 'baz']
 
-def shift(matrix, shift=[0, 0], fill_value=0):
+def shift(matrix: np.ndarray, shift: list = None, fill_value: int = 0) -> np.ndarray:
     '''Shift operator
     Shift an image in 2D naively as in SOLO-PHI instrument.
     Faster and more efficient methods can be used in normal CPU.
@@ -147,21 +151,13 @@ def threshold_otsu(image, nbins=256):
     ----------
     .. [1] Wikipedia, http://en.wikipedia.org/wiki/Otsu's_Method
 
-    Examples
-    --------
-    >>> from skimage.data import camera
-    >>> image = camera()
-    >>> thresh = threshold_otsu(image)
-    >>> binary = image <= thresh
-
     Notes
     -----
     The input image must be grayscale.
     """
     if len(image.shape) > 2 and image.shape[-1] in (3, 4):
-        msg = "threshold_otsu is expected to work correctly only for " \
-              "grayscale images; image shape {0} looks like an RGB image"
-        warn(msg.format(image.shape))
+        raise ValueError("threshold_otsu is expected to work correctly only for "
+                         "grayscale images; image shape {0} looks like an RGB image")
 
     # Check if the image is multi-colored or not
     if image.min() == image.max():
@@ -185,10 +181,9 @@ def threshold_otsu(image, nbins=256):
     variance12 = weight1[:-1] * weight2[1:] * (mean1[:-1] - mean2[1:]) ** 2
 
     idx = np.argmax(variance12)
-    threshold = bin_centers[:-1][idx]
-    return threshold
+    return bin_centers[:-1][idx]
 
-def histogram(image, nbins=256):
+def histogram(image: np.ndarray, nbins: int=256):
     """Return histogram of image.
 
     Unlike `numpy.histogram`, this function returns the centers of bins and
@@ -218,21 +213,8 @@ def histogram(image, nbins=256):
     --------
     cumulative_distribution
 
-    Examples
-    --------
-    >>> from skimage import data, exposure, img_as_float
-    >>> image = img_as_float(data.camera())
-    >>> np.histogram(image, bins=2)
-    (array([107432, 154712]), array([ 0. ,  0.5,  1. ]))
-    >>> exposure.histogram(image, nbins=2)
-    (array([107432, 154712]), array([ 0.25,  0.75]))
     """
     sh = image.shape
-    if len(sh) == 3 and sh[-1] < 4:
-        warn("This might be a color image. The histogram will be "
-             "computed on the flattened image. You can instead "
-             "apply this function to each color channel.")
-
     # For integer types, histogramming with bincount is more efficient.
     if np.issubdtype(image.dtype, np.integer):
         offset = 0
@@ -279,9 +261,9 @@ def FindEdges(xs, threshold, method='simply', dthr=1, Otsu=None, verbose=False):
     im_grad -= im_grad.min()
 
     # make binary image
-    for loop in range(int(dthr)):
+    for _ in range(int(dthr)):
         image = np.copy(im_grad)
-        image = image > image.max()*threshold
+        image = image > image.max*threshold
         image.dtype = np.int8
         nonzero = np.array(image.nonzero())
         density = float(nonzero[0].size)/image.size
@@ -299,13 +281,11 @@ def FindEdges(xs, threshold, method='simply', dthr=1, Otsu=None, verbose=False):
                 print("Too less points")
             threshold = threshold/2.
 
-        # FIXME CUIDADO- HE PUESTO EL OUTSU Ya no esta por defecto pero 
-        # hay que ponerlo com parámetro de entreada
     if Otsu != None:
         print('Override current method. Using Otsu histogram')
         thresh = threshold_otsu(im_grad)
         image = np.copy(im_grad)
-        image = image > image.max()*thresh
+        image = image > image.max*thresh
         image.dtype = np.int8
     #show_one(image2)
     #np.save('test.npy', image)  # npzfile = np.load(outfile)
@@ -320,10 +300,7 @@ def FindEdges(xs, threshold, method='simply', dthr=1, Otsu=None, verbose=False):
     if verbose == True:
         print('Stop in FindEdges. Close plot window to continue.')
         plib.show_one(image, title='FindEdges thresholded image')
-    if dthr == 1:
-        return image
-    else:
-        return image, threshold
+    return image if dthr == 1 else (image, threshold)
 
 def make_circles(radius, r_width):
     """
@@ -341,9 +318,7 @@ def make_circles(radius, r_width):
 
     # back to integers
     outer_circle.dtype = inner_circle.dtype = np.int8
-    #inner_circle = inner_circle*1.1
-    annulus = outer_circle - inner_circle
-    return annulus
+    return outer_circle - inner_circle
 
 def find_Circles_ida(image, radii, r_width,verbose = False):
     """
@@ -388,8 +363,7 @@ def votes(acc, radii):
             radius = np.copy(r)
         print("calc: %8.2f | %8.2f | %s | %8.2f" % (r, maxima[i], (max_positions[i]), signal))
     
-    print("Last: %8.2f | %8.2f | %s" %
-          (radius, np.max(maxima), (circle_x, circle_y)))
+    print(f"Last: {radius:8.2f} | {np.max(maxima):8.2f} | {(circle_x, circle_y)}")
     
     # Identify maximum. Note: the values come back as index, row, column
     #    max_index, circle_y, circle_x = np.unravel_index(acc.argmax(), acc.shape)
@@ -404,17 +378,14 @@ def bin_annulus(shape,radius, width, full = False):
     # try:
     #     rho
     # except NameError:
-        
+
     rho = circle_grid(shape)  # FOR GENERATING CENTERS GLOVAL VARIABLE
 
     mask1 = rho <= radius + width//2 + 1
     mask2 = rho >= radius - width//2
     mask1.astype(np.int8)
     mask2.astype(np.int8)
-    if full ==  True:
-        return mask1
-    else:
-        return mask1 == mask2
+    return mask1 if full ==  True else mask1 == mask2
 
 def circle_grid(shape):
     """
@@ -429,10 +400,9 @@ def circle_grid(shape):
     x = np.linspace(-N/2, N/2, N)
     y = np.copy(x)
     X, Y = np.meshgrid(x, y)
-    rho = np.sqrt(X**2 + Y**2)
     #globals()['rho'] = rho
 
-    return rho
+    return np.sqrt(X**2 + Y**2)
 
 def find_circle_hough(image,inner_radius, outer_radius, steps,method='prewitt',
             dhtr=10,normalize = False,verbose=False,Otsu = None,threshold = 0.15):
@@ -580,5 +550,81 @@ def rebin(arr, new_shape):
     return arr.reshape(shape).mean(-1).mean(1)
 
 def apod(nx,alpha):
-    window = tukey(int(nx),alpha=alpha) 
+    window = tukey(int(nx),alpha=alpha)
     return 1 - np.outer(window,window)
+
+def expand_mask(mask,pixels = 1,step = 1):
+
+    msk = shift(mask, shift=[-step, -step], fill_value=0) & shift(mask, shift=[0, step], fill_value=0) \
+    & shift(mask, shift=[-step, 0], fill_value=0) & shift(mask, shift=[0, -step], fill_value=0) \
+    & shift(mask, shift=[step, 0], fill_value=0) & shift(mask, shift=[1, step], fill_value=0) \
+    & mask
+    if pixels > 1:
+        for _ in range(pixels):
+            msk = shift(msk, shift=[-step, -step], fill_value=0) & shift(msk, shift=[0, step], fill_value=0) \
+            & shift(msk, shift=[-step, 0], fill_value=0) & shift(msk, shift=[0, -step], fill_value=0)\
+            & shift(msk, shift=[step, 0], fill_value=0) & shift(msk, shift=[1, step], fill_value=0) \
+            & msk
+
+    return msk
+
+def sigma_mask(input,sigma=5,verbose=False,level=0.02):
+    """ Input HAS to be a n,ny,nx array becouse we average in n"""
+    shape = input.shape
+    if len(shape) != 3:
+        print('Input should be [n,ny,nx]')
+        raise IndexError 
+    md = np.mean(input,axis=0)
+    md_std = np.std(input,axis=0)
+    md_std = gaussian_filter(md_std,sigma=sigma) 
+    if verbose:
+        plt.imshow(md_std)
+        plt.colorbar()
+        plt.show()
+    ms = np.ones_like(md)
+    ms[md_std > level] = 0
+    ms = ms.astype(int)
+    if verbose:
+        plt.imshow(ms.astype(int),interpolation=None,cmap='Greys')
+        plt.colorbar()
+        plt.show()
+    return ms
+
+def n_coord(x,y,d=1):
+    w,h = x.shape
+    assert w,h == y.shape
+    if d ==1:
+        print('Normalizing')
+        return (2*x-w)/w, (2*y-h)/h
+    if d ==-1:
+        print('De-Normalizing')
+        return (x+1)*w / 2 , (y+1)*h/2
+    print('wrong direction')
+    return 0,0
+def dmodel(r,k1,k2):
+    '''r is a map of the grid'''
+    return 1 + k1*r + k2*r**2
+def cmesh(w,h,**kwargs):
+    X,Y = np.meshgrid(np.arange(w),np.arange(h))
+    x,y = n_coord(X,Y,**kwargs)
+    r = np.sqrt(x**2 + y**2) 
+    return x,y,r
+
+def test_distortion():
+    # adjust k_1 and k_2 to achieve the required distortion
+    k1 = 0.02
+    k2 = 0.02
+    margin = np.max([k1,k2])*4+1
+    w,h = 2048,2048
+    wn,hn = int(np.round(w*margin)),int(np.round(h*margin))
+    print(w,h)
+    x,y,r = cmesh(wn,hn)
+    model = dmodel(r,k1,k2)
+    #the model is applied like
+    x_new = x * model
+    y_new = y * model
+    x_new2, y_new2 = n_coord(x_new,y_new,d=-1)
+
+    # TODO incomplete program
+    # grid = ndimage.map_coordinates(m, [y_new2.ravel(),x_new2.ravel()])
+

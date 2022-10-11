@@ -17,7 +17,8 @@
 //---------------------------------------------------------
 // USER CONFIGURATION
 
-#define CENTRAL_WL 6173.335400
+// define CENTRAL_WL 6173.335400
+#define CENTRAL_WL 6173.341000 // changed on Sep 27 2022 to chcl zero reference wavelength used for commanding FM
 
 
 //##############################################
