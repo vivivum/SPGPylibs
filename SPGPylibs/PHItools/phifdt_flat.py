@@ -26,7 +26,7 @@ Main program is called ``fdt_flat``
 """
 from typing import Tuple
 
-from SPGPylibs.GENtools import *
+from ..GENtools import *
 from .phi_fits import *
 from .phi_reg import *
 from .phi_utils import *
@@ -1253,9 +1253,11 @@ def fdt_flat(files, wavelength, npol, method='kll', dark=None, r_shifts=0, shift
     return gain, norma
 
 
-def fdt_flat_preprocessing(file: str = None, dark_f: str = None, verbose: bool = True, correct_ghost: int = 0,
+def fdt_flat_preprocessing(file: str = None, dark_f: str = None, verbose: bool = True, correct_ghost: bool = False,
                            correct_prefilter: bool = False,
-                           prefilter_fits: str = '0000990710_noMeta.fits', version='01'):
+                           prefilter_fits: str = '0000990710_noMeta.fits',
+                           correct_distortion: bool = False,
+                           version='01'):
     # TODO: This preprocessing should be done with the main phifdt_flat.py. So far it is here because of lack of time.
 
     if os.path.isfile(file):
@@ -1351,6 +1353,15 @@ def fdt_flat_preprocessing(file: str = None, dark_f: str = None, verbose: bool =
 
     if correct_prefilter:
         data, header = phi_correct_prefilter(prefilter_fits, header, data, voltagesData, verbose=verbose)
+
+    # ------------------
+    # CORRECT DISTORTION
+    # ------------------
+
+    # TODO: AF: Implement distortion correction here
+
+    if correct_distortion:
+        printc('Distortion correction TBD', color=bcolors.YELLOW)
 
     # -----------------
     # FIND DATA CENTER 

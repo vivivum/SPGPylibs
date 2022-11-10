@@ -8,9 +8,9 @@
 #-----------------------------------------------------------------------------
 from .tools import *
 try:
-    from .cmilos import pymilos
+    from .cmilos import pmilos
 except:
-    print("unable to import pymilos version in phi_rte.py (this is o.k.)")
+    print("unable to import pmilos in phi_rte.py (this is o.k.)")
 
 import subprocess
 import numpy as np
@@ -95,7 +95,7 @@ def phi_rte(data: np.ndarray,wave_axis: np.ndarray,rte_mode:str,output_dir:str,c
         # (4, 6, 298, 1176) (pol,wave, y,x)
         # This has to be changed to (y,x,pol,wave) for C
 
-        result =  pymilos.pmilos(options,data,wave_axis)
+        result =  pmilos(options,data,wave_axis)
 
         return np.einsum('ijk->kij',result)                                                                                                                                                                                     
 

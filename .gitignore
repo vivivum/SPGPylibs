@@ -1,6 +1,6 @@
-*.o
 *workspace
 .DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -8,6 +8,8 @@ __pycache__/
 
 # C extensions
 *.so
+*.o
+*.a
 
 # Distribution / packaging
 .Python
@@ -154,3 +156,6 @@ SPGPylibs/PHItools/cmilos_testdata/
 *.save
 *.x
 dummy*
+
+SPGPylibs/PHItools/cmilos/lib/milos
+SPGPylibs/PHItools/cmilos/

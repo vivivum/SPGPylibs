@@ -9,7 +9,7 @@ else
 	CFLAGS = -O3
 endif
 
-CXXFLAGS="-mmacosx-version-min=10.10"
+#CXXFLAGS="-mmacosx-version-min=10.10"
 HOSTCOMPUTER := $(shell hostname | cut -d . -f 1)
 
 default: print create_cuantic.o fvoigt.o fgauss.o me_der.o mil_sinrf.o calculosCompartidos.o lib.o milos.o libmilos.a milos fin

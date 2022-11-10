@@ -4,8 +4,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import subprocess
 import time
 
-# here import the pymilos cython code
-import pymilos
+# here import pmilos from the pymilos cython code
+from .pymilos import pmilos
 #although not necessaty these are the dtype to be passed to C
 DTYPE_INT = np.intc
 DTYPE_DOUBLE = np.float_
@@ -47,7 +47,7 @@ npy = y
 
 print('----------- pmilos---------')
 start = time.process_time()
-out = pymilos.pmilos(options,datos[0:npx,0:npy,:,:],wave_axis)
+out = pmilos(options,datos[0:npx,0:npy,:,:],wave_axis)
 print(time.process_time() - start)
 print(out.shape)
 #output has npy*npx 

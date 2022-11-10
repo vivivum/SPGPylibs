@@ -15,8 +15,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.signal import fftconvolve, savgol_filter
 from scipy.signal.windows import tukey
 
-import SPGPylibs.GENtools.plot_lib as plib
-
+from ..GENtools import plot_lib as plib
 
 # __all__ = ['bar', 'baz']
 
