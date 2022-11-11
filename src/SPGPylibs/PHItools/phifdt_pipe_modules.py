@@ -41,6 +41,7 @@ from matplotlib import pyplot as plt
 from scipy.ndimage import gaussian_filter
 
 from ..GENtools import plot_lib as plib
+from ..GENtools.processing import MP # for multi-processing
 from .phi_fits import fits_get
 from .phi_gen import bin_annulus, shift, find_center, apod, rebin, generate_circular_mask
 from .phi_reg import shift_subp, moments
@@ -940,7 +941,7 @@ def phi_correct_ghost_single(data, header, rad, verbose=False, center=0):
     return data, header
 
 
-def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0):
+def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel=False):
     '''
     Startup version on Jun 2021
     '''
@@ -1005,10 +1006,13 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0):
     mean_intensity = np.zeros((6, 4))
 
     # LOOP in wavelengths!
-    for i in range(zd // 4):
+    global map_func  # make the function accessible for MP
+
+    def map_func(arg_list):
+        data, i, only_one_vorbose = arg_list  # unpack argument list
 
         # STEP --->>> average data in polarization for fitting the limb
-        dummy_data = np.mean(data[i, :, :, :], axis=0)
+        dummy_data = np.mean(data, axis=0)
 
         # STEP --->>> Find center of average data
         centers[1, i], centers[0, i], radius[i] = find_center(dummy_data)  # cy,cx....
@@ -1111,9 +1115,11 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0):
         # factorr=np.array((0.53,0.56,0.44,0.77))
         # factorr=np.array((0.53,0.56,0.44,0.80))
         mean_intensity_reference = np.mean(dummy_data[idx_big])
+
+        # Loop over polarization states
         for j in range(4):
 
-            dummy = data[i, j, :, :]
+            dummy = data[j, :, :]
             mean_intensity[i, j] = np.mean(dummy[idx_big])
 
             # FORMA 1 - con anillo
@@ -1185,12 +1191,12 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0):
             # data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * float((cf[0] + 50)/100.)#0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
             # print('new',factor[i,j]*float((cf[0] + 50)/100.))
 
-            data[i, j, :, :] = data[i, j, :, :] - reflection * factor[i, j] / 100. * ints_fit_pars[i][0] * \
+            data[j, :, :] = data[j, :, :] - reflection * factor[i, j] / 100. * ints_fit_pars[i][0] * \
                                mean_intensity[i, j] / mean_intensity_reference
             # data[i,j,:,:] = data[i,j,:,:] - reflection * factorr[j] / 100. * ints_fit_pars[0][0]
             if verbose and only_one_vorbose:
                 l = ints_fit_pars[i][0]
-                plib.show_two(datap[i, j, :, :], data[i, j, :, :], vmin=[0, 0], vmax=[l * 0.01, l * 0.01], block=True,
+                plib.show_two(datap[i, j, :, :], data[j, :, :], vmin=[0, 0], vmax=[l * 0.01, l * 0.01], block=True,
                               pause=0.1, title=['Before', 'After'], xlabel='Pixel', ylabel='Pixel')
                 plt.plot(datap[0, 0, 0:200, 200])
                 plt.plot(data[0, 0, 0:200, 200])
@@ -1201,7 +1207,17 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0):
                 plt.ylim([0, l * 0.01])
                 plt.show()
 
-            only_one_vorbose = 0
+            return data
+
+    # Generate argument list for mapping function
+    n_wave = zd // 4
+    verbose_only = [1] + (n_wave - 1) * [0]
+    arg_list = [(data[i,:].copy(), i, v) for i, v in zip(range(n_wave), verbose_only)]
+
+    if parallel:
+        data = np.array(MP.simultaneous(map_func, arg_list, workers=n_wave))
+    else:
+        data = np.array(map(map_func, arg_list))
 
     if 'CAL_GHST' in header:  # Check for existence
         header['CAL_GHST'] = version
