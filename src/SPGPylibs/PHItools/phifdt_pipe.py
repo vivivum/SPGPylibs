@@ -93,7 +93,9 @@ def phifdt_pipe(json_input = None,
     pol_c_file: str = None,
     do2d = 0, outfile = None,
     extra_offset: int = 0,
-    scattering_veil: float = 0) -> int: 
+    scattering_veil: float = 0,
+    parallel: bool = False
+    ) -> int: 
     
     '''
     Parameters
@@ -302,6 +304,7 @@ def phifdt_pipe(json_input = None,
         realign = CONFIG['realign']
         ind_wave = CONFIG['ind_wave']
         nlevel = CONFIG['nlevel']
+        parallel = CONFIG['parallel']
         try: 
             fringe_threshold = CONFIG['fringe_threshold']
         except:
@@ -790,7 +793,7 @@ def phifdt_pipe(json_input = None,
     #-----------------
 
     if correct_ghost:
-        data,header = phi_correct_ghost(data,header,radius,verbose = verbose,extra_offset = extra_offset)
+        data,header = phi_correct_ghost(data,header,radius,verbose = verbose,extra_offset = extra_offset, parallel=parallel)
 
     #-----------------
     # REALIGN DATA BEFORE DEMODULATION
