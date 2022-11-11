@@ -157,5 +157,9 @@ SPGPylibs/PHItools/cmilos_testdata/
 *.x
 dummy*
 
+# CMILOS executables
 SPGPylibs/PHItools/cmilos/lib/milos
 SPGPylibs/PHItools/cmilos/milos.*
+
+# Scratch files
+scratch.ipynb
