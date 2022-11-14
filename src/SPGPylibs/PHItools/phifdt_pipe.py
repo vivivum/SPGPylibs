@@ -59,7 +59,9 @@ SIGMA_MEDIAN_FILTER = 30.
 PLT_RNG = 5
 PERCENT_OF_DISK_FOR_MASKI = 0.8  # 80% of the disk
 
-def phifdt_pipe(json_input = None, 
+
+def phifdt_pipe(
+    json_input = None, 
     data_f: str = None,
     dark_f: str = None,
     flat_f: str = None,
@@ -277,7 +279,11 @@ def phifdt_pipe(json_input = None,
 
         verbose = CONFIG['verbose']
         input_data_dir = CONFIG['input_data_dir']
-        data_f = CONFIG['data_f']
+        
+        # If data_f is given as separate argument, besides the JSON file, then use the argument.
+        if data_f is None:
+            data_f = CONFIG['data_f']
+        
         shrink_mask = CONFIG['shrink_mask']
         center_method = CONFIG['center_method'] 
         hough_params = CONFIG['hough_params']
@@ -323,7 +329,7 @@ def phifdt_pipe(json_input = None,
 
     #check all input files exist
 
-    data_filename = input_data_dir + data_f
+    data_filename = os.path.join(input_data_dir, data_f)
 
     if os.path.isfile(data_filename):
         printc("Data file exist",bcolors.OKGREEN)
