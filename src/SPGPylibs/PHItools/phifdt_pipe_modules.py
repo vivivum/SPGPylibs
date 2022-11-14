@@ -35,10 +35,11 @@ import os
 import random
 import statistics
 from sys import exit
+import time
 
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, map_coordinates
 
 from ..GENtools import plot_lib as plib
 from ..GENtools.processing import MP # for multi-processing
@@ -180,6 +181,82 @@ def interpolateImages(image1, image2, dist1I, distI2):
     ''' interpolate 2D images -
     '''
     return (image1 * distI2 + image2 * dist1I) / (dist1I + distI2)
+
+
+def distortion_correction_model(x_u, y_u, pars=None):
+    if pars is None:
+        pars = (1057, 1113, 1.9e-08)
+    x_c, y_c, k = pars
+    r_u = np.sqrt((x_u - x_c)**2 + (y_u - y_c)**2)
+    x_d = x_c + (x_u - x_c) * (1 - k * r_u**2)
+    y_d = y_c + (y_u - y_c) * (1 - k * r_u**2)
+    return x_d, y_d
+
+
+def correct_distortion_single(im, pars=None):
+    nx, ny = im.shape
+    x = np.arange(nx)
+    y = np.arange(ny)
+    X, Y = np.meshgrid(x, y)
+    x_d, y_d = distortion_correction_model(X, Y, pars=pars)
+    corrected_im = map_coordinates(im, [y_d, x_d], order=1)
+    return corrected_im
+
+
+def phi_correct_distortion(data, header, pars=None, parallel=False, verbose=False):
+    """Correct distortion
+
+    Correct the distortion of a set of images, based on the `distortion_correction_model`.
+
+    Args:
+        data: set of images with dimensions (waves, stokes, nx, ny)
+        header: data header
+        pars: distortion parameters; if `None`, then the nominal parameters are used
+        verbose: verbosity flag
+
+    Returns:
+        Distortion corrected set of images with the same dimensions as `data`
+    """
+
+    t0 = time.time()
+
+    global map_func  # make map_func visible to MP
+    
+    def map_func(im):
+        return correct_distortion_single(im, pars=pars)
+
+    # Generate argument list for mapping function
+    if len(data.shape) == 4:
+        data = list(np.reshape(data, (data.shape[0] * data.shape[1], data.shape[2], data.shape[3])))
+    elif len(data.shape) == 3:
+        data = list(data)
+    elif len(data.shape) == 2:
+        data = [data]
+    else:
+        raise TypeError('data must have at least 2 dimensions')
+
+    if parallel:
+        n_workers = min(6, os.cpu_count())
+        # TODO: replace by values defined in JSON config file
+
+        if verbose:
+            print(f'Multi-process with {n_workers} cores')
+        data = list(MP.simultaneous(map_func, data, workers=n_workers))
+    else:
+        data = list(map(map_func, data))
+
+    if len(data) == 1:
+        data = data[0]
+    else:
+        data = np.array(data)
+
+    if verbose:
+        dt = time.time() - t0
+        print(f'Time spent in distortion correction: {dt: .3f}s')
+
+    # TODO: add keywords to header, documenting the correction
+
+    return data
 
 
 def phi_correct_prefilter(prefilter_fits, header, data, voltagesData, verbose=False):
@@ -1308,8 +1385,6 @@ def phi_correct_ghost_dm(data, header, rad, verbose=False):
     # plt.axvline(factor[0,1]*ints_fit_pars[0][0] / 100., lw=2, color='green', alpha=0.4)
     plt.axvline(factor[0, 1], lw=2, color='green', alpha=0.4)
     plt.show()
-
-    stop
 
     # LOOP in wavelengths!
     for i in range(zd // 4):
