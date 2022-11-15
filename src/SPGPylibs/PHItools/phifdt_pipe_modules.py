@@ -183,9 +183,7 @@ def interpolateImages(image1, image2, dist1I, distI2):
     return (image1 * distI2 + image2 * dist1I) / (dist1I + distI2)
 
 
-def distortion_correction_model(x_u, y_u, pars=None):
-    if pars is None:
-        pars = (1057, 1113, 1.9e-08)
+def distortion_correction_model(x_u, y_u, pars):
     x_c, y_c, k = pars
     r_u = np.sqrt((x_u - x_c)**2 + (y_u - y_c)**2)
     x_d = x_c + (x_u - x_c) * (1 - k * r_u**2)
@@ -193,12 +191,12 @@ def distortion_correction_model(x_u, y_u, pars=None):
     return x_d, y_d
 
 
-def correct_distortion_single(im, pars=None):
+def correct_distortion_single(im, pars):
     nx, ny = im.shape
     x = np.arange(nx)
     y = np.arange(ny)
     X, Y = np.meshgrid(x, y)
-    x_d, y_d = distortion_correction_model(X, Y, pars=pars)
+    x_d, y_d = distortion_correction_model(X, Y, pars)
     corrected_im = map_coordinates(im, [y_d, x_d], order=1)
     return corrected_im
 
@@ -218,15 +216,22 @@ def phi_correct_distortion(data, header, pars=None, parallel=False, verbose=Fals
         Distortion corrected set of images with the same dimensions as `data`
     """
 
+    printc('-->>>>>>> Correcting distortion', color=bcolors.OKGREEN)
+
     t0 = time.time()
 
+    if pars is None:
+        pars = (1057, 1113, 1.9e-08)
+
     global map_func  # make map_func visible to MP
-    
+
     def map_func(im):
-        return correct_distortion_single(im, pars=pars)
+        return correct_distortion_single(im, pars)
 
     # Generate argument list for mapping function
+    original_shape = None
     if len(data.shape) == 4:
+        original_shape = data.shape
         data = list(np.reshape(data, (data.shape[0] * data.shape[1], data.shape[2], data.shape[3])))
     elif len(data.shape) == 3:
         data = list(data)
@@ -250,13 +255,22 @@ def phi_correct_distortion(data, header, pars=None, parallel=False, verbose=Fals
     else:
         data = np.array(data)
 
+    # Restore original data shape
+    if original_shape is not None:
+        data = np.reshape(data, original_shape)
+
     if verbose:
         dt = time.time() - t0
         print(f'Time spent in distortion correction: {dt: .3f}s')
 
-    # TODO: add keywords to header, documenting the correction
+    # Add or update header keyword
+    val = '({:.1f}, {:.1f}, {:.1e})'.format(pars[0], pars[1], pars[2])
+    if 'CAL_DIS' in header:  # Check for existence
+        header['CAL_DIS'] = val
+    else:
+        header.set('CAL_DIS', val, 'Distortion parameters applied (x, y, k)', after='CAL_DARK')
 
-    return data
+    return data, header
 
 
 def phi_correct_prefilter(prefilter_fits, header, data, voltagesData, verbose=False):

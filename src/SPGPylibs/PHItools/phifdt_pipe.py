@@ -44,7 +44,7 @@ from .phi_rte import *
 #from .phi_utils import newton,azimutal_average,limb_darkening,genera_2d,find_string
 from .phifdt_pipe_modules import phi_correct_dark,phi_correct_prefilter,phi_apply_demodulation,\
     crosstalk_ItoQUV,cross_talk_QUV,crosstalk_ItoQUV2d,phi_correct_ghost,phi_correct_fringes,\
-    generate_level2,check_pmp_temp,zero_level
+    generate_level2,check_pmp_temp,zero_level, phi_correct_distortion
 
 from ..GENtools import plot_lib as plib
 # import SPGPylibs.GENtools.cog as cog
@@ -299,6 +299,7 @@ def phifdt_pipe(
         prefilter = CONFIG['prefilter']
         output_dir = CONFIG['output_dir']
         rte = CONFIG['rte']
+        correct_distortion = CONFIG['correct_distortion']
         correct_fringes = CONFIG['correct_fringes']
         correct_ghost = CONFIG['correct_ghost']
         putmediantozero = CONFIG['putmediantozero']
@@ -538,6 +539,15 @@ def phifdt_pipe(
         data,header  = phi_correct_dark(dark_f,data,header,data_scale,verbose = verbose)
     else:
         printc('-->>>>>>> No darks mode                    ',color=bcolors.WARNING)
+
+    #-----------------
+    # CORRECT DISTORTION
+    #-----------------
+
+    if correct_distortion:
+        data, header  = phi_correct_distortion(data, header, parallel=parallel, verbose=verbose)
+    else:
+        printc('-->>>>>>> No distortion correction', color=bcolors.WARNING)
 
     #-----------------
     # FIND DATA CENTER 
