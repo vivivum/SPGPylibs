@@ -472,7 +472,7 @@ def simple_shift(xs, shift=0, fill_value=0):
         e = xs
     return e
 
-def find_center(im,sjump = 10,njumps = 50,threshold = 0.9):
+def find_center(im,sjump = 10,njumps = 50,threshold = 0.9, verbose=False):
     ys,xs = im.shape
     jumps = np.linspace(-sjump*njumps//2,sjump*njumps//2,njumps-1)
     rf = np.array([],dtype=float)
@@ -519,7 +519,8 @@ def find_center(im,sjump = 10,njumps = 50,threshold = 0.9):
     xc_m = np.mean(xc[np.where((xc < (np.median(xc)+1)) & (xc > (np.median(xc)-1)))])
     yc_m = np.mean(yc[np.where((yc < (np.median(yc)+1)) & (yc > (np.median(yc)-1)))])
 
-    print(xc_m,yc_m,rf_m)
+    if verbose:
+        print(xc_m,yc_m,rf_m)
 
     return xc_m,yc_m,rf_m
 
