@@ -220,13 +220,15 @@ def phi_correct_distortion(data, header, pars=None, parallel=False, verbose=Fals
 
     t0 = time.time()
 
+    # Nominal parameters
     if pars is None:
-        pars = (1057, 1113, 1.9e-08)
+        pars = (1064.4, 948.2, 1.9e-08)
 
-    global map_func  # make map_func visible to MP
+    global distortion_map_func  # make distortion_map_func visible to MP
 
-    def map_func(im):
-        return correct_distortion_single(im, pars)
+    def distortion_map_func(arg_list):
+        image_no, im = arg_list
+        return image_no, correct_distortion_single(im, pars)
 
     # Generate argument list for mapping function
     original_shape = None
@@ -240,15 +242,25 @@ def phi_correct_distortion(data, header, pars=None, parallel=False, verbose=Fals
     else:
         raise TypeError('data must have at least 2 dimensions')
 
+    # DEBUG
+    # import pdb; pdb.set_trace()
+    
+    args_list = [(i, data[i]) for i in range(len(data))]
+
     if parallel:
         n_workers = min(6, os.cpu_count())
         # TODO: replace by values defined in JSON config file
-
         if verbose:
             print(f'Multi-process with {n_workers} cores')
-        data = list(MP.simultaneous(map_func, data, workers=n_workers))
+        results = list(MP.simultaneous(distortion_map_func, args_list, workers=n_workers))
     else:
-        data = list(map(map_func, data))
+        results = list(map(distortion_map_func, args_list))
+
+    # sort data according to image no.
+    image_no = [r[0] for r in results]
+    sorted_indices = np.argsort(image_no)
+    data = [r[1] for r in results]
+    data = [data[idx] for idx in sorted_indices]
 
     if len(data) == 1:
         data = data[0]
@@ -1097,9 +1109,9 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel
     mean_intensity = np.zeros((6, 4))
 
     # LOOP in wavelengths!
-    global map_func  # make the function accessible for MP
+    global ghost_map_func  # make the function accessible for MP
 
-    def map_func(arg_list):
+    def ghost_map_func(arg_list):
         data, i, only_one_vorbose = arg_list  # unpack argument list
 
         # STEP --->>> average data in polarization for fitting the limb
@@ -1285,18 +1297,18 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel
             data[j, :, :] = data[j, :, :] - reflection * factor[i, j] / 100. * ints_fit_pars[i][0] * \
                                mean_intensity[i, j] / mean_intensity_reference
             # data[i,j,:,:] = data[i,j,:,:] - reflection * factorr[j] / 100. * ints_fit_pars[0][0]
-            if verbose and only_one_vorbose:
-                l = ints_fit_pars[i][0]
-                plib.show_two(datap[i, j, :, :], data[j, :, :], vmin=[0, 0], vmax=[l * 0.01, l * 0.01], block=True,
-                              pause=0.1, title=['Before', 'After'], xlabel='Pixel', ylabel='Pixel')
-                plt.plot(datap[0, 0, 0:200, 200])
-                plt.plot(data[0, 0, 0:200, 200])
-                plt.ylim([0, l * 0.01])
-                plt.show()
-                plt.plot(datap[0, 0, 200, 0:200])
-                plt.plot(data[0, 0, 200, 0:200])
-                plt.ylim([0, l * 0.01])
-                plt.show()
+            # if verbose and only_one_vorbose:
+            #     l = ints_fit_pars[i][0]
+            #     plib.show_two(datap[i, j, :, :], data[j, :, :], vmin=[0, 0], vmax=[l * 0.01, l * 0.01], block=True,
+            #                   pause=0.1, title=['Before', 'After'], xlabel='Pixel', ylabel='Pixel')
+            #     plt.plot(datap[0, 0, 0:200, 200])
+            #     plt.plot(data[0, 0, 0:200, 200])
+            #     plt.ylim([0, l * 0.01])
+            #     plt.show()
+            #     plt.plot(datap[0, 0, 200, 0:200])
+            #     plt.plot(data[0, 0, 200, 0:200])
+            #     plt.ylim([0, l * 0.01])
+            #     plt.show()
 
             return data
 
@@ -1306,9 +1318,9 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel
     arg_list = [(data[i,:].copy(), i, v) for i, v in zip(range(n_wave), verbose_only)]
 
     if parallel:
-        data = np.array(MP.simultaneous(map_func, arg_list, workers=n_wave))
+        data = np.array(MP.simultaneous(ghost_map_func, arg_list, workers=n_wave))
     else:
-        data = np.array(map(map_func, arg_list))
+        data = np.array(map(ghost_map_func, arg_list))
 
     if 'CAL_GHST' in header:  # Check for existence
         header['CAL_GHST'] = version
