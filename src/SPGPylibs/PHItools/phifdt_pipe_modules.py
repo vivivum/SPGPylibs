@@ -242,9 +242,6 @@ def phi_correct_distortion(data, header, pars=None, parallel=False, verbose=Fals
     else:
         raise TypeError('data must have at least 2 dimensions')
 
-    # DEBUG
-    # import pdb; pdb.set_trace()
-    
     args_list = [(i, data[i]) for i in range(len(data))]
 
     if parallel:
