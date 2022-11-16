@@ -30,7 +30,8 @@ from ..GENtools import *
 from .phi_fits import *
 from .phi_reg import *
 from .phi_utils import *
-from .phifdt_pipe_modules import phi_correct_dark, phi_correct_ghost_single, phi_correct_prefilter, phi_correct_ghost
+from .phifdt_pipe_modules import phi_correct_dark, phi_correct_ghost_single,\
+    phi_correct_prefilter, phi_correct_ghost, phi_correct_distortion
 
 SIGMA_NORMA = 5
 
@@ -1253,11 +1254,14 @@ def fdt_flat(files, wavelength, npol, method='kll', dark=None, r_shifts=0, shift
     return gain, norma
 
 
-def fdt_flat_preprocessing(file: str = None, dark_f: str = None, verbose: bool = True, correct_ghost: bool = False,
-                           correct_prefilter: bool = False,
-                           prefilter_fits: str = '0000990710_noMeta.fits',
-                           correct_distortion: bool = False,
-                           version='01'):
+def fdt_flat_preprocessing(
+    file: str = None, dark_f: str = None, verbose: bool = True, parallel: bool = False,
+    correct_ghost: bool = False,
+    correct_prefilter: bool = False,
+    prefilter_fits: str = '0000990710_noMeta.fits',
+    correct_distortion: bool = False,
+    version='01'
+):
     # TODO: This preprocessing should be done with the main phifdt_flat.py. So far it is here because of lack of time.
 
     if os.path.isfile(file):
@@ -1358,10 +1362,8 @@ def fdt_flat_preprocessing(file: str = None, dark_f: str = None, verbose: bool =
     # CORRECT DISTORTION
     # ------------------
 
-    # TODO: AF: Implement distortion correction here
-
     if correct_distortion:
-        printc('Distortion correction TBD', color=bcolors.YELLOW)
+        data, header = phi_correct_distortion(data, header, parallel=parallel, verbose=verbose)
 
     # -----------------
     # FIND DATA CENTER 
@@ -1419,7 +1421,7 @@ def fdt_flat_preprocessing(file: str = None, dark_f: str = None, verbose: bool =
                       int(cy)])
         # El vector es [0,1,2,...] == [x,y,z,...] == [cx,cy,cz,...] Pero esto ultimo esta al reves
         radius = int(radius)
-        data, header = phi_correct_ghost(data, header, radius, verbose=verbose)
+        data, header = phi_correct_ghost(data, header, radius, verbose=verbose, parallel=parallel)
 
     printc('---------------------------------------------------------', color=bcolors.OKGREEN)
 
