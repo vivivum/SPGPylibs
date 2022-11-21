@@ -1307,7 +1307,7 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel
             #     plt.ylim([0, l * 0.01])
             #     plt.show()
 
-            return data
+            return data, i
 
     # Generate argument list for mapping function
     n_wave = zd // 4
@@ -1315,9 +1315,21 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel
     arg_list = [(data[i,:].copy(), i, v) for i, v in zip(range(n_wave), verbose_only)]
 
     if parallel:
-        data = np.array(MP.simultaneous(ghost_map_func, arg_list, workers=n_wave))
+        if verbose:
+            print(f'Multi-process with {n_wave} cores')
+        results = list(MP.simultaneous(ghost_map_func, arg_list, workers=n_wave))
     else:
-        data = np.array(map(ghost_map_func, arg_list))
+        results = list(map(ghost_map_func, arg_list))
+
+    # DEBUG
+    # import pdb; pdb.set_trace()
+
+    # Sort result according to wavelength
+    wave = [r[1] for r in results]
+    sorted_index = np.argsort(wave)
+    data = [r[0] for r in results]
+    data = [data[i] for i in sorted_index]
+    data = np.array(data)
 
     if 'CAL_GHST' in header:  # Check for existence
         header['CAL_GHST'] = version
