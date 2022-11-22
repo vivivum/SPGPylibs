@@ -1106,13 +1106,10 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel
     mean_intensity = np.zeros((6, 4))
 
     # LOOP in wavelengths!
-    global ghost_map_func  # make the function accessible for MP
-
-    def ghost_map_func(arg_list):
-        data, i, only_one_vorbose = arg_list  # unpack argument list
+    for i in range(zd // 4):
 
         # STEP --->>> average data in polarization for fitting the limb
-        dummy_data = np.mean(data, axis=0)
+        dummy_data = np.mean(data[i, :, :, :], axis=0)
 
         # STEP --->>> Find center of average data
         centers[1, i], centers[0, i], radius[i] = find_center(dummy_data)  # cy,cx....
@@ -1219,7 +1216,7 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel
         # Loop over polarization states
         for j in range(4):
 
-            dummy = data[j, :, :]
+            dummy = data[i, j, :, :]
             mean_intensity[i, j] = np.mean(dummy[idx_big])
 
             # FORMA 1 - con anillo
@@ -1291,45 +1288,23 @@ def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel
             # data[i,j,:,:] = data[i,j,:,:] - reflection * factor[i,j] / 100. * ints_fit_pars[i][0]  * float((cf[0] + 50)/100.)#0.9 # * mean_intensity[i,j] / mean_intensity[i,0]
             # print('new',factor[i,j]*float((cf[0] + 50)/100.))
 
-            data[j, :, :] = data[j, :, :] - reflection * factor[i, j] / 100. * ints_fit_pars[i][0] * \
+            data[i, j, :, :] = data[i, j, :, :] - reflection * factor[i, j] / 100. * ints_fit_pars[i][0] * \
                                mean_intensity[i, j] / mean_intensity_reference
             # data[i,j,:,:] = data[i,j,:,:] - reflection * factorr[j] / 100. * ints_fit_pars[0][0]
-            # if verbose and only_one_vorbose:
-            #     l = ints_fit_pars[i][0]
-            #     plib.show_two(datap[i, j, :, :], data[j, :, :], vmin=[0, 0], vmax=[l * 0.01, l * 0.01], block=True,
-            #                   pause=0.1, title=['Before', 'After'], xlabel='Pixel', ylabel='Pixel')
-            #     plt.plot(datap[0, 0, 0:200, 200])
-            #     plt.plot(data[0, 0, 0:200, 200])
-            #     plt.ylim([0, l * 0.01])
-            #     plt.show()
-            #     plt.plot(datap[0, 0, 200, 0:200])
-            #     plt.plot(data[0, 0, 200, 0:200])
-            #     plt.ylim([0, l * 0.01])
-            #     plt.show()
+            if verbose and only_one_vorbose:
+                l = ints_fit_pars[i][0]
+                plib.show_two(datap[i, j, :, :], data[i, j, :, :], vmin=[0, 0], vmax=[l * 0.01, l * 0.01], block=True,
+                              pause=0.1, title=['Before', 'After'], xlabel='Pixel', ylabel='Pixel')
+                plt.plot(datap[0, 0, 0:200, 200])
+                plt.plot(data[0, 0, 0:200, 200])
+                plt.ylim([0, l * 0.01])
+                plt.show()
+                plt.plot(datap[0, 0, 200, 0:200])
+                plt.plot(data[0, 0, 200, 0:200])
+                plt.ylim([0, l * 0.01])
+                plt.show()
 
-            return data, i
-
-    # Generate argument list for mapping function
-    n_wave = zd // 4
-    verbose_only = [1] + (n_wave - 1) * [0]
-    arg_list = [(data[i,:].copy(), i, v) for i, v in zip(range(n_wave), verbose_only)]
-
-    if parallel:
-        if verbose:
-            print(f'Multi-process with {n_wave} cores')
-        results = list(MP.simultaneous(ghost_map_func, arg_list, workers=n_wave))
-    else:
-        results = list(map(ghost_map_func, arg_list))
-
-    # DEBUG
-    # import pdb; pdb.set_trace()
-
-    # Sort result according to wavelength
-    wave = [r[1] for r in results]
-    sorted_index = np.argsort(wave)
-    data = [r[0] for r in results]
-    data = [data[i] for i in sorted_index]
-    data = np.array(data)
+            only_one_vorbose = 0
 
     if 'CAL_GHST' in header:  # Check for existence
         header['CAL_GHST'] = version
