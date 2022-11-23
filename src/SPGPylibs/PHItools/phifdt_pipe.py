@@ -809,7 +809,7 @@ def phifdt_pipe(
     #-----------------
 
     if correct_ghost:
-        data,header = phi_correct_ghost(data,header,radius,verbose = verbose,extra_offset = extra_offset, parallel=parallel)
+        data,header = phi_correct_ghost(data,header,radius,verbose = verbose,extra_offset = extra_offset)
 
     #-----------------
     # REALIGN DATA BEFORE DEMODULATION

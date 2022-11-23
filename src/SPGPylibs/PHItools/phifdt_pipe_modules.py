@@ -1041,7 +1041,7 @@ def phi_correct_ghost_single(data, header, rad, verbose=False, center=0):
     return data, header
 
 
-def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0, parallel=False):
+def phi_correct_ghost(data, header, rad, verbose=False, extra_offset=0):
     '''
     Startup version on Jun 2021
     '''
