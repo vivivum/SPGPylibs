@@ -1260,6 +1260,7 @@ def fdt_flat_preprocessing(
     correct_prefilter: bool = False,
     prefilter_fits: str = '0000990710_noMeta.fits',
     correct_distortion: bool = False,
+    center_method: str = 'circlefit', 
     version='01'
 ):
     # TODO: This preprocessing should be done with the main phifdt_flat.py. So far it is here because of lack of time.
@@ -1365,69 +1366,65 @@ def fdt_flat_preprocessing(
     if correct_distortion:
         data, header = phi_correct_distortion(data, header, parallel=parallel, verbose=verbose)
 
-    # -----------------
-    # FIND DATA CENTER 
-    # -----------------
-    # TODO: We can just save this information into the header and we are done!!!!
+    # ----------------------------------------
+    # FIND SOLAR DISK CENTER AND UPDATE HEADER
+    # ----------------------------------------
 
-    # printc('-->>>>>>> finding the center of the solar disk (needed for masking) ',color=bcolors.OKGREEN)
-    # try:
-    #     if center_method == 'Hough':
-    #         inner_radius,outer_radius,steps = hough_params
-    #         c, radius,threshold = find_circle_hough(data[0,0,:,:],inner_radius,outer_radius,steps,threshold = 0.01,normalize=False,verbose=False)
-    #         #c = np.roll(c,1)
-    #         cx = c[0]
-    #         cy = c[1]
-    #         #TBE PUT IN CORRECT UNITS
-    #     elif center_method  == 'circlefit':
-    #         cy,cx,radius=find_center(data[0,0,:,:],sjump = 4,njumps = 100,threshold = 0.8)  #OJO Cy... Cx
-    #         c = np.array([int(cx),int(cy)])   #El vector es [0,1,2,...] == [x,y,z,...] == [cx,cy,cz,...] Pero esto ultimo esta al reves
-    #         radius = int(radius)
-    #     elif center_method == None:
-    #         #get from header
-    #         cx = header['CRPIX1']
-    #         cy = header['CRPIX2']
-    #         c = np.array([int(cx),int(cy)])   #El vector es [0,1,2,...] == [x,y,z,...] == [cx,cy,cz,...] Pero esto ultimo esta al reves
-    #         radius = header['RSUN_ARC']/header['CDELT1']
-    #     else:  
-    #         raise ValueError("ERROR in center determination method - check input 'circlefit','Hough',null/None") 
-    # except ValueError as err:
-    #     print(err.args)
-    #     return 0
+    printc('-->>>>>>> finding the center of the solar disk (needed for masking) ',color=bcolors.OKGREEN)
+    if center_method == 'Hough':
+        printc('        Hough center method not implemented yet! Setting center_method=None for now.', color=bcolors.FAIL)
+        # inner_radius,outer_radius,steps = hough_params
+        # c, radius,threshold = find_circle_hough(data[0,0,:,:],inner_radius,outer_radius,steps,threshold = 0.01,normalize=False,verbose=False)
+        # #c = np.roll(c,1)
+        # cx = c[0]
+        # cy = c[1]
+        # #TBE PUT IN CORRECT UNITS
+    elif center_method  == 'circlefit':
+        cy,cx,radius=find_center(data[0,0,:,:],sjump = 4,njumps = 100,threshold = 0.8)  #OJO Cy... Cx
+        c = np.array([int(cx),int(cy)])   #El vector es [0,1,2,...] == [x,y,z,...] == [cx,cy,cz,...] Pero esto ultimo esta al reves
+        radius = int(radius)
+    elif center_method is None:
+        pass
+    else:  
+        raise ValueError("ERROR in center determination method - check input 'circlefit', 'Hough', None") 
 
-    # #Uptade header with new centers
-    # if center_method == 'Hough' or center_method  == 'circlefit':
-    #     printc('          Uptade header with new center:',color=bcolors.OKBLUE)
-    #     printc('          OLD center:',color=bcolors.OKBLUE)
-    #     printc('                  at: CRPIX1[x]=',header['CRPIX1'],' CRPIX2[y]=',header['CRPIX2'],' radius=',radius,color=bcolors.OKBLUE)
-    #     header['history'] = ' CRPIX 1 and CRPIX2 uptated from ' + str(header['CRPIX1'])+ ' and ' + str(header['CRPIX2'])
-    #     header['CRPIX1'] = (round(cx, 2))
-    #     header['CRPIX2'] = (round(cy, 2))
-    #     printc('          NEW center:',color=bcolors.OKBLUE)
-    #     printc('                  at: CRPIX1[x]=',header['CRPIX1'],' CRPIX2[y]=',header['CRPIX2'],' radius=',radius,color=bcolors.OKBLUE)
-    #     printc('ATTENTION: Keywords CRVAL1 and CRVAL2 are NOT updated but should be SET to zero!!!!',color=bcolors.FAIL)
-    # else:
-    #     printc('          Using header image center:',color=bcolors.OKBLUE)
-    #     printc('                  at: CRPIX1[x]=',header['CRPIX1'],' CRPIX2[y]=',header['CRPIX2'],' radius=',radius,color=bcolors.OKBLUE)
-
+    # Update header with new centers
+    if center_method == 'Hough' or center_method  == 'circlefit':
+        printc('          Update header with new solar disk parameters', color=bcolors.OKBLUE)
+        printc('              OLD parameters:', color=bcolors.OKBLUE)
+        printc(f"                  at: CRPIX1[x]={header['CRPIX1']}, CRPIX2[y]={header['CRPIX2']}, RSUN_ARC={header['RSUN_ARC']}", color=bcolors.OKBLUE)
+        
+        header['history'] = f"CRPIX 1, CRPIX2, RSUN_ARC uptated from {header['CRPIX1']}, {header['CRPIX2']}, {header['RSUN_ARC']}"
+        header['CRPIX1'] = (round(cx, 2))
+        header['CRPIX2'] = (round(cy, 2))
+        header['RSUN_ARC'] = (round(radius * header['CDELT1'],4))
+        
+        printc('              NEW parameters:', color=bcolors.OKBLUE)
+        printc(f"                  at: CRPIX1[x]={header['CRPIX1']}, CRPIX2[y]={header['CRPIX2']}, RSUN_ARC={header['RSUN_ARC']}", color=bcolors.OKBLUE)
+        printc('ATTENTION: Keywords CRVAL1 and CRVAL2 are NOT updated but should be SET to zero!!!!', color=bcolors.WARNING)
+    else:
+        printc('          Using header solar disk parameters:', color=bcolors.OKBLUE)
+        printc(f"             at: CRPIX1[x]={header['CRPIX1']}, CRPIX2[y]={header['CRPIX2']}, RSUN_ARC={header['RSUN_ARC']}", color=bcolors.OKBLUE)
+    
     # -----------------
     # GHOST CORRECTION  
     # -----------------
 
     if correct_ghost:
-        # here I am recalculating the correct center of the image. If I use the header it does not work
-        cy, cx, radius = find_center(data[0, 0, :, :], sjump=4, njumps=100, threshold=0.8)  # OJO Cy... Cx
-        c = np.array([int(cx),
-                      int(cy)])
-        # El vector es [0,1,2,...] == [x,y,z,...] == [cx,cy,cz,...] Pero esto ultimo esta al reves
-        radius = int(radius)
-        data, header = phi_correct_ghost(data, header, radius, verbose=verbose, parallel=parallel)
+        radius = header['RSUN_ARC'] / header['CDELT1']
+        # TODO : AF : adapt phi_correct_ghost() such that it also takes radius from the image header!
+
+        # DEBUG
+        # import pdb; pdb.set_trace()
+
+        data, header = phi_correct_ghost(data, header, radius, verbose=verbose)
 
     printc('---------------------------------------------------------', color=bcolors.OKGREEN)
 
     # -----------------
     # SAVE DATA
     # -----------------
+
     # basically replace L1 by L1.5
     outfile = set_level(file, 'L1', 'L1.5')
     outfile = set_level(outfile, 'ilam', 'ilam_offpoint')
