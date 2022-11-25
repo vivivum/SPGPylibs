@@ -191,14 +191,18 @@ def distortion_correction_model(x_u, y_u, pars):
     return x_d, y_d
 
 
-def correct_distortion_single(im, pars):
+def correct_distortion_single(im, pars, get_shifts=False):
     nx, ny = im.shape
     x = np.arange(nx)
     y = np.arange(ny)
     X, Y = np.meshgrid(x, y)
     x_d, y_d = distortion_correction_model(X, Y, pars)
     corrected_im = map_coordinates(im, [y_d, x_d], order=1)
-    return corrected_im
+
+    if get_shifts:
+        return corrected_im, x_d - X, y_d - Y
+    else:
+        return corrected_im
 
 
 def phi_correct_distortion(data, header, pars=None, parallel=False, verbose=False):
