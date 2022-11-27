@@ -7,6 +7,8 @@
 # Description: programs for accesing data and fits files
 #-----------------------------------------------------------------------------
 from .tools import *
+import concurrent.futures
+
 try:
     from .cmilos import pmilos
 except:
@@ -19,7 +21,11 @@ DTYPE_INT = np.intc
 DTYPE_DOUBLE = np.float_
 
 @timeit
-def phi_rte(data: np.ndarray,wave_axis: np.ndarray,rte_mode:str,output_dir:str,cmilos = None,options:list = None):
+def phi_rte(
+    data: np.ndarray, wave_axis: np.ndarray, rte_mode:str, output_dir:str,
+    cmilos = None, options:list = None,
+    parallel=False, num_workers = 10
+):
     ''' For the moment this is just isolated from the main pipeline
     input should be: 
             l,p,x,y = data.shape  -cmilos  (DEFAULT)
@@ -95,9 +101,32 @@ def phi_rte(data: np.ndarray,wave_axis: np.ndarray,rte_mode:str,output_dir:str,c
         # (4, 6, 298, 1176) (pol,wave, y,x)
         # This has to be changed to (y,x,pol,wave) for C
 
-        result =  pmilos(options,data,wave_axis)
+        global phi_rte_map_func
 
-        return np.einsum('ijk->kij',result)                                                                                                                                                                                     
+        def phi_rte_map_func(args):
+            stripe, data = args
+            return stripe, pmilos(options, data, wave_axis)
+
+        ny, nx, npol, nwave = data.shape
+
+        data = np.reshape(data, (num_workers, ny // num_workers, nx, npol, nwave))  # split data spatially into row-wise stripes
+        args_list = [(stripe, data[stripe, :]) for stripe in range(num_workers)]
+
+        if parallel:
+            with concurrent.futures.ProcessPoolExecutor(num_workers) as executor:
+                results = executor.map(phi_rte_map_func, args_list)
+        else:
+            results = map(phi_rte_map_func, args_list)
+
+        stripes = []
+        data = []
+        for result in results:
+            stripes.append(result[0])
+            data.append(result[1])
+        data = np.array(data)
+        data = np.reshape(data, (ny, nx, 12))
+
+        return np.einsum('ijk->kij', data)
 
 			# outputdata[cnt_model] = contador;
 			# outputdata[cnt_model+1] = iter;
