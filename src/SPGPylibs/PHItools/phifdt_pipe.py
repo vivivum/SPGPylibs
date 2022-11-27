@@ -1146,17 +1146,18 @@ def phifdt_pipe(
             data[i,3,:,:] = data[i,3,:,:] - PV#[:,np.newaxis,np.newaxis]
             printc(PQ,PU,PV)
 
-    plib.show_four_row(data[0,0,:,:],data[0,1,:,:],data[0,2,:,:],data[0,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
-    plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
-    plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
-    plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
-    plib.show_four_row(data[4,0,:,:],data[4,1,:,:],data[4,2,:,:],data[4,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
-    plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
-    # ctnd = data[0,1:3,:,:]
-    # for i in range(zd//4):
-    #     data[i,1:3,:,:] = data[i,1:3,:,:] - ctnd
-    # plib.show_four_row(data[0,0,:,:],data[0,1,:,:],data[0,2,:,:],data[0,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
-    print('La vin compae')
+    if verbose == 1:
+        plib.show_four_row(data[0,0,:,:],data[0,1,:,:],data[0,2,:,:],data[0,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        plib.show_four_row(data[1,0,:,:],data[1,1,:,:],data[1,2,:,:],data[1,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        plib.show_four_row(data[2,0,:,:],data[2,1,:,:],data[2,2,:,:],data[2,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        plib.show_four_row(data[3,0,:,:],data[3,1,:,:],data[3,2,:,:],data[3,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        plib.show_four_row(data[4,0,:,:],data[4,1,:,:],data[4,2,:,:],data[4,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        plib.show_four_row(data[5,0,:,:],data[5,1,:,:],data[5,2,:,:],data[5,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        # ctnd = data[0,1:3,:,:]
+        # for i in range(zd//4):
+        #     data[i,1:3,:,:] = data[i,1:3,:,:] - ctnd
+        # plib.show_four_row(data[0,0,:,:],data[0,1,:,:],data[0,2,:,:],data[0,3,:,:],title=['I','Q','U','V'],zoom=3,svmin=[0,-0.004,-0.004,-0.004],svmax=[1.2,0.004,0.004,0.004])
+        print('La vin compae')
 
     if verbose == 1:
         plib.show_hist(data[0,1, maski > 0].flatten(), bins='auto',title=' ',leave='open',color='green')
@@ -1243,46 +1244,47 @@ def phifdt_pipe(
     # Cavity maps
     #-----------------
 
-    fig, maps = plt.subplots(2,3, sharex='col', sharey='row',figsize=(10,6))
-    fig.subplots_adjust(top=0.92,hspace=0.05)
-    fig.suptitle(header['DATE-AVG'], y=0.96, fontsize=14)
+    # fig, maps = plt.subplots(2,3, sharex='col', sharey='row',figsize=(10,6))
+    # fig.subplots_adjust(top=0.92,hspace=0.05)
+    # fig.suptitle(header['DATE-AVG'], y=0.96, fontsize=14)
 
-    im1 = maps[0, 0].imshow((data[0,0,:,:]-data[1,0,:,:])*1000.,interpolation='none')
-    plib.colorbar(im1)
-    maps[0, 0].title.set_text('data[0,0,:,:]-data[1,0,:,:]')
-    maps[0, 0].title.set_size(12)
+    # im1 = maps[0, 0].imshow((data[0,0,:,:]-data[1,0,:,:])*1000.,interpolation='none')
+    # plib.colorbar(im1)
+    # maps[0, 0].title.set_text('data[0,0,:,:]-data[1,0,:,:]')
+    # maps[0, 0].title.set_size(12)
 
-    im1 = maps[0, 1].imshow((data[0,0,:,:]-data[2,0,:,:])*1000.,interpolation='none')
-    plib.colorbar(im1)
-    maps[0, 1].title.set_text('data[0,0,:,:]-data[3,0,:,:]')
-    maps[0, 1].title.set_size(12)
+    # im1 = maps[0, 1].imshow((data[0,0,:,:]-data[2,0,:,:])*1000.,interpolation='none')
+    # plib.colorbar(im1)
+    # maps[0, 1].title.set_text('data[0,0,:,:]-data[3,0,:,:]')
+    # maps[0, 1].title.set_size(12)
 
-    im1 = maps[0, 2].imshow((data[0,0,:,:]-data[3,0,:,:])*1000.,interpolation='none')
-    plib.colorbar(im1)
-    maps[0, 2].title.set_text('data[0,0,:,:]-data[3,0,:,:]')
-    maps[0, 2].title.set_size(12)
+    # im1 = maps[0, 2].imshow((data[0,0,:,:]-data[3,0,:,:])*1000.,interpolation='none')
+    # plib.colorbar(im1)
+    # maps[0, 2].title.set_text('data[0,0,:,:]-data[3,0,:,:]')
+    # maps[0, 2].title.set_size(12)
 
-    im1 = maps[1, 0].imshow((data[3,0,:,:]-data[5,0,:,:])*1000.,interpolation='none')
-    plib.colorbar(im1)
-    maps[1, 0].title.set_text('data[3,0,:,:]-data[5,0,:,:]')
-    maps[1, 0].title.set_size(12)
+    # im1 = maps[1, 0].imshow((data[3,0,:,:]-data[5,0,:,:])*1000.,interpolation='none')
+    # plib.colorbar(im1)
+    # maps[1, 0].title.set_text('data[3,0,:,:]-data[5,0,:,:]')
+    # maps[1, 0].title.set_size(12)
 
-    im1 = maps[1, 1].imshow((data[4,0,:,:]-data[5,0,:,:])*1000.,interpolation='none')
-    plib.colorbar(im1)
-    maps[1, 1].title.set_text('data[4,0,:,:]-data[5,0,:,:]')
-    maps[1, 1].title.set_size(12)
+    # im1 = maps[1, 1].imshow((data[4,0,:,:]-data[5,0,:,:])*1000.,interpolation='none')
+    # plib.colorbar(im1)
+    # maps[1, 1].title.set_text('data[4,0,:,:]-data[5,0,:,:]')
+    # maps[1, 1].title.set_size(12)
 
-    im1 = maps[1, 2].imshow((data[2,0,:,:]-data[3,0,:,:])*1000.,interpolation='none')
-    plib.colorbar(im1)
-    maps[1, 2].title.set_text('data[2,0,:,:]-data[3,0,:,:]')
-    maps[1, 2].title.set_size(12)
+    # im1 = maps[1, 2].imshow((data[2,0,:,:]-data[3,0,:,:])*1000.,interpolation='none')
+    # plib.colorbar(im1)
+    # maps[1, 2].title.set_text('data[2,0,:,:]-data[3,0,:,:]')
+    # maps[1, 2].title.set_size(12)
 
     #ax.imshow(Zm, cmap='gray')
-    writeto = set_level(outfile_L2,'stokes','-cavity-')
-    writeto = set_level(writeto,filetype,FIGUREOUT) 
 
-    plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
-    plt.close()
+    # plt.savefig(output_dir+'pngs/'+writeto,dpi=300)
+    # plt.close()
+
+    # writeto = set_level(outfile_L2,'stokes','-cavity-')
+    # writeto = set_level(writeto,filetype,FIGUREOUT) 
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
