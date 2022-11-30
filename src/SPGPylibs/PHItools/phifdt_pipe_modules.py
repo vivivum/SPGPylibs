@@ -191,7 +191,15 @@ def distortion_correction_model(x_u, y_u, pars):
     return x_d, y_d
 
 
-def correct_distortion_single(im, pars, get_shifts=False):
+def correct_distortion_single(im: np.ndarray, pars: list, get_shifts=False):
+    """Correct distortion of single image
+    
+    Parameters
+    ----------
+    im: image
+    pars: distortion parameters (x, y, k); Note: x -> columns, y -> rows!
+    get_shifts: get shift vectors
+    """
     nx, ny = im.shape
     x = np.arange(nx)
     y = np.arange(ny)
