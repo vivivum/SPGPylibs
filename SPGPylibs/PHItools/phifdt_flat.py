@@ -363,6 +363,10 @@ def do_hough(image, inner_radius, outer_radius, steps, org_centers=None, method=
             image[i], threshold, method=method, verbose=verbose, Otsu=otsu)
         binmask.append(image_dummy)
 
+    #Mask to prevent edges
+    circle_mask, _ = generate_circular_mask([imsize[0] - 1, imsize[1] - 1], 1020, 1020)
+    for i in range(n_images):
+        binmask[i] = binmask[i] * circle_mask
     ############################
     # FIND CENTERS - COARSE SEARCH
     ############################
@@ -659,6 +663,10 @@ def fdt_flat_gen(image, rel_centers, method, radious=0, thrd=0.05, iter=15,
         for i in range(n_images):
             x, y = np.where(image[i] > thrd)
             mask[i][x, y] = 1
+
+    circle_mask, _ = generate_circular_mask([imsize[0] - 1, imsize[1] - 1], 1020, 1020)
+    for i in range(n_images):
+        mask[i] = mask[i] * circle_mask
 
     ############################
     # NORMALIZATION Option 1 
@@ -1048,7 +1056,7 @@ def fdt_flat_gen(image, rel_centers, method, radious=0, thrd=0.05, iter=15,
 def fdt_flat(files, wavelength, npol, method='kll', dark=None, r_shifts=0, shifts=None, verbose=1,
              correct_ghost=0, expand=1, thrd=0., iter=4, normalize=False, disp_method='Hough', c_term=0,
              inner_radius=400, outer_radius=800, steps=20, shifts_file=False, imasize=None, single=False,
-             clv=False):
+             clv=False,threshold=0.05,dhtr = 2):
     """
     fdt_flat _summary_
 
@@ -1165,7 +1173,7 @@ def fdt_flat(files, wavelength, npol, method='kll', dark=None, r_shifts=0, shift
         if disp_method == 'Hough':
             printc('... calculating shifts using Hough ...', color=bcolors.OKGREEN)
 
-            centers, radius = do_hough(image, inner_radius, outer_radius, steps, verbose=False, threshold=0.05)
+            centers, radius = do_hough(image, inner_radius, outer_radius, steps, verbose=verbose, threshold=threshold,dhtr=dhtr)
 
             if shifts_file:
                 _ = write_shifts(shifts_file + '_cnt_w' + str(wavelength) + '_n' + str(npol) + '.txt', centers)

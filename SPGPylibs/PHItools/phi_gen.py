@@ -263,7 +263,7 @@ def FindEdges(xs, threshold, method='simply', dthr=1, Otsu=None, verbose=False):
     # make binary image
     for _ in range(int(dthr)):
         image = np.copy(im_grad)
-        image = image > image.max*threshold
+        image = image > image.max()*threshold
         image.dtype = np.int8
         nonzero = np.array(image.nonzero())
         density = float(nonzero[0].size)/image.size
