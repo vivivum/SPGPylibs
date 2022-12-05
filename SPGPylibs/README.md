@@ -1,4 +1,4 @@
-<div style="width:800px"/>
+<div style="width:800px">
 
 <img src="SPGLOGO-LR.png" align="right" width=100px />
 
