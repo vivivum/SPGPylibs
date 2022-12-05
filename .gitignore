@@ -1,5 +1,7 @@
-*.o
+
 *workspace
+*code-workspace
+
 .DS_Store
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -8,6 +10,12 @@ __pycache__/
 
 # C extensions
 *.so
+*.a
+*.o
+*.img
+*.raw
+*.rec
+*.dss67
 
 # Distribution / packaging
 .Python

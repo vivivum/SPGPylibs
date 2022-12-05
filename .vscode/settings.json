@@ -1,3 +1,8 @@
 {
-    "python.pythonPath": "/Users/orozco/opt/miniconda3/bin/python"
+    "python.pythonPath": "/Users/orozco/opt/miniconda3/bin/python",
+    "files.associations": {
+        "*.ipynb": "python",
+        "__locale": "c"
+    },
+    "python.analysis.typeCheckingMode": "basic"
 }
