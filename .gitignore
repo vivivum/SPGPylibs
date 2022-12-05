@@ -1,8 +1,12 @@
+<<<<<<< HEAD
 
+=======
+>>>>>>> d3ad734cbf8a5309af3848810b5b861abce60a7d
 *workspace
 *code-workspace
 
 .DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -10,12 +14,17 @@ __pycache__/
 
 # C extensions
 *.so
+<<<<<<< HEAD
 *.a
 *.o
 *.img
 *.raw
 *.rec
 *.dss67
+=======
+*.o
+*.a
+>>>>>>> d3ad734cbf8a5309af3848810b5b861abce60a7d
 
 # Distribution / packaging
 .Python
@@ -162,3 +171,10 @@ SPGPylibs/PHItools/cmilos_testdata/
 *.save
 *.x
 dummy*
+
+# CMILOS executables
+SPGPylibs/PHItools/cmilos/lib/milos
+SPGPylibs/PHItools/cmilos/milos.*
+
+# Scratch files
+scratch.ipynb

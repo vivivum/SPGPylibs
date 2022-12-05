@@ -1,0 +1,419 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title>The SOLAR-ORBITER SPICE Kernel Dataset</title>
+</head>
+<body>
+
+<pre>
++-----------------------------------------------------------------------------+
+|  __   __   __      __   __     __   ___     __   ___  __          __   ___  |
+| /__\ /__` '__\    /__` |__) | /  ` |__     /__` |__  |__) \  / | /  ` |__   |
+| \__, .__/ \__/    .__/ |    | \__, |___    .__/ |___ |  \  \/  | \__, |___  |
+|                                                                             |
+| The SOLAR-ORBITER SPICE Kernel Dataset                                      |
++-----------------------------------------------------------------------------+     
+
+   Last update: October 18, 2018
+
+<A NAME="Introduction"></A>
+Introduction
+============
+
+   This document describes the Solar Orbiter SPICE kernel dataset (SKD)
+   containing observation geometry and other ancillary data in the form of
+   SPICE System kernel files for the spacecraft and its instruments and targets.
+   It describes the dataset directory structure, kernels included in the
+   dataset, their naming conventions, and provides pointers to the SPICE
+   software and documentation.
+
+<A NAME="Table of Contents"></A>
+Table of Contents
+=================
+
+   <A HREF="#Introduction">Introduction</A>
+   <A HREF="#Table of Contents">Table of Contents</A>
+   <A HREF="#Overview">Overview</A>
+   <A HREF="#Errata">Errata</A>
+   <A HREF="#Archive Contents">Archive Contents</A>
+   <A HREF="#Kernel Types">Kernel Types</A>
+   <A HREF="#Kernel Details">Kernel Details</A>
+      <A HREF="#SPK Files">SPK Files</A>
+      <A HREF="#PCK Files">PCK Files</A>
+      <A HREF="#IK Files">IK Files</A>
+      <A HREF="#CK Files">CK Files</A>
+      <A HREF="#DSK Files">DSK Files</A>
+      <A HREF="#LSK Files">LSK Files</A>
+      <A HREF="#SCLK Files">SCLK Files</A>
+      <A HREF="#FK Files">FK Files</A>
+      <A HREF="#MK Files">MK Files</A>
+      <A HREF="#ORBNUM Files">ORBNUM Files</A>
+   <A HREF="#SKD Latest Release Notes">SKD Latest Release Notes</A>
+   <A HREF="#SPICE Software and Documentation">SPICE Software and Documentation</A>
+   <A HREF="#Contact Information">Contact Information</A>
+
+
+<A NAME="Overview"></A>
+Overview
+========
+
+   This archive includes the complete set of Solar Orbiter SPICE data files
+   (kernel files), which can be accessed using SPICE software. The
+   SPICE data contain geometric and other ancillary information needed
+   to recover the full value of science instrument data. In particular
+   SPICE kernels provide spacecraft and planetary ephemeris,
+   spacecraft and instrument orientation, instrument mounting
+   alignments, and data needed for relevant time conversions. Data in
+   the SPICE kernel files must be accessed using the software called
+   the SPICE Toolkit produced and distributed by the Navigation and
+   Ancillary Information Facility (NAIF) Node of the Planetary Data
+   System.
+
+   This archive includes data covering from Solar Orbiter launch,
+   through the end time of the latest spacecraft orientation file
+   supplied in the archive. Until the end of the spacecraft lifespan
+   this archive will be accumulating with new data added according to
+   the project archiving plan.
+
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="Errata"></A>
+Errata
+======
+
+   None.
+
+
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="Archive Contents"></A>
+SPICE Kernel Dataset Contents
+=============================
+
+   Files in this archive are organized into a set of subdirectories
+   below the top-level directory. The following diagram shows the
+   structure and content of these directories. The directory names are
+   enclosed in square brackets ([]).
+
+
+   <a href="">[SOLAR-ORBITER]</a>                         Top-level directory
+   |
+   |-<a href="../kernels/">[kernels]</a>                           Directory containing SPICE kernels.
+   | |
+   | |- <a href="../aareadme.txt">aareadme.txt</a>                     SPICE Kernel Dataset top-level readme file.
+   | |
+   | |-<a href="../kernels/ck/">[ck]</a>                              Directory containing CK files.
+   | | |
+   | | |-- *.bc                          Binary CK files.
+   | | +-- *.txt                         CK readme file.
+   | |
+   | |-<a href="../kernels/dsk/">[dsk]</a>                             Directory containing DSK files.
+   | | |
+   | | |-- *.bds                         Binary DSK files.
+   | | |-- *.obj                         Geometry definition file generated from a DSK.
+   | | |-- *.png                         Graphic file from an OBJ file.
+   | | +-- *.txt                         DSK readme file.
+   | |
+   | |-<a href="../kernels/fk/">[fk]</a>                              Directory containing FK files.
+   | | |
+   | | |-- *.tf                          Text FK files.
+   | | +-- *.txt                         FK readme file.
+   | |
+   | |-<a href="../kernels/ik/">[ik]</a>                              Directory containing IK files.
+   | | |
+   | | |-- *.ti                          Text IK files.
+   | | +-- *.txt                         IK readme file.
+   | |
+   | |-<a href="../kernels/lsk/">[lsk]</a>                             Directory containing LSK files.
+   | | |
+   | | |-- *.tls                         Text LSK files.
+   | | +-- *.txt                         LSK readme file.
+   | |
+   | |--<a href="../kernels/mk/">[mk]</a>                             Directory containing MK files.
+   | | |
+   | | |-- *.tm                          Text Meta-kernel files.
+   | | +-- *.txt                         MK readme file.
+   | |
+   | |-<a href="../kernels/pck/">[pck]</a>                             Directory containing PCK files.
+   | | |
+   | | |-- *.tpc                         Text PCK files.
+   | | |-- *.bpc                         Binary PCK files.
+   | | +-- *.txt                         PCK readme file.
+   | |
+   | |-<a href="../kernels/sclk/">[sclk]</a>                            Directory containing SCLK files.
+   | | |
+   | | |-- *.tsc                         Text SCLK files.
+   | | +-- *.txt                         SCLK readme file.
+   | |
+   | +-<a href="../kernels/spk/">[spk]</a>                             Directory containing SPK files.
+   |   |
+   |   |-- *.bsp                         Binary SPK files.
+   |   +-- *.txt                         SPK readme file.
+   |
+   +-<a href="../misc/">[misc]</a>                              Directory containing miscellaneous documents.
+     |
+     |-<a href="../misc/release_notes/">[release_notes]</a>                   Directory containing release notes.
+     |   |
+     |   +-- *.txt                       Release notes files.
+     |
+     |-<a href="../misc/cosmo/">[cosmo]</a>                           Directory containing SPICE-Enhanced
+     |    |                              Cosmographia configuration files.
+     |    |
+     |    |-<a href="../misc/cosmo/config">[config]</a>                     Directory containing configuration files
+     |    |  |                           for the spacecraft(s) and the SPICE kernels used.
+     |    |  |
+     |    |  +-- *.json                  JSON configuration files.
+     |    |
+     |    |-<a href="../misc/cosmo/models">[models]</a>                     Directory containing 3D models for the spacecraft(s).
+     |    |  |
+     |    |  |-- *.3ds                   3D Studio models.
+     |    |  |-- *.cmod                  Celestia models.
+     |    |  +-- *.jpg                   Texture for the models
+     |    |
+     |    |-<a href="../misc/cosmo/observations">[observations]</a>               Directory containing observations.
+     |    |  |
+     |    |  +-- *.json                  JSON observation files.
+     |    |
+     |    |-<a href="../misc/cosmo/scenarios">[scenarios]</a>                  Directory containing scenarios definitions.
+     |    |  |
+     |    |  +-- *.json                  JSON scenario files.
+     |    |
+     |    |-<a href="../misc/cosmo/sensors">[sensors]</a>                    Directory containing sensor configurations.
+     |    |  |
+     |    |  +-- *.json                  JSON sensor files.
+     |    |
+     |    +-<a href="../misc/cosmo/scripts">[scripts]</a>                    Directory containing scripts.
+     |       |
+     |       |-- *.py                    Python files.
+     |       |-- *.csh                   Bash files for Unix/MAC.
+     |       +-- *.bat                   Batch files for Windows.
+     |
+     |-<a href="../misc/deprecated_kernels/">[deprecated_kernels]</a>              Directory that replicates the kernels
+     |                                   directory with deprecated kernels.
+     |
+     |-<a href="../misc/skd">[skd]</a>                             Directory that contains a zipped directory
+     |   |                               with the latest sub-set of the
+     |   |                               SPICE Kernel Dataset from the meta-kernels
+     |   |
+     |   +-- *.zip                       Zipped directory.
+     |
+     +-SOLAR-ORBITER.html                This file.
+
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="Kernel Types"></A>
+Kernel Types
+============
+
+   Different SPICE kernel types are used to store different kinds of
+   ancillary data.
+
+   SPK (Spacecraft Planet Kernel) files contain ephemerides (position
+   and velocity) for spacecraft, planets, satellites, comets and
+   asteroids as well as for moving or fixed spacecraft and instrument
+   structures. SPK files are located under the <a href="../kernels/spk/">kernels/spk</a>
+   directory of this archive.
+ 
+   PCK (Planetary Constants Kernel) files contain certain physical,
+   dynamical and cartographic constants for target bodies, such as size
+   and shape specifications, and orientation of the spin axis and prime
+   meridian. PCK files are located under the <a href="../kernels/pck/">kernels/pck</a>
+   directory of this archive.
+ 
+   IK (Instrument Kernel) files contain instrument parameters relevant
+   for computing an instrument's geometry such as field-of-view
+   definitions, CCD and optical distortion characteristics, and internal
+   timing parameters. IK files are located under the <a href="../kernels/ik/">kernels/ik</a>
+   directory of this archive.
+ 
+   CK (C-matrix Kernel) files contain time varying orientations for
+   spacecraft, spacecraft structures, and articulating science
+   instruments. CK files are located under the <a href="../kernels/ck/">kernels/ck</a>
+   directory of this archive.
+
+   DSK (Digital Shape Kernel) files contain detailed shape models for
+   extended objects. These objects typically are solar system bodies such as
+   planets, dwarf planets, natural satellites, asteroids, and comet nuclei. DSK
+   data can represent the shapes of such objects, as well as local topography,
+   such as that in the vicinity of a rover or a tracking station. DSK data also
+   can represent shapes of artificial objects such as spacecraft components, or
+   represent abstractions such as the subset of a target body's surface that
+   has a property of interest. DSK files are located under the <a href="../kernels/dsk/">kernels/dsk</a>
+   directory of this archive.
+ 
+   LSK (Leapseconds Kernel) files contain the leapseconds and the
+   values of other constants required to perform a transformation
+   between Universal Time Coordinated (UTC) and Ephemeris time (ET),
+   which is also known as Barycentric Dynamical Time (TDB). LSK 
+   files are located under the <a href="../kernels/lsk/">kernels/lsk</a> directory of 
+   this archive.
+ 
+   SCLK (Spacecraft Clock Kernel) files contain on-board clock
+   calibration data required to perform a transformation between
+   Ephemeris time (ET) and spacecraft on-board time (SCLK). SCLK files
+   are located under the <a href="../kernels/sclk/">kernels/sclk</a> directory of this 
+   archive.
+ 
+   FK (Frame definitions Kernel) files contain information required to
+   define reference frames, sources of frame orientation data and
+   connections between these frames and other frames supported within
+   the SPICE system. The science instrument frame definitions provided
+   in the FK files include mounting alignment information for the
+   instruments. FK files are located under the <a href="../kernels/fk/">kernels/fk</a>
+   directory of this archive.
+
+   MK (Meta-Kernel) files list sets of related SPICE kernels that
+   should be used together, providing an easy way to make data from
+   these kernel sets available to a SPICE-based application by loading
+   meta-kernels into the program using the high level SPICE data loader
+   routine FURNSH. MK files are located the <a href="../kernels/mk/">kernels/mk</a>
+   directory of this archive.
+
+   ORBNUM (Orbit Number) files is not a SPICE Kernel but is a SPICE product
+   generated during the mission using the NAIF's ORBNUM utility program for the
+   final merged spacecraft trajectory SPK files of the mission.
+   They contain data that follow the "periapsis-to-periapsis" orbit
+   numbering scheme -- with the orbit number changing at periapsis.
+
+   The information contained in the orbit number files includes:
+
+    - Orbit number ("No".)
+    - Periapsis or descending node UTC time ("Event UTC PERI")
+    - SCLK time ("Event SCLK PERI" )
+    - Apoapsis or ascending UTC time ("OP-Event UTC APO").
+    - Sub-solar geodetic longitude and latitude (SolLon, SolLat)
+    - Sub-spacecraft geodetic longitude and latitude (SC Lon, SC Lat)
+    - Altitude of the vehicle above the primary body (Alt)
+    - Inclination of the vehicle orbit (Inc)
+    - Eccentricity of the orbit plane about the primary body (Ecc)
+    - Longitude of the ascending node of the orbit (LonNode)
+    - Argument of periapsis of the orbit (Arg Per)
+    - Solar distance the time or the orbit event (Sol Dist)
+    - Semimajor axis of the orbit (Semi Axis
+
+   All longitudes and latitudes where computed using the IAU Sun
+   rotation model. ORBNUM files are located under the <a href="../misc/orbnum/">misc/orbnum</a>
+   directory of this archive.
+
+<A NAME="Archived Kernel Details"></A>
+Kernel Details
+==============
+
+   The subsections below provide details, such as file naming
+   conventions and specific details, for each of the kernel types
+   included in this archive.
+
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="SPK Files"></A>
+<div id="spk">
+  <p><iframe src="../kernels/spk/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="PCK Files"></A>
+<div id="pck">
+  <p><iframe src="../kernels/pck/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="IK Files"></A>
+<div id="ik">
+  <p><iframe src="../kernels/ik/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="CK Files"></A>
+<div id="ck">
+  <p><iframe src="../kernels/ck/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="DSK Files"></A>
+<div id="dsk">
+  <p><iframe src="../kernels/dsk/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="LSK Files"></A>
+<div id="lsk">
+  <p><iframe src="../kernels/lsk/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="SCLK Files"></A>
+<div id="sclk">
+  <p><iframe src="../kernels/sclk/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="FK Files"></A>
+<div id="fk">
+  <p><iframe src="../kernels/fk/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="MK Files"></A>
+<div id="mk">
+  <p><iframe src="../kernels/mk/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="ORBNUM Files"></A>
+<div id="orbnum">
+  <p><iframe src="../misc/orbnum/aareadme.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+
+<A NAME="SKD Latest Release Notes"></A>
+SKD Latest Release Notes
+========================
+
+   This section provides the latest release notes of the Solar Orbiter
+   SPICE Kernel Dataset
+
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="SKD Latest Release Notes"></A>
+<div id="skd">
+  <p><iframe src="../misc/release_notes/bc_skd_current.txt" frameborder="1" height="500"
+      width="75%"></iframe></p>
+</div>
+
+
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="SPICE Software and Documentation"></A>
+SPICE Software and Documentation
+================================
+
+   The latest SPICE Toolkit for a variety of computer platforms,
+   additional utility programs, documentation, tutorials, and hands-on
+   lessons are available at the NAIF Node of the PDS:
+
+      <a href="http://naif.jpl.nasa.gov">http://naif.jpl.nasa.gov</a>    
+
+   specifically:
+
+      Toolkit:   <a href="http://naif.jpl.nasa.gov/naif/toolkit.html">http://naif.jpl.nasa.gov/naif/toolkit.html</a>    
+
+      Utilities: <a href="http://naif.jpl.nasa.gov/naif/utilities.html">http://naif.jpl.nasa.gov/naif/utilities.html</a>    
+
+      Tutorials: <a href="http://naif.jpl.nasa.gov/naif/tutorials.html">http://naif.jpl.nasa.gov/naif/tutorials.html</a>
+
+      Lessons:   <a href="http://naif.jpl.nasa.gov/naif/lessons.html">http://naif.jpl.nasa.gov/naif/lessons.html</a>
+
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+<A NAME="Contact Information"></A>
+Contact Information
+===============================
+
+   If you have any questions regarding this directory or its
+   contents, please contact the ESA SPICE Service:
+
+             Marc Costa Sitja
+             (+34) 91-8131-457
+             mcosta@sciops.esa.int, esa_spice@sciops.esa.int
+
+
+End of Solar Orbiter SPICE Kernel Dataset description.
+<p align="right"><a href="#Table of Contents">Back to Table of Contents</a></p>
+</pre>
+
+</body>
+
+</html>
