@@ -1,0 +1,333 @@
+# =============================================================================
+# Project: SoPHI
+# File:    phi_fits.py
+# Author:  David Orozco Suárez (orozco@iaa.es)
+# Contributors:  
+# -----------------------------------------------------------------------------
+# Description: programs for accesing data and fits files
+# -----------------------------------------------------------------------------
+
+import contextlib
+from astropy.io import fits as pyfits
+from astropy.io.fits import getheader
+import numpy as np
+from .phi_utils import find_string
+from os import path, walk
+
+
+def fits_get(file: str, info: bool = False, head: int = 0, get_scaling: bool = False, scale: bool = True)-> any:
+    """
+    Helper function to load FITS data set
+
+    - if only file data is given, return data (16bits) + header: ``d,h = fits_get(file)``
+
+    - if ``info = True`` prints fits info (headers structure)
+
+    - if ``head`` is provided, returns data and selected header
+
+    - if ``scaling = True``, return the file scaling
+
+    The scaling will be a list of two tuple elements
+
+    -- scaling[0] ->  IMGFMT_16_0_S scaling
+        with scaling[0][0] = bool: True if present and scaling[0][1] the actual scaling
+    -- scaling[1] ->  IMGFMT_24_8 scaling
+        with scaling[0][0] = bool: True if present and scaling[0][1] the actual scaling
+
+    :param file: fits file to load
+    :type file: str
+    :param info: True if fits information is returned
+    :type info: bool
+    :param head: header extension to extract
+    :type head: integer
+    :param get_scaling: If True returns the scaling information
+    :type get_scaling: integer
+    :param scale: list of two tuple elements
+    :type scale: tuple
+    :return: data and header or scaling of ``get_scaling = True``
+    :rtype: Return type.
+    """
+    if info == True:
+        try:
+            return pyfits.info(file)
+        except Exception:
+            print("Unable to open fits file: {}", file)
+            raise
+    if get_scaling == True:
+        index = 1
+        scaling = {"Present": [False, True], "scaling": [0, 0]}
+        while True:
+            try:
+                dummy_head = getheader(file, index)
+            except:
+                print("index in get_scaling is out bounds: {}", index)
+                break
+            if dummy_head['EXTNAME'] == 'PHI_FITS_imageSummary':
+                with pyfits.open(file) as hdu_list:
+                    header_data = hdu_list[index].data
+                    # case 1 if that there is only ONE scaling (untouched data)
+                    if len(header_data) == 1:
+                        scaling["Present"][0] = False
+                        scaling["Present"][1] = True
+                        scaling["scaling"][0] = 0.
+                        scaling["scaling"][1] = float(header_data[0][12])
+                        break
+                    # case 2 if that there is more than TWO scaling data
+                    if len(header_data) > 2:
+                        # check the first one from below and if it is IMGFMT_16_0_S store it and continue
+                        if header_data[-1][3] == 'IMGFMT_16_0_S':
+                            scaling["Present"][0] = True
+                            scaling["Present"][1] = True
+                            scaling["scaling"][0] = float(header_data[-1][12])
+                            scaling["scaling"][1] = float(header_data[-3][12])
+                            break
+                        if header_data[-1][3] == 'IMGFMT_24_8':
+                            scaling["Present"][0] = False
+                            scaling["Present"][1] = True
+                            scaling["scaling"][0] = 0.
+                            scaling["scaling"][1] = float(header_data[-1][12])
+                            break
+            index += 1
+        return scaling
+    with pyfits.open(file) as hdu_list:
+        if head != 0:
+            data = hdu_list[head].data
+            header = hdu_list[head].header
+        else:
+            data = hdu_list[head].data.astype(np.dtype('float32'))
+            header = hdu_list[head].header
+
+        if scale:
+            print('-->>>>>>> Scaling data... ')
+            try:
+                head = 9
+                data_ext9 = hdu_list[head].data
+                header_ext9 = hdu_list[head].header
+                IMGformat = data_ext9['PHI_IMG_format'][-1]
+            except:
+                print("PHI_IMG_format not found: Most likely file does not have 9th Image extension")
+                IMGformat = 'IMGFMT_16'
+
+    if scale:
+        if IMGformat != 'IMGFMT_24_8':
+            print('          INPUT IS DIVIDED by 256.   ')
+            data /= 256.
+        else:
+            print("Dataset downloaded as raw: no bit convert scaling needed")
+
+        try:
+            maxRange = data_ext9['PHI_IMG_maxRange']
+            data *= maxRange[0] / maxRange[-1]
+            print("max range ", maxRange[0], maxRange[-1], maxRange[0] / maxRange[-1])
+        except:
+            print("PHI_IMG_maxRange not found: Most likely file does not have 9th Image extension")
+            data *= 81920 / 128
+            print("max range ", 81920, 128, 81920 / 128)
+
+    return data, header
+
+
+def scale_data(data, header):
+    try:
+        IMGformat = header['PHI_IMG_format'][-1]
+    except:
+        print("PHI_IMG_format not found: Most likely file does not have 9th Image extension")
+        IMGformat = 'IMGFMT_16'
+    if IMGformat != 'IMGFMT_24_8':
+        print('          INPUT IS DIVIDED by 256.   ')
+        data /= 256.
+    else:
+        print("Dataset downloaded as raw: no bit convert scaling needed")
+
+    try:
+        maxRange = header['PHI_IMG_maxRange']
+        data *= maxRange[0] / maxRange[-1]
+        print("max range ", maxRange[0], maxRange[-1], maxRange[0] / maxRange[-1])
+    except:
+        print("PHI_IMG_maxRange not found: Most likely file does not have 9th Image extension")
+        data *= 81920 / 128
+        print("max range ", 81920, 128, 81920 / 128)
+
+    return data
+
+
+def fits_get_fpatimes(file, offset=None):
+    '''
+    for the moment provide the time corresponding to first exposure/wavelength 
+    old version below
+    '''
+
+    from datetime import datetime
+    fpa_head = 4
+
+    dummy_head = getheader(file, 0)
+    NAXIS3 = dummy_head['NAXIS3']  # 6 or 24
+    ACCCOLIT = dummy_head['ACCCOLIT']  # Cycles
+
+    dummy_head = getheader(file, fpa_head)
+    if dummy_head['EXTNAME'] != 'PHI_FITS_FPA_settings':
+        print('ERROR .... fpa_head is not number 4')
+        return
+
+    adq_times = np.zeros((NAXIS3), dtype=float)
+
+    with pyfits.open(file) as hdu_list:
+        dat_fpa = hdu_list[fpa_head].data
+
+    init = datetime.strptime(dat_fpa[0][1], '%Y-%m-%dT%H:%M:%S.%f')
+    for i in range(0, NAXIS3 * ACCCOLIT, ACCCOLIT):
+        the_time = datetime.strptime(dat_fpa[i][1], '%Y-%m-%dT%H:%M:%S.%f')
+        adq_times[i // ACCCOLIT] = float((the_time - init).total_seconds())
+        # print(i,i/ACCCOLIT)
+
+    if offset:
+        diff = init - offset
+        print('diff: ', adq_times)
+        print('diff: ', float(diff.total_seconds()))
+        adq_times = adq_times + float(diff.total_seconds())
+
+    return adq_times, init
+
+    fpa_head = 4
+    dummy_head = getheader(file, 0)
+    NAXIS3 = dummy_head['NAXIS3']
+    dummy_head = getheader(file, fpa_head)
+    if dummy_head['EXTNAME'] != 'PHI_FITS_FPA_settings':
+        print('ERROR .... fpa_head is not number 4')
+        return
+    adq_times = np.zeros((NAXIS3), dtype=float)
+    with pyfits.open(file) as hdu_list:
+        dat_fpa = hdu_list[fpa_head].data
+        init = datetime.strptime(dat_fpa[0][1], '%Y-%m-%dT%H:%M:%S.%f')
+        for i in range(NAXIS3):
+            the_time = datetime.strptime(dat_fpa[i][1], '%Y-%m-%dT%H:%M:%S.%f')
+            adq_times[i] = float((the_time - init).total_seconds())
+        if offset:
+            diff = init - offset
+            print('diff: ', adq_times)
+            print('diff: ', float(diff.total_seconds()))
+            adq_times = adq_times + float(diff.total_seconds())
+    return adq_times, init
+
+
+def list_fits(inpath='./', contain=None, remove_dir=False):
+    '''Find all fits in directory.'''
+    # from os import path.isdir,walk
+    assert path.isdir(inpath)
+
+    list_of_files = []
+    for (dirpath, dirnames, filenames) in walk(inpath):
+        for filename in filenames:
+            if filename.endswith('.fits') or filename.endswith('.fits.gz'):
+                if contain != None:
+                    _, exist = find_string(filename, contain)
+                    if exist != -1:
+                        if remove_dir:
+                            list_of_files.append(filename)
+                        else:
+                            list_of_files.append(dirpath + '/' + filename)
+                else:
+                    list_of_files.append(dirpath + filename)
+    return list_of_files
+
+
+def fits_get_sampling(file, verbose=False):
+    '''
+    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(file)
+    No S/C velocity corrected!!!
+    cpos = 0 if continuum is at first wavelength and = 5 if continuum is at the end
+    '''
+    print('-- Obtaining voltages......')
+    fg_head = 3
+    try:
+        with pyfits.open(file) as hdu_list:
+            header = hdu_list[fg_head].data
+            j = 0
+            dummy = 0
+            voltagesData = np.zeros((6))
+            tunning_constant = 0.0
+            ref_wavelength = 0.0
+            for v in header:
+                if (j < 6):
+                    if tunning_constant == 0:
+                        tunning_constant = float(v[4]) / 1e9
+                    if ref_wavelength == 0:
+                        ref_wavelength = float(v[5]) / 1e3
+                    if np.abs(np.abs(v[2]) - np.abs(dummy)) > 5:
+                        voltagesData[j] = float(v[2])
+                        dummy = voltagesData[j]
+                        j += 1
+        if verbose:
+            print('     Voltages: ', voltagesData)
+        d1 = voltagesData[0] - voltagesData[1]
+        d2 = voltagesData[4] - voltagesData[5]
+        if np.abs(d1) > np.abs(d2):
+            cpos = 0
+        else:
+            cpos = 5
+        if verbose:
+            print('Continuum position at wave: ', cpos)
+        wave_axis = voltagesData * tunning_constant + ref_wavelength  # 6173.3356
+        if verbose:
+            print('     Data wave axis [mA]: ', wave_axis)
+
+        return wave_axis, voltagesData, tunning_constant, cpos, ref_wavelength
+
+    except Exception:
+        print("Unable to open fits file: {}", file)
+
+
+def fits_get_part(file, wave, npol, info=False):
+    '''helper function to load FITS data set
+    wave and npol reref to wave and npol (wow!)
+    '''
+    data, header = fits_get(file, head=0, info=info)
+    if len(data.shape) == 4:
+        return data[wave, npol, :, :], header
+    if len(data.shape) == 3:
+        return data[wave * 4 + npol, :, :], header
+
+    # try:
+    #     with pyfits.open(file, mode='denywrite') as hdu_list:
+    #         if info:
+    #             hdu_list.info()
+    #         data = hdu_list[0].data.astype(np.dtype('float32')) 
+    #         header = hdu_list[0].header
+    #         image = data[wave*4+npol,:,:]
+    #     return image,header
+    # except Exception:
+    #     print("Unable to open fits file: {}",file)        
+
+    #     return
+
+
+def read_shifts(file):
+    print('Reading ', file)
+    return np.loadtxt(file, dtype=np.int_)
+
+
+def write_shifts(file, content):
+    # check if dir exist
+    import os
+    dirname = os.path.dirname(file)
+    with contextlib.suppress(Exception):
+        os.makedirs(dirname)
+        print('directory created ', file)
+
+    print('writing ', file)
+    np.savetxt(file, content, fmt='%5.0d')
+    #     with open(file, 'w') as writer:
+    #         formatted = [[format(v) for v in r] for r in content]
+    #         writer.write(str(formatted))
+    return 1
+
+
+def set_level(file, what, towhat):
+    _, exist = find_string(file, what)
+    if exist != -1:
+        return file.replace(what, towhat)
+
+
+def append_id(file, filetype, vers, DID):
+    ande = file.index(filetype)
+    return file.split('V')[0] + 'V' + vers + '_' + DID + file[ande:]
