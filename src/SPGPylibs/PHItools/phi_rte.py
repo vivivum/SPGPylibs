@@ -30,7 +30,7 @@ DTYPE_DOUBLE = np.float_
 # @timeit
 def phi_rte(
     data: np.ndarray, wave_axis: np.ndarray, rte_mode: str, output_dir: str = None,
-    cmilos=None, options: list = None,
+    cmilos=None, options: list = None, cavity: np.ndarray = None,
     parallel=False, num_workers=10
 ):
     ''' For the moment this is just isolated from the main pipeline
@@ -147,6 +147,15 @@ def phi_rte(
         wave, p, y, x = data.shape
         printc('   saving data into dummy_in.txt for RTE input. dimensions (l,p,y,x):', wave, p, y, x)
 
+        wave_axis = np.broadcast_to(wave_axis, (y, x, wave))
+        wave_axis = np.einsum('ijl->lij', wave_axis)
+
+        import pdb; pdb.set_trace()
+
+        if cavity is not None:
+            cavity = np.broadcast_to(wave, y, x)
+            wave_axis = wave_axis - cavity
+
         if output_dir is None:
             # get file path from calling script
             output_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -159,7 +168,7 @@ def phi_rte(
             for i in range(x):
                 for j in range(y):
                     for k in range(wave):
-                        f.write('%e %e %e %e %e \n' % (wave_axis[k], data[k, 0, j, i], data[k, 1, j, i], data[k, 2, j, i], data[k, 3, j, i]))
+                        f.write('%e %e %e %e %e \n' % (wave_axis[k, j, i], data[k, 0, j, i], data[k, 1, j, i], data[k, 2, j, i], data[k, 3, j, i]))
 
         printc('  ---- >>>>> Inverting data.... ', color=bcolors.OKGREEN)
 
