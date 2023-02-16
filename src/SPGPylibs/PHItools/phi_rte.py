@@ -150,10 +150,8 @@ def phi_rte(
         wave_axis = np.broadcast_to(wave_axis, (y, x, wave))
         wave_axis = np.einsum('ijl->lij', wave_axis)
 
-        import pdb; pdb.set_trace()
-
         if cavity is not None:
-            cavity = np.broadcast_to(wave, y, x)
+            cavity = np.broadcast_to(cavity, (wave, y, x))
             wave_axis = wave_axis - cavity
 
         if output_dir is None:
