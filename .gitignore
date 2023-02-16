@@ -159,7 +159,11 @@ dummy*
 
 # CMILOS executables
 **/lib/milos
+**/cmilos/milos
 **/cmilos/milos.*
 
 # Scratch files
 scratch.ipynb
+
+# Synchronization files
+**/sync.ffs_db
