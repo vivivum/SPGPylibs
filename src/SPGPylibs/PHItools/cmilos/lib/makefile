@@ -14,7 +14,6 @@ HOSTCOMPUTER := $(shell hostname | cut -d . -f 1)
 
 default: print create_cuantic.o fvoigt.o fgauss.o me_der.o mil_sinrf.o calculosCompartidos.o lib.o milos.o libmilos.a milos fin
 
-
 print:
 	@echo Compilando CMILOS in $(HOSTCOMPUTER)
 	@echo and coping milos.$(HOSTCOMPUTER) to parent folder cmilos
@@ -53,7 +52,7 @@ libmilos.a: milos.o create_cuantic.o fvoigt.o fgauss.o me_der.o mil_sinrf.o calc
 	ar rcs $@ $^
 
 fin:
-	cp milos ../milos.$(HOSTCOMPUTER)
+	cp milos ../milos
 	@echo --
 	@echo All done.
 
