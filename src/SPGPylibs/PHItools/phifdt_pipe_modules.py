@@ -327,11 +327,20 @@ def phi_correct_prefilter(prefilter_fits, header, data, voltagesData, verbose=Fa
     data = applyPrefilter_dos(data, voltagesData, prefdata, prefscale, prefVoltages, -1, scaledown=scale,
                               verbose=verbose)
     if verbose:
-        plt.plot(data[:, 0, yd // 2, xd // 2], 'o-', label='corrected')
-        plt.plot(datap[:, 0, yd // 2, xd // 2], '--', label='original')
+        plt.plot(data[:, 0, yd // 2, xd // 2] / np.mean(data[:, 0, yd // 2, xd // 2]), 'o-', label='center, corrected')
+        plt.plot(datap[:, 0, yd // 2, xd // 2] / np.mean(datap[:, 0, yd // 2, xd // 2]), '--', label='center, original')
+        
+        plt.plot(data[:, 0, yd // 2, xd // 2 + 400] / np.mean(data[:, 0, yd // 2, xd // 2 + 400]), 'o-', label='center + 400 px, corrected')
+        plt.plot(datap[:, 0, yd // 2, xd // 2 + 400] / np.mean(datap[:, 0, yd // 2, xd // 2 + 400]), '--', label='center + 400 px, original')
+        
+        plt.plot(data[:, 0, yd // 2, xd // 2 - 400] / np.mean(data[:, 0, yd // 2, xd // 2 - 400]), 'o-', label='center - 400 px, corrected')
+        plt.plot(datap[:, 0, yd // 2, xd // 2 - 400] / np.mean(datap[:, 0, yd // 2, xd // 2 - 400]), '--', label='center - 400 px, original')
+        
         plt.legend()
+        plt.grid()
         plt.show()
         del datap
+
     slash, nothing = find_string(prefilter_fits, '/')
     if nothing == -1:
         slash = [0]
