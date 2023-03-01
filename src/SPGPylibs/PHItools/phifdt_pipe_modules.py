@@ -144,14 +144,8 @@ def phi_correct_dark(dark_f, data, header, data_scale, verbose=False, get_dark=F
 
     if verbose:
         dummy = data[0, 0, :, :]
-    data = data - dark[np.newaxis, np.newaxis, PXBEG2:PXEND2 + 1, PXBEG1:PXEND1 + 1]
-
-    # cx = header['CRPIX1']
-    # radius = header['RSUN_ARC']/header['CDELT1']
-
-    # columns = np.mean(data[0,0,0:20,:],axis=0)
-    # data = data - columns[np.newaxis,np.newaxis,np.newaxis,:]
-    data = np.abs(data)
+    dark = dark[PXBEG2:PXEND2 + 1, PXBEG1:PXEND1 + 1]
+    data = data - np.broadcast_to(dark, data.shape)
 
     if 'CAL_DARK' in header:  # Check for existence
         header['CAL_DARK'] = DID
@@ -508,7 +502,7 @@ def check_pmp_temp(hdr_arr):
         exit(1)
 
 
-def phi_apply_demodulation(data, instrument, header=False, demod=False, verbose=False, modulate=False):
+def phi_apply_demodulation(data, instrument, header=None, demod=False, verbose=False, modulate=False):
     '''
     Use demodulation matrices to demodulate data size ls,ps,ys,xs  (n_wave*S_POL,N,M)
     ATTENTION: FDT40 is fixed to the one Johann is using!!!!
@@ -637,7 +631,7 @@ def phi_apply_demodulation(data, instrument, header=False, demod=False, verbose=
     for i in range(ls):
         data[i, :, :, :] = np.reshape(np.matmul(demodM, np.reshape(data[i, :, :, :], (ps, xs * ys))), (ps, ys, xs))
 
-    if header != False:
+    if header is not None:
         if 'CAL_IPOL' in header:  # Check for existence
             header['CAL_IPOL'] = instrument
         else:
