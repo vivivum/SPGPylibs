@@ -1432,7 +1432,10 @@ def fdt_flat_preprocessing(
 
     printc(' Saving data to:', outfile)
 
-    data = data.astype(float)
+    data = data.astype('float32')
+    nwl, npol, ny, nx = data.shape
+    nframes = nwl * npol
+    data = np.reshape(data, (nframes, ny, nx))
 
     with pyfits.open(file) as hdu_list:
         hdu_list[0].data = data

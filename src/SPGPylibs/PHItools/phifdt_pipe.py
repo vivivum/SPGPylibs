@@ -764,15 +764,16 @@ def phifdt_pipe(
                 print('          Changing flat index to ',flat_index)
         except:
             flat_index = [0,1,2,3,4,5]
+
         for p in range(4):
             for l in range(int(zd//4)):
                 print('          ... pol: ',p,' wave: ',l,' index: ',flat_index[l])
-                dummy_flat = (flat[flat_index[l],p,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1]/float(flat_scaling))
+                dummy_flat = (flat[flat_index[l],p,PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] / float(flat_scaling))
                 if norm_f:
                     print('          normalizing flats using region x = [',rrx[0],':',rrx[1],'] y = ]',rry[0],':',rry[1],']')
                     mm = np.mean(dummy_flat[rry[0]:rry[1],rrx[0]:rrx[1]])
                     dummy_flat = dummy_flat / mm
-                data[l,p,:,:] = data[l,p,:,:]/dummy_flat
+                data[l, p, :, :] = data[l, p, :, :] / dummy_flat
         del dummy_flat
 
         # locations = find_string(flat_f,'_')
